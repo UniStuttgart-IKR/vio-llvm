@@ -1,6 +1,6 @@
 // A 14-bit constant greater than 4.
 def uimm14 : RISCVUImmOp<14>, ImmLeaf<XLenVT, [{
-  return Imm < 16384 && Imm > 3;
+  return Imm < 16384 && Imm > 3 && (Imm&3) == 0;
 }]>;
 
 def OPC_HM : RISCVOpcode<"HM", 0b0001011>;
@@ -53,6 +53,12 @@ let Predicates = [HasStdExtZhm] in {
 
   def : Pat<(int_riscv_alci uimm14:$imm14), (ALCI uimm14:$imm14)>;
   def : Pat<(int_riscv_alci_d uimm14:$imm14), (ALCI_D uimm14:$imm14)>;
+
+  def : Pat<(XLenVT (allocate uimm14:$imm14)),(ALCI_D uimm14:$imm14)>;
+  def : PatGpr<allocate, ALC_D>;
+  
+  def : Pat<(XLenVT (allocate uimm14:$imm14)),(ALCI uimm14:$imm14)>;
+  def : PatGpr<allocate, ALC>;
 }
 
 let Predicates = [HasStdExtZhm, IsRV32] in {

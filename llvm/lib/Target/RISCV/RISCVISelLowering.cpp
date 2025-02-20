@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVISelLowering.h"
+#include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "MCTargetDesc/RISCVMatInt.h"
 #include "RISCV.h"
 #include "RISCVConstantPoolValue.h"
@@ -285,7 +286,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
   // TODO: add all necessary setOperationAction calls.
   if (Subtarget.hasStdExtZhm()) {
-    setOperationAction(ISD::DYNAMIC_STACKALLOC, XLenVT, Custom);
+    setOperationAction(ISD::ALLOCATE, XLenVT, Custom);
   } else {
     setOperationAction(ISD::DYNAMIC_STACKALLOC, XLenVT, Expand);
   }
@@ -7322,16 +7323,22 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
       return lowerFixedLengthVectorStoreToRVV(Op, DAG);
     return Op;
   }
-  case ISD::DYNAMIC_STACKALLOC: {
-    // Zhm: Allocate new Object instead of stack space
-    EVT PtrVT = getPointerTy(DAG.getDataLayout());
+  case ISD::ALLOCATE: {
+    // Zhm: Allocate new Object 
+    // ALCI if smaller than 2^14 (rounded up to next multiple of 4)
+    // ALC  otherwise
     SDLoc DL(Op);
-    SDValue Chain = Op.getOperand(0);
-    SDValue Res = SDValue(
-      DAG.getMachineNode(RISCV::ALC, DL, PtrVT,Op.getOperand(1)),
-      0);
+    EVT PtrVT = getPointerTy(DAG.getDataLayout());
+    if (ConstantSDNode* Int = dyn_cast<ConstantSDNode>(Op.getOperand(0).getNode())) {
+      if (Int->getConstantIntValue()->getZExtValue() < ((1<<14) -3)) {
+        uint64_t RoundedSize = (Int->getConstantIntValue()->getZExtValue() + 3) & -4;
+        unsigned int Opcode = Op.getNode()->getFlags().hasElementsPrimitive() ? RISCV::ALCI_D : RISCV::ALCI;
+        return SDValue(DAG.getMachineNode(Opcode, DL, PtrVT, DAG.getTargetConstant(RoundedSize, DL, Subtarget.getXLenVT())), 0);
+      }
+    }
 
-    return DAG.getMergeValues({Res, Chain}, DL);
+    unsigned int Opcode = Op.getNode()->getFlags().hasElementsPrimitive() ? RISCV::ALC_D : RISCV::ALC;
+    return SDValue(DAG.getMachineNode(Opcode, DL, PtrVT, Op.getOperand(0)), 0);
   }
   case ISD::MLOAD:
   case ISD::VP_LOAD:

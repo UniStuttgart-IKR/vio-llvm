@@ -4494,7 +4494,7 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
     SDNodeFlags Flags = SDNodeFlags::None;
     if (Ty->isArrayTy()) {
       ArrayType *ATy = dyn_cast_or_null<ArrayType>(Ty);
-      if (ATy->getElementType()->isIntegerTy() && ATy->getElementType()->isFloatingPointTy())
+      if (ATy->getElementType()->isIntegerTy() || ATy->getElementType()->isFloatingPointTy())
         Flags = SDNodeFlags::ElementsPrimitive;
     }
     else if (Ty->isStructTy()){
@@ -4510,8 +4510,11 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
     else if (Ty->isIntegerTy() || Ty->isFloatingPointTy())
       Flags = SDNodeFlags::ElementsPrimitive;
 
-    SDValue ALC = DAG.getNode(ISD::ALLOCATE, dl, IntPtr, AllocSize, Flags);
+    SDValue Ops[] = {getRoot(), AllocSize};
+    SDVTList VTs = DAG.getVTList(IntPtr, MVT::Other);
+    SDValue ALC = DAG.getNode(ISD::ALLOCATE, dl, VTs, Ops, Flags);
     setValue(&I, ALC);
+    DAG.setRoot(ALC.getValue(1));
     return;
   }
 

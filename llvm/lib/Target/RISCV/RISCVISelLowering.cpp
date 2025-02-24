@@ -286,7 +286,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
   // TODO: add all necessary setOperationAction calls.
   if (Subtarget.hasStdExtZhm()) {
-    setOperationAction(ISD::ALLOCATE, XLenVT, Custom);
+    setOperationAction(ISD::ALLOCATE, XLenVT, Legal);
   } else {
     setOperationAction(ISD::DYNAMIC_STACKALLOC, XLenVT, Expand);
   }
@@ -7323,23 +7323,25 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
       return lowerFixedLengthVectorStoreToRVV(Op, DAG);
     return Op;
   }
-  case ISD::ALLOCATE: {
+  /*case ISD::ALLOCATE: {
     // Zhm: Allocate new Object 
     // ALCI if smaller than 2^14 (rounded up to next multiple of 4)
     // ALC  otherwise
     SDLoc DL(Op);
     EVT PtrVT = getPointerTy(DAG.getDataLayout());
-    if (ConstantSDNode* Int = dyn_cast<ConstantSDNode>(Op.getOperand(0).getNode())) {
+    if (ConstantSDNode* Int = dyn_cast<ConstantSDNode>(Op.getOperand(1).getNode())) {
       if (Int->getConstantIntValue()->getZExtValue() < ((1<<14) -3)) {
         uint64_t RoundedSize = (Int->getConstantIntValue()->getZExtValue() + 3) & -4;
         unsigned int Opcode = Op.getNode()->getFlags().hasElementsPrimitive() ? RISCV::ALCI_D : RISCV::ALCI;
-        return SDValue(DAG.getMachineNode(Opcode, DL, PtrVT, DAG.getTargetConstant(RoundedSize, DL, Subtarget.getXLenVT())), 0);
+        auto Res = DAG.getMachineNode(Opcode, DL, PtrVT, MVT::Other, Op.getOperand(0), DAG.getTargetConstant(RoundedSize, DL, Subtarget.getXLenVT()));
+        return DAG.getMergeValues({SDValue(Res, 0), SDValue(Res, 1)}, DL);
       }
     }
 
     unsigned int Opcode = Op.getNode()->getFlags().hasElementsPrimitive() ? RISCV::ALC_D : RISCV::ALC;
-    return SDValue(DAG.getMachineNode(Opcode, DL, PtrVT, Op.getOperand(0)), 0);
-  }
+    auto Res = DAG.getMachineNode(Opcode, DL, PtrVT, MVT::Other, Op.getOperand(0), Op.getOperand(1));
+    return DAG.getMergeValues({SDValue(Res, 0), SDValue(Res, 1)}, DL);
+  }*/
   case ISD::MLOAD:
   case ISD::VP_LOAD:
     return lowerMaskedLoad(Op, DAG);
@@ -20437,6 +20439,7 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
   bool IsVarArg = CLI.IsVarArg;
   EVT PtrVT = getPointerTy(DAG.getDataLayout());
   MVT XLenVT = Subtarget.getXLenVT();
+  SDVTList AlcVTs = DAG.getVTList(PtrVT, MVT::Other);
 
   MachineFunction &MF = DAG.getMachineFunction();
 
@@ -20458,11 +20461,7 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
                        "site marked musttail");
 
   // Get a count of how many bytes are to be pushed on the stack.
-  unsigned NumArgObjBytes = 0;
-  for (unsigned i = 0; i < ArgLocs.size(); ++i){
-    if (ArgLocs[i].isMemLoc())
-      NumArgObjBytes += (Subtarget.getXLen()/8);
-  }
+  unsigned NumBytes = ArgCCInfo.getStackSize();
 
   // Create local copies for byval args
   SmallVector<SDValue, 8> ByValArgs;
@@ -20488,19 +20487,15 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
   }
 
   if (!IsTailCall)
-    Chain = DAG.getCALLSEQ_START(Chain, NumArgObjBytes, 0, CLI.DL);
+    Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, CLI.DL);
 
   // Copy argument values to their designated locations.
   SmallVector<std::pair<Register, SDValue>, 8> RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
-  MachinePointerInfo SpilledArgsInfo;
 
-  SDValue SpilledArgsPtr = SDValue();
-  if (NumArgObjBytes != 0) {
-    MachineSDNode *AlciNode = DAG.getMachineNode(RISCV::ALCI, DL, PtrVT, DAG.getTargetConstant(NumArgObjBytes, DL, MVT::i32));
-    SpilledArgsPtr = SDValue(AlciNode, 0);
-    SpilledArgsInfo = MachinePointerInfo();
-  }
+  SDValue SpilledArgsPtr = DAG.getNode(ISD::ALLOCATE, DL, AlcVTs, Chain, DAG.getTargetConstant(0, DL, MVT::i32));
+  MachinePointerInfo SpilledArgsInfo = MachinePointerInfo();
+  unsigned NumArgObjBytes = 0;
 
   for (unsigned i = 0, j = 0, e = ArgLocs.size(), OutIdx = 0; i != e;
        ++i, ++OutIdx) {
@@ -20530,8 +20525,9 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
                         DAG.getIntPtrConstant(HiVA.getLocMemOffset(), DL));
         // Emit the store.
         MemOpChains.push_back(DAG.getStore(
-            Chain, DL, Hi, Address,
+            SpilledArgsPtr.getValue(1), DL, Hi, Address,
             SpilledArgsInfo.getWithOffset(HiVA.getLocMemOffset())));
+        NumArgObjBytes += Hi.getValueSizeInBits()/8;
       } else {
         // Second half of f64 is passed in another GPR.
         Register RegHigh = HiVA.getLocReg();
@@ -20574,10 +20570,11 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
         ++OutIdx;
       }
 
-      SDValue SpillSlot = SDValue(
-        DAG.getMachineNode(RISCV::ALCI, DL, PtrVT, DAG.getTargetConstant(StoredSize, DL, MVT::i32)),
-        0);
-      MachinePointerInfo SpillInfo = MachinePointerInfo();
+      //NumArgObjBytes += StoredSize;
+      SDValue SpillSlot = DAG.getNode(ISD::ALLOCATE, DL, AlcVTs, Chain, DAG.getConstant(StoredSize, DL, MVT::i32));
+      SpillSlot->setFlags(SDNodeFlags::ElementsPrimitive);
+      MachinePointerInfo SpillInfo = MachinePointerInfo::getUnknownStack(MF);
+      Chain = SpillSlot.getValue(1);
       MemOpChains.push_back(
           DAG.getStore(Chain, DL, ArgValue, SpillSlot, SpillInfo));
       for (const auto &Part : Parts) {
@@ -20616,6 +20613,13 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
   }
   SDValue Glue;
 
+  if (NumArgObjBytes != 0) {
+    Chain = SpilledArgsPtr.getValue(1);
+    DAG.UpdateNodeOperands(SpilledArgsPtr.getNode(), SpilledArgsPtr.getOperand(0), DAG.getConstant(NumArgObjBytes, DL, MVT::i32));
+    Chain = DAG.getCopyToReg(Chain, DL, RISCV::X17, SpilledArgsPtr, Glue);
+    Glue = Chain.getValue(1);
+  }
+
   // Join the stores, which are independent of one another.
   if (!MemOpChains.empty()) {
     Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, MemOpChains);
@@ -20624,11 +20628,6 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
   // Build a sequence of copy-to-reg nodes, chained and glued together.
   for (auto &Reg : RegsToPass) {
     Chain = DAG.getCopyToReg(Chain, DL, Reg.first, Reg.second, Glue);
-    Glue = Chain.getValue(1);
-  }
-
-  if (NumArgObjBytes != 0) {
-    Chain = DAG.getCopyToReg(Chain, DL, RISCV::X17, SpilledArgsPtr, Glue);
     Glue = Chain.getValue(1);
   }
   

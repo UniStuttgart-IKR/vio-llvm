@@ -1,11 +1,23 @@
-// A 14-bit constant greater than 4.
+// A 14-bit constant
 def uimm14 : RISCVUImmOp<14>, ImmLeaf<XLenVT, [{
-  return Imm < 16384 && Imm > 3 && (Imm&3) == 0;
+  return Imm <= 16380;
+}]>;
+// Round up Imm
+def RoundUpTo4 : SDNodeXForm<imm, [{
+  return CurDAG->getTargetConstant(((N->getSExtValue()+ 3) & -4), SDLoc(N),
+                                     N->getValueType(0));
 }]>;
 
 def OPC_HM : RISCVOpcode<"HM", 0b0001011>;
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
+def data_only_allocate : PatFrag<(ops node:$len), (allocate node:$len),[{
+  return N->getFlags().hasElementsPrimitive();
+}]>;
+def pointer_allocate : PatFrag<(ops node:$len), (allocate node:$len),[{
+  return !N->getFlags().hasElementsPrimitive();
+}]>;
+
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
   class Alc_i<bits<3> funct3, string opcodestr, DAGOperand rty = GPR>
     : RVInstI<funct3, OPC_HM, (outs rty:$rd), (ins uimm14:$imm14),
               opcodestr, "$rd, ${imm14}">, Sched<[]> {
@@ -15,7 +27,7 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
   }
 }
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
   class Alc<bits<3> funct3, string opcodestr, DAGOperand rty = GPR>
     : RVInstR<0b0000000, funct3, OPC_HM, (outs rty:$rd), (ins GPR:$rs1),
               opcodestr, "$rd, $rs1">, Sched<[]> {
@@ -54,11 +66,10 @@ let Predicates = [HasStdExtZhm] in {
   def : Pat<(int_riscv_alci uimm14:$imm14), (ALCI uimm14:$imm14)>;
   def : Pat<(int_riscv_alci_d uimm14:$imm14), (ALCI_D uimm14:$imm14)>;
 
-  def : Pat<(XLenVT (allocate uimm14:$imm14)),(ALCI_D uimm14:$imm14)>;
-  def : PatGpr<allocate, ALC_D>;
-  
-  def : Pat<(XLenVT (allocate uimm14:$imm14)),(ALCI uimm14:$imm14)>;
-  def : PatGpr<allocate, ALC>;
+  def : Pat<(iPTR (data_only_allocate uimm14:$imm14)),     (ALCI_D (RoundUpTo4 uimm14:$imm14))>;
+  def : Pat<(iPTR (allocate uimm14:$imm14)),               (ALCI   (RoundUpTo4 uimm14:$imm14))>;
+  def : Pat<(iPTR (data_only_allocate (XLenVT GPR:$rs1))), (ALC_D  GPR:$rs1)>;
+  def : Pat<(iPTR (allocate (XLenVT GPR:$rs1))),           (ALC    GPR:$rs1)>;
 }
 
 let Predicates = [HasStdExtZhm, IsRV32] in {

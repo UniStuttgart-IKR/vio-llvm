@@ -865,7 +865,7 @@ def convergencectrl_loop   : SDNode<"ISD::CONVERGENCECTRL_LOOP",
 def convergencectrl_glue   : SDNode<"ISD::CONVERGENCECTRL_GLUE",
                                     SDTypeProfile<0, 1, [SDTCisVT<0, untyped>]>>;
 
-def allocate               : SDNode<"ISD::ALLOCATE", SDTUnaryOp>;
+def allocate               : SDNode<"ISD::ALLOCATE", SDTypeProfile<1, 1, [SDTCisPtrTy<0>, SDTCisInt<1>]>, [SDNPHasChain, SDNPSideEffect]>;
 
 //===----------------------------------------------------------------------===//
 // Selection DAG Condition Codes

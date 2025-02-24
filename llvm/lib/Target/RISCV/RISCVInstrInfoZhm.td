@@ -4,7 +4,7 @@ def uimm14 : RISCVUImmOp<14>, ImmLeaf<XLenVT, [{
 }]>;
 // Round up Imm
 def RoundUpTo4 : SDNodeXForm<imm, [{
-  return CurDAG->getTargetConstant(((N->getSExtValue()+ 3) & -4), SDLoc(N),
+  return CurDAG->getTargetConstant(((N->getZExtValue()+ 3) & -4), SDLoc(N),
                                      N->getValueType(0));
 }]>;
 
@@ -12,9 +12,6 @@ def OPC_HM : RISCVOpcode<"HM", 0b0001011>;
 
 def data_only_allocate : PatFrag<(ops node:$len), (allocate node:$len),[{
   return N->getFlags().hasElementsPrimitive();
-}]>;
-def pointer_allocate : PatFrag<(ops node:$len), (allocate node:$len),[{
-  return !N->getFlags().hasElementsPrimitive();
 }]>;
 
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {

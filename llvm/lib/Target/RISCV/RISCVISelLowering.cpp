@@ -7323,25 +7323,6 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
       return lowerFixedLengthVectorStoreToRVV(Op, DAG);
     return Op;
   }
-  /*case ISD::ALLOCATE: {
-    // Zhm: Allocate new Object 
-    // ALCI if smaller than 2^14 (rounded up to next multiple of 4)
-    // ALC  otherwise
-    SDLoc DL(Op);
-    EVT PtrVT = getPointerTy(DAG.getDataLayout());
-    if (ConstantSDNode* Int = dyn_cast<ConstantSDNode>(Op.getOperand(1).getNode())) {
-      if (Int->getConstantIntValue()->getZExtValue() < ((1<<14) -3)) {
-        uint64_t RoundedSize = (Int->getConstantIntValue()->getZExtValue() + 3) & -4;
-        unsigned int Opcode = Op.getNode()->getFlags().hasElementsPrimitive() ? RISCV::ALCI_D : RISCV::ALCI;
-        auto Res = DAG.getMachineNode(Opcode, DL, PtrVT, MVT::Other, Op.getOperand(0), DAG.getTargetConstant(RoundedSize, DL, Subtarget.getXLenVT()));
-        return DAG.getMergeValues({SDValue(Res, 0), SDValue(Res, 1)}, DL);
-      }
-    }
-
-    unsigned int Opcode = Op.getNode()->getFlags().hasElementsPrimitive() ? RISCV::ALC_D : RISCV::ALC;
-    auto Res = DAG.getMachineNode(Opcode, DL, PtrVT, MVT::Other, Op.getOperand(0), Op.getOperand(1));
-    return DAG.getMergeValues({SDValue(Res, 0), SDValue(Res, 1)}, DL);
-  }*/
   case ISD::MLOAD:
   case ISD::VP_LOAD:
     return lowerMaskedLoad(Op, DAG);

@@ -32,6 +32,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAGAddressAnalysis.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/ValueTypes.h"
@@ -43,6 +44,7 @@
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCInstBuilder.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -286,7 +288,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
   // TODO: add all necessary setOperationAction calls.
   if (Subtarget.hasStdExtZhm()) {
-    setOperationAction(ISD::ALLOCATE, XLenVT, Legal);
+    setOperationAction(ISD::ALLOCATE, XLenVT, Custom);
   } else {
     setOperationAction(ISD::DYNAMIC_STACKALLOC, XLenVT, Expand);
   }
@@ -7331,6 +7333,28 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     return lowerMaskedStore(Op, DAG);
   case ISD::VECTOR_COMPRESS:
     return lowerVectorCompress(Op, DAG);
+  case ISD::ALLOCATE: {
+    //On RISC-V we only differenciate between Data-Only Objects and non-Data-Only Objects.
+    //If PointersSize is != 0, add all Datas to the PointersSize and replace DatasSize by 0
+    //so the InstructionSelection can match against an ALCI if possible
+    SDLoc dl(Op);
+    EVT PtrVT = getPointerTy(DAG.getDataLayout());
+    if (   !(isa<ConstantSDNode>(Op.getOperand(1)) && Op->getConstantOperandVal(1) == 0) 
+        && !(isa<ConstantSDNode>(Op.getOperand(2)) && Op->getConstantOperandVal(2) == 0)) {
+      SDValue SumNode = DAG.getNode(ISD::ADD, dl, PtrVT, Op.getOperand(1), Op.getOperand(2));
+      SDValue Ops[] = {Op.getOperand(0),
+                      SumNode,
+                      DAG.getConstant(0, dl, MVT::i32)};
+      SDVTList VTs = DAG.getVTList(PtrVT, MVT::Other);
+      return DAG.getNode(ISD::ALLOCATE, dl, VTs, Ops);
+    }
+    //If we would allocate a Zero-length Object, just return a NULL-Pointer 
+    if (   (isa<ConstantSDNode>(Op.getOperand(1)) && Op->getConstantOperandVal(1) == 0) 
+        && (isa<ConstantSDNode>(Op.getOperand(2)) && Op->getConstantOperandVal(2) == 0))
+      return DAG.getConstant(0, dl, MVT::i32);
+
+    return Op;
+  }
   case ISD::SELECT_CC: {
     // This occurs because we custom legalize SETGT and SETUGT for setcc. That
     // causes LegalizeDAG to think we need to custom legalize select_cc. Expand
@@ -20423,6 +20447,7 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
   SDVTList AlcVTs = DAG.getVTList(PtrVT, MVT::Other);
 
   MachineFunction &MF = DAG.getMachineFunction();
+  SDValue ZeroNode = DAG.getConstant(0, DL, MVT::i32);
 
   // Analyze the operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
@@ -20454,17 +20479,30 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
     SDValue Arg = OutVals[i];
     unsigned Size = Flags.getByValSize();
     Align Alignment = Flags.getNonZeroByValAlign();
-
+    const uint64_t AlignMask = Alignment.value() - 1U;
+    
+    //Get Alligned Size
+    SDValue SizeNode = DAG.getConstant(Size, DL, XLenVT);
+    SizeNode = DAG.getNode(ISD::ADD, DL, SizeNode.getValueType(), SizeNode,
+                            DAG.getConstant(AlignMask, DL, XLenVT),
+                            SDNodeFlags::NoUnsignedWrap);
+    SizeNode = DAG.getNode(ISD::AND, DL, SizeNode.getValueType(), SizeNode,
+                            DAG.getSignedConstant(~AlignMask, DL, XLenVT));
+/*
     int FI =
-        MF.getFrameInfo().CreateStackObject(Size, Alignment, /*isSS=*/false);
+        MF.getFrameInfo().CreateStackObject(Size, Alignment, false);
     SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
     SDValue SizeNode = DAG.getConstant(Size, DL, XLenVT);
+*/
 
-    Chain = DAG.getMemcpy(Chain, DL, FIPtr, Arg, SizeNode, Alignment,
+    SDValue Ops[] = {Chain, SizeNode, ZeroNode};
+    SDVTList VTs = DAG.getVTList(PtrVT, MVT::Other);
+    SDValue ByValAlc = DAG.getNode(ISD::ALLOCATE, DL, VTs, Ops);
+    Chain = DAG.getMemcpy(ByValAlc.getValue(1), DL, ByValAlc.getValue(0), Arg, SizeNode, Alignment,
                           /*IsVolatile=*/false,
                           /*AlwaysInline=*/false, /*CI*/ nullptr, IsTailCall,
                           MachinePointerInfo(), MachinePointerInfo());
-    ByValArgs.push_back(FIPtr);
+    ByValArgs.push_back(ByValAlc);
   }
 
   if (!IsTailCall)
@@ -20474,7 +20512,7 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
   SmallVector<std::pair<Register, SDValue>, 8> RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
 
-  SDValue SpilledArgsPtr = DAG.getNode(ISD::ALLOCATE, DL, AlcVTs, Chain, DAG.getTargetConstant(0, DL, MVT::i32));
+  SDValue SpilledArgsPtr = DAG.getNode(ISD::ALLOCATE, DL, AlcVTs, Chain, ZeroNode, ZeroNode);
   MachinePointerInfo SpilledArgsInfo = MachinePointerInfo();
   unsigned NumArgObjBytes = 0;
 
@@ -20483,7 +20521,7 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
     CCValAssign &VA = ArgLocs[i];
     SDValue ArgValue = OutVals[OutIdx];
     ISD::ArgFlagsTy Flags = Outs[OutIdx].Flags;
-
+    
     // Handle passing f64 on RV32D with a soft float ABI as a special case.
     if (VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64) {
       assert(VA.isRegLoc() && "Expected register VA assignment");
@@ -20552,19 +20590,17 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
       }
 
       //NumArgObjBytes += StoredSize;
-      SDValue SpillSlot = DAG.getNode(ISD::ALLOCATE, DL, AlcVTs, Chain, DAG.getConstant(StoredSize, DL, MVT::i32));
-      SpillSlot->setFlags(SDNodeFlags::ElementsPrimitive);
-      MachinePointerInfo SpillInfo = MachinePointerInfo::getUnknownStack(MF);
+      SDValue SpillSlot = DAG.getNode(ISD::ALLOCATE, DL, AlcVTs, Chain, ZeroNode, DAG.getConstant(StoredSize, DL, MVT::i32));
       Chain = SpillSlot.getValue(1);
       MemOpChains.push_back(
-          DAG.getStore(Chain, DL, ArgValue, SpillSlot, SpillInfo));
+          DAG.getStore(Chain, DL, ArgValue, SpillSlot, MachinePointerInfo()));
       for (const auto &Part : Parts) {
         SDValue PartValue = Part.first;
         SDValue PartOffset = Part.second;
         SDValue Address =
             DAG.getNode(ISD::ADD, DL, PtrVT, SpillSlot, PartOffset);
         MemOpChains.push_back(
-            DAG.getStore(Chain, DL, PartValue, Address,SpillInfo));
+            DAG.getStore(Chain, DL, PartValue, Address, MachinePointerInfo()));
       }
       ArgValue = SpillSlot;
     } else {
@@ -20596,7 +20632,9 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
 
   if (NumArgObjBytes != 0) {
     Chain = SpilledArgsPtr.getValue(1);
-    DAG.UpdateNodeOperands(SpilledArgsPtr.getNode(), SpilledArgsPtr.getOperand(0), DAG.getConstant(NumArgObjBytes, DL, MVT::i32));
+    DAG.UpdateNodeOperands(SpilledArgsPtr.getNode(), SpilledArgsPtr.getOperand(0), 
+                                                        SpilledArgsPtr.getOperand(1),
+                                                        DAG.getConstant(NumArgObjBytes, DL, MVT::i32));
     Chain = DAG.getCopyToReg(Chain, DL, RISCV::X17, SpilledArgsPtr, Glue);
     Glue = Chain.getValue(1);
   }

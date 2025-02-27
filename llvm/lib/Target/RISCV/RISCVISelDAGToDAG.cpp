@@ -3243,6 +3243,20 @@ bool RISCVDAGToDAGISel::selectInvLogicImm(SDValue N, SDValue &Val) {
   return true;
 }
 
+bool RISCVDAGToDAGISel::selectAlciLength(SDValue N, SDValue &Val) {
+  if (N.getOpcode() != ISD::ALLOCATE)
+    return false;
+
+  if (isa<ConstantSDNode>(N.getOperand(1)) && isa<ConstantSDNode>(N.getOperand(2))){
+    uint64_t Pi = N->getConstantOperandVal(1);
+    uint64_t Dt = N->getConstantOperandVal(2);
+
+    Val = CurDAG->getTargetConstant(Pi+Dt, SDLoc(N), MVT::i32);
+    return true;
+  }
+  return false;
+}
+
 static bool vectorPseudoHasAllNBitUsers(SDNode *User, unsigned UserOpNo,
                                         unsigned Bits,
                                         const TargetInstrInfo *TII) {

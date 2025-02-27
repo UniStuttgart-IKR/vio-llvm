@@ -4489,30 +4489,47 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
                             DAG.getZExtOrTrunc(TySizeValue, dl, IntPtr));
   }
 
+
   if (FuncInfo.MF->getSubtarget().canAllocateOnHeap()) {
     assert(FuncInfo.StaticAllocaMap.size() == 0 && "AllocaMap not empty >:(");
-    SDNodeFlags Flags = SDNodeFlags::None;
+
+    SDValue ZeroNode = DAG.getConstant(0, dl, MVT::i32);
+    SDValue PointersSize, PrimitivesSize;
+    
     if (Ty->isArrayTy()) {
       ArrayType *ATy = dyn_cast_or_null<ArrayType>(Ty);
-      if (ATy->getElementType()->isIntegerTy() || ATy->getElementType()->isFloatingPointTy())
-        Flags = SDNodeFlags::ElementsPrimitive;
-    }
-    else if (Ty->isStructTy()){
-      StructType *STy = dyn_cast_or_null<StructType>(Ty);
-      Flags = SDNodeFlags::ElementsPrimitive;
-      for (unsigned i = 0; i < STy->getNumElements(); ++i) {
-        if (!STy->getElementType(i)->isIntegerTy() && !STy->getElementType(i)->isFloatingPointTy()){
-          Flags = SDNodeFlags::None;
-          break;
-        }
+      if (ATy->getElementType()->isIntegerTy() || ATy->getElementType()->isFloatingPointTy()){
+        PrimitivesSize = AllocSize;
+        PointersSize = ZeroNode;
+      } else {
+        PrimitivesSize = ZeroNode;
+        PointersSize = AllocSize;
       }
+    } else if (Ty->isStructTy()){
+      StructType *STy = dyn_cast_or_null<StructType>(Ty);
+      PrimitivesSize = ZeroNode;
+      PointersSize = ZeroNode;
+      SDValue ElSizeNode;
+      Type *ETy;
+      for (unsigned i = 0; i < STy->getNumElements(); ++i) {
+        ETy = STy->getElementType(i);
+        ElSizeNode = DAG.getConstant(DL.getTypeAllocSize(ETy), dl, MVT::i32);
+        if (ETy->isIntegerTy() || ETy->isFloatingPointTy())
+          PrimitivesSize = DAG.getNode(ISD::ADD, dl, IntPtr, PrimitivesSize, ElSizeNode);
+        else
+          PointersSize = DAG.getNode(ISD::ADD, dl, IntPtr, PointersSize, ElSizeNode);
+      }
+    } else if (Ty->isIntegerTy() || Ty->isFloatingPointTy()){
+      PrimitivesSize = AllocSize;
+      PointersSize = ZeroNode;
+    } else {
+      PrimitivesSize = ZeroNode;
+      PointersSize = AllocSize;
     }
-    else if (Ty->isIntegerTy() || Ty->isFloatingPointTy())
-      Flags = SDNodeFlags::ElementsPrimitive;
 
-    SDValue Ops[] = {getRoot(), AllocSize};
+    SDValue Ops[] = {getRoot(), PointersSize, PrimitivesSize};
     SDVTList VTs = DAG.getVTList(IntPtr, MVT::Other);
-    SDValue ALC = DAG.getNode(ISD::ALLOCATE, dl, VTs, Ops, Flags);
+    SDValue ALC = DAG.getNode(ISD::ALLOCATE, dl, VTs, Ops);
     setValue(&I, ALC);
     DAG.setRoot(ALC.getValue(1));
     return;

@@ -4489,6 +4489,52 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
                             DAG.getZExtOrTrunc(TySizeValue, dl, IntPtr));
   }
 
+
+  if (FuncInfo.MF->getSubtarget().canAllocateOnHeap()) {
+    assert(FuncInfo.StaticAllocaMap.size() == 0 && "AllocaMap not empty >:(");
+
+    SDValue ZeroNode = DAG.getConstant(0, dl, MVT::i32);
+    SDValue PointersSize, PrimitivesSize;
+    
+    if (Ty->isArrayTy()) {
+      ArrayType *ATy = dyn_cast_or_null<ArrayType>(Ty);
+      if (ATy->getElementType()->isIntegerTy() || ATy->getElementType()->isFloatingPointTy()){
+        PrimitivesSize = AllocSize;
+        PointersSize = ZeroNode;
+      } else {
+        PrimitivesSize = ZeroNode;
+        PointersSize = AllocSize;
+      }
+    } else if (Ty->isStructTy()){
+      StructType *STy = dyn_cast_or_null<StructType>(Ty);
+      PrimitivesSize = ZeroNode;
+      PointersSize = ZeroNode;
+      SDValue ElSizeNode;
+      Type *ETy;
+      for (unsigned i = 0; i < STy->getNumElements(); ++i) {
+        ETy = STy->getElementType(i);
+        ElSizeNode = DAG.getConstant(DL.getTypeAllocSize(ETy), dl, MVT::i32);
+        if (ETy->isIntegerTy() || ETy->isFloatingPointTy())
+          PrimitivesSize = DAG.getNode(ISD::ADD, dl, IntPtr, PrimitivesSize, ElSizeNode);
+        else
+          PointersSize = DAG.getNode(ISD::ADD, dl, IntPtr, PointersSize, ElSizeNode);
+      }
+    } else if (Ty->isIntegerTy() || Ty->isFloatingPointTy()){
+      PrimitivesSize = AllocSize;
+      PointersSize = ZeroNode;
+    } else {
+      PrimitivesSize = ZeroNode;
+      PointersSize = AllocSize;
+    }
+
+    SDValue Ops[] = {getRoot(), PointersSize, PrimitivesSize};
+    SDVTList VTs = DAG.getVTList(IntPtr, MVT::Other);
+    SDValue ALC = DAG.getNode(ISD::ALLOCATE, dl, VTs, Ops);
+    setValue(&I, ALC);
+    DAG.setRoot(ALC.getValue(1));
+    return;
+  }
+
   // Handle alignment.  If the requested alignment is less than or equal to
   // the stack alignment, ignore it.  If the size is greater than or equal to
   // the stack alignment, we note this in the DYNAMIC_STACKALLOC node.
@@ -4516,7 +4562,7 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
   setValue(&I, DSA);
   DAG.setRoot(DSA.getValue(1));
 
-  assert(FuncInfo.MF->getFrameInfo().hasVarSizedObjects() || FuncInfo.MF->getSubtarget().canAllocateOnHeap());
+  assert(FuncInfo.MF->getFrameInfo().hasVarSizedObjects());
 }
 
 static const MDNode *getRangeMetadata(const Instruction &I) {

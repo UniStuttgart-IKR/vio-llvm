@@ -792,13 +792,13 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
 
   //For Zhm Extension, frame lowering is just allocating a Frame-Object
   if (MF.getSubtarget<RISCVSubtarget>().hasStdExtZhm()){
-    RealStackSize = alignTo(MFI.getStackSize() + RVFI->getRVVPadding() + STI.getXLen()/8, Align(MF.getSubtarget<RISCVSubtarget>().getXLen() / 8));
+    //RealStackSize = alignTo(MFI.getStackSize() + RVFI->getRVVPadding() + STI.getXLen()/8, Align(MF.getSubtarget<RISCVSubtarget>().getXLen() / 8));
     if (RealStackSize > 16383){
       MF.getFunction().getContext().diagnose(DiagnosticInfoUnsupported{
           MF.getFunction(), "Frames larger than 16384 Bytes are not allowed with Zhm."});
     }
     BuildMI(MBB, MBBI, DL, TII->get(RISCV::ALCI), SPReg)
-        .addImm(RealStackSize)
+        .addImm(MFI.getStackSize() + 16) //FIXME: this is overallocating but will be fixed later!
         .setMIFlags(MachineInstr::FrameSetup);
     return;
   }
@@ -1186,14 +1186,10 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
     MinCSFI = CSI[0].getFrameIdx();
     MaxCSFI = CSI[CSI.size() - 1].getFrameIdx();
   }
-    
+  
   if (Subtarget.hasStdExtZhm()){
     FrameReg = SPReg;
-    Offset =  StackOffset::getFixed(MFI.getStackSize() - FirstSPAdjustAmount + MFI.getObjectOffset(FI));
-    if (FI >= MinCSFI && FI <= MaxCSFI)
-      Offset = StackOffset::getFixed(RVFI->getCalleeSavedStackSize()) - Offset;
-    else
-      Offset += StackOffset::getFixed(Subtarget.getXLen() / 8);
+    Offset = StackOffset::getFixed(- MFI.getObjectOffset(FI));
     return Offset;
   }
 

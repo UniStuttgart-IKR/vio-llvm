@@ -415,6 +415,8 @@ public:
     Unpredictable = 1 << 13,
     // Compare instructions which may carry the samesign flag.
     SameSign = 1 << 14,
+    // Allocate instructions may differ for primitve only objects
+    ElementsPrimitive = 1 << 15,
 
     // NOTE: Please update LargestValue in LLVM_DECLARE_ENUM_AS_BITMASK below
     // the class definition when adding new flags.
@@ -470,6 +472,7 @@ public:
   bool hasAllowReassociation() const { return Flags & AllowReassociation; }
   bool hasNoFPExcept() const { return Flags & NoFPExcept; }
   bool hasUnpredictable() const { return Flags & Unpredictable; }
+  bool hasElementsPrimitive() const { return Flags & ElementsPrimitive; }
 
   bool operator==(const SDNodeFlags &Other) const {
     return Flags == Other.Flags;

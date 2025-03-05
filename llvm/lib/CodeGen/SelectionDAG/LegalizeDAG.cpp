@@ -1104,6 +1104,11 @@ void SelectionDAGLegalize::LegalizeOp(SDNode *Node) {
     if (Action == TargetLowering::Legal)
       Action = TargetLowering::Custom;
     break;
+  case ISD::ALLOCATE:
+    // This operation is typically going to be LibCall unless the target wants
+    // something differrent.
+    Action = TLI.getOperationAction(Node->getOpcode(), Node->getValueType(0));
+    break;
   case ISD::CLEAR_CACHE:
     // This operation is typically going to be LibCall unless the target wants
     // something differrent.
@@ -5798,6 +5803,12 @@ void SelectionDAGLegalize::PromoteNode(SDNode *Node) {
   case ISD::VP_REDUCE_FMAXIMUM:
   case ISD::VP_REDUCE_FMINIMUM:
     Results.push_back(PromoteReduction(Node));
+    break;
+
+  case ISD::ALLOCATE:
+    Tmp1 = DAG.getNode(ISD::ZERO_EXTEND, dl, NVT, Node->getOperand(0));
+    Tmp2 = DAG.getNode(Node->getOpcode(), dl, NVT, Tmp1, Node->getOperand(1));
+    Results.push_back(Tmp2);
     break;
   }
 

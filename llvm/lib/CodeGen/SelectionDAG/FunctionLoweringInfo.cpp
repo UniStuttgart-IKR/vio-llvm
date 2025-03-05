@@ -133,6 +133,12 @@ void FunctionLoweringInfo::set(const Function &fn, MachineFunction &mf,
   for (const BasicBlock &BB : *Fn) {
     for (const Instruction &I : BB) {
       if (const AllocaInst *AI = dyn_cast<AllocaInst>(&I)) {
+
+        //If Subtarget supports allocation on heap,
+        //no stack objects are needed
+        if (MF->getSubtarget().canAllocateOnHeap())
+          continue;
+
         Type *Ty = AI->getAllocatedType();
         Align Alignment = AI->getAlign();
 

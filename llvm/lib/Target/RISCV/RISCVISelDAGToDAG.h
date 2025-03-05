@@ -142,6 +142,7 @@ public:
   // only the bottom 8 bits are preserved.
   bool selectLow8BitsVSplat(SDValue N, SDValue &SplatVal);
   bool selectScalarFPAsInt(SDValue N, SDValue &Imm);
+  bool selectAlciLength(SDValue N, SDValue &Val);
 
   bool selectRVVSimm5(SDValue N, unsigned Width, SDValue &Imm);
   template <unsigned Width> bool selectRVVSimm5(SDValue N, SDValue &Imm) {

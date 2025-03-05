@@ -16,6 +16,7 @@
 #include "MCTargetDesc/RISCVMatInt.h"
 #include "RISCVISelLowering.h"
 #include "RISCVInstrInfo.h"
+#include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/IR/IntrinsicsRISCV.h"
 #include "llvm/Support/Alignment.h"
@@ -3240,6 +3241,20 @@ bool RISCVDAGToDAGISel::selectInvLogicImm(SDValue N, SDValue &Val) {
 
   Val = selectImm(CurDAG, SDLoc(N), N->getSimpleValueType(0), ~Imm, *Subtarget);
   return true;
+}
+
+bool RISCVDAGToDAGISel::selectAlciLength(SDValue N, SDValue &Val) {
+  if (N.getOpcode() != ISD::ALLOCATE)
+    return false;
+
+  if (isa<ConstantSDNode>(N.getOperand(1)) && isa<ConstantSDNode>(N.getOperand(2))){
+    uint64_t Pi = N->getConstantOperandVal(1);
+    uint64_t Dt = N->getConstantOperandVal(2);
+
+    Val = CurDAG->getTargetConstant(Pi+Dt, SDLoc(N), MVT::i32);
+    return true;
+  }
+  return false;
 }
 
 static bool vectorPseudoHasAllNBitUsers(SDNode *User, unsigned UserOpNo,

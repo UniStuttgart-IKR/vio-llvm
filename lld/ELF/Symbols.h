@@ -166,7 +166,6 @@ public:
     return inOtherObject;
   }
 
-  bool includeInDynsym(Ctx &) const;
   uint8_t computeBinding(Ctx &) const;
   bool isGlobal() const { return binding == llvm::ELF::STB_GLOBAL; }
   bool isWeak() const { return binding == llvm::ELF::STB_WEAK; }

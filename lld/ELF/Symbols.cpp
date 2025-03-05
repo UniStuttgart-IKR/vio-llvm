@@ -275,22 +275,6 @@ uint8_t Symbol::computeBinding(Ctx &ctx) const {
   return binding;
 }
 
-bool Symbol::includeInDynsym(Ctx &ctx) const {
-  if (inOtherObject)
-    return true;
-  if (computeBinding(ctx) == STB_LOCAL)
-    return false;
-  if (!isDefined() && !isCommon())
-    // This should unconditionally return true, unfortunately glibc -static-pie
-    // expects undefined weak symbols not to exist in .dynsym, e.g.
-    // __pthread_mutex_lock reference in _dl_add_to_namespace_list,
-    // __pthread_initialize_minimal reference in csu/libc-start.c.
-    return !(isUndefWeak() && ctx.arg.noDynamicLinker);
-
-  return exportDynamic ||
-         (ctx.arg.exportDynamic && (isUsedInRegularObj || !ltoCanOmit));
-}
-
 // Print out a log message for --trace-symbol.
 void elf::printTraceSymbol(const Symbol &sym, StringRef name) {
   std::string s;

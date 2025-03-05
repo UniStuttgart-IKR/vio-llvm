@@ -301,9 +301,10 @@ static void demoteSymbolsAndComputeIsPreemptible(Ctx &ctx) {
       }
     }
 
-    sym->isExported = sym->includeInDynsym(ctx);
-    if (ctx.arg.hasDynSymTab)
-      sym->isPreemptible = sym->isExported && computeIsPreemptible(ctx, *sym);
+    sym->isExported = sym->getInOtherObject();
+    if (maybePreemptible)
+      sym->isPreemptible = (sym->isUndefined() || sym->isExported) &&
+                           computeIsPreemptible(ctx, *sym);
   }
 }
 

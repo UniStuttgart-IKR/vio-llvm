@@ -258,10 +258,9 @@ void Symbol::parseSymbolVersion(Ctx &ctx) {
 }
 
 void Symbol::extract(Ctx &ctx) const {
-  if (file->lazy) {
-    file->lazy = false;
-    parseFile(ctx, file);
-  }
+  assert(file->lazy);
+  file->lazy = false;
+  parseFile(ctx, file);
 }
 
 uint8_t Symbol::computeBinding(Ctx &ctx) const {
@@ -384,13 +383,22 @@ void elf::parseVersionAndComputeIsPreemptible(Ctx &ctx) {
   // Symbol themselves might know their versions because symbols
   // can contain versions in the form of <name>@<version>.
   // Let them parse and update their names to exclude version suffix.
-  bool hasDynSymTab = ctx.arg.hasDynSymTab;
+  // In addition, compute isExported and isPreemptible.
+  bool maybePreemptible = ctx.sharedFiles.size() || ctx.arg.shared;
   for (Symbol *sym : ctx.symtab->getSymbols()) {
     if (sym->hasVersionSuffix)
       sym->parseSymbolVersion(ctx);
-    sym->isExported = sym->includeInDynsym(ctx);
-    if (hasDynSymTab)
-      sym->isPreemptible = sym->isExported && computeIsPreemptible(ctx, *sym);
+    if (sym->computeBinding(ctx) == STB_LOCAL) {
+      sym->isExported = false;
+      continue;
+    }
+    if (!sym->isDefined() && !sym->isCommon()) {
+      sym->isPreemptible = maybePreemptible && computeIsPreemptible(ctx, *sym);
+    } else if (ctx.arg.exportDynamic &&
+               (sym->isUsedInRegularObj || !sym->ltoCanOmit)) {
+      sym->isExported = true;
+      sym->isPreemptible = maybePreemptible && computeIsPreemptible(ctx, *sym);
+    }
   }
 }
 
@@ -673,10 +681,10 @@ void Symbol::resolve(Ctx &ctx, const LazySymbol &other) {
 }
 
 void Symbol::resolve(Ctx &ctx, const SharedSymbol &other) {
-    if(inOtherObject)
+  if(inOtherObject)
     return;
   
-  exportDynamic = true;
+  isExported = true;
   if (isPlaceholder()) {
     other.overwrite(*this);
     return;

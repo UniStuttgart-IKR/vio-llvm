@@ -162,6 +162,30 @@ public:
     return std::make_pair(SDValue(), SDValue());
   }
 
+  virtual std::pair<SDValue, SDValue>
+  EmitTargetCodeForMalloc(SelectionDAG &DAG, const SDLoc &DL, SDValue Chain,
+                          SDValue Size) const {
+    return std::make_pair(SDValue(), SDValue());
+  }
+
+  virtual std::pair<SDValue, SDValue>
+  EmitTargetCodeForRealloc(SelectionDAG &DAG, const SDLoc &DL, SDValue Chain,
+                          SDValue Ptr, SDValue Size) const {
+    return std::make_pair(SDValue(), SDValue());
+  }
+
+  virtual std::pair<SDValue, SDValue>
+  EmitTargetCodeForCalloc(SelectionDAG &DAG, const SDLoc &DL, SDValue Chain,
+                          SDValue Num, SDValue Size) const {
+    return std::make_pair(SDValue(), SDValue());
+  }
+
+  virtual bool
+  EmitTargetCodeForFree(SelectionDAG &DAG, const SDLoc &DL, SDValue Chain,
+                          SDValue Ptr) const {
+    return false;
+  }
+
   virtual SDValue EmitTargetCodeForSetTag(SelectionDAG &DAG, const SDLoc &dl,
                                           SDValue Chain, SDValue Addr,
                                           SDValue Size,

@@ -9,6 +9,7 @@
 #ifndef LLVM_LIB_TARGET_RISCV_RISCVSELECTIONDAGINFO_H
 #define LLVM_LIB_TARGET_RISCV_RISCVSELECTIONDAGINFO_H
 
+#include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/SelectionDAGTargetInfo.h"
 
 namespace llvm {
@@ -20,6 +21,22 @@ public:
   bool isTargetMemoryOpcode(unsigned Opcode) const override;
 
   bool isTargetStrictFPOpcode(unsigned Opcode) const override;
+
+  std::pair<SDValue, SDValue>
+  EmitTargetCodeForMalloc(SelectionDAG &DAG, const SDLoc &DL, SDValue Chain,
+                          SDValue Size) const override;
+
+  std::pair<SDValue, SDValue>
+  EmitTargetCodeForRealloc(SelectionDAG &DAG, const SDLoc &DL, SDValue Chain,
+                          SDValue Ptr, SDValue Size) const override;
+
+  std::pair<SDValue, SDValue>
+  EmitTargetCodeForCalloc(SelectionDAG &DAG, const SDLoc &DL, SDValue Chain,
+                          SDValue Num, SDValue Size) const override;
+
+  bool
+  EmitTargetCodeForFree(SelectionDAG &DAG, const SDLoc &DL, SDValue Chain,
+                          SDValue Ptr) const override;
 };
 
 } // namespace llvm

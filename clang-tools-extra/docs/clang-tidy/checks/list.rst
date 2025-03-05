@@ -101,6 +101,7 @@ Clang-Tidy Checks
    :doc:`bugprone-inaccurate-erase <bugprone/inaccurate-erase>`, "Yes"
    :doc:`bugprone-inc-dec-in-conditions <bugprone/inc-dec-in-conditions>`,
    :doc:`bugprone-incorrect-enable-if <bugprone/incorrect-enable-if>`, "Yes"
+   :doc:`bugprone-incorrect-enable-shared-from-this <bugprone/incorrect-enable-shared-from-this>`, "Yes"
    :doc:`bugprone-incorrect-roundings <bugprone/incorrect-roundings>`,
    :doc:`bugprone-infinite-loop <bugprone/infinite-loop>`,
    :doc:`bugprone-integer-division <bugprone/integer-division>`,
@@ -157,6 +158,7 @@ Clang-Tidy Checks
    :doc:`bugprone-undelegated-constructor <bugprone/undelegated-constructor>`,
    :doc:`bugprone-unhandled-exception-at-new <bugprone/unhandled-exception-at-new>`,
    :doc:`bugprone-unhandled-self-assignment <bugprone/unhandled-self-assignment>`,
+   :doc:`bugprone-unintended-char-ostream-output <bugprone/unintended-char-ostream-output>`, "Yes"
    :doc:`bugprone-unique-ptr-array-mismatch <bugprone/unique-ptr-array-mismatch>`, "Yes"
    :doc:`bugprone-unsafe-functions <bugprone/unsafe-functions>`,
    :doc:`bugprone-unused-local-non-trivial-variable <bugprone/unused-local-non-trivial-variable>`,

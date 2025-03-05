@@ -1894,13 +1894,13 @@ let TargetPrefix = "riscv" in {
       : Intrinsic<[llvm_i32_ty], [llvm_ptr_ty],
               [IntrReadMem, IntrWillReturn]>;
   class RiscvZhmSWX
-      : Intrinsic<[], [llvm_i32_ty, llvm_ptr_ty],
+      : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty],
               [IntrWriteMem]>;
   class RiscvZhmLDX
       : Intrinsic<[llvm_i64_ty], [llvm_ptr_ty],
               [IntrReadMem, IntrWillReturn]>;
   class RiscvZhmSDX
-      : Intrinsic<[], [llvm_i64_ty, llvm_ptr_ty],
+      : Intrinsic<[], [llvm_ptr_ty, llvm_i64_ty],
               [IntrWriteMem]>;
 
   def int_riscv_alci   : RiscvZhmAlci;

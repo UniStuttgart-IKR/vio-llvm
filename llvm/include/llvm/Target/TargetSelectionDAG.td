@@ -353,6 +353,8 @@ class SDNode<string opcode, SDTypeProfile typeprof,
   string SDClass = sdclass;
   let Properties = props;
   SDTypeProfile TypeProfile = typeprof;
+  bit IsStrictFP = false;
+  bits<32> TSFlags = 0;
 }
 
 // Special TableGen-recognized dag nodes
@@ -838,6 +840,10 @@ def vector_insert_subvec : SDNode<"ISD::INSERT_SUBVECTOR",
 def extract_subvector : SDNode<"ISD::EXTRACT_SUBVECTOR", SDTSubVecExtract, []>;
 def insert_subvector : SDNode<"ISD::INSERT_SUBVECTOR", SDTSubVecInsert, []>;
 
+def find_last_active
+    : SDNode<"ISD::VECTOR_FIND_LAST_ACTIVE",
+             SDTypeProfile<1, 1, [SDTCisInt<0>, SDTCisVec<1>]>, []>;
+
 // Nodes for intrinsics, you should use the intrinsic itself and let tblgen use
 // these internally.  Don't reference these directly.
 def intrinsic_void : SDNode<"ISD::INTRINSIC_VOID",
@@ -864,6 +870,8 @@ def convergencectrl_loop   : SDNode<"ISD::CONVERGENCECTRL_LOOP",
                                       [SDTCisVT<0,untyped>, SDTCisVT<1,untyped>]>>;
 def convergencectrl_glue   : SDNode<"ISD::CONVERGENCECTRL_GLUE",
                                     SDTypeProfile<0, 1, [SDTCisVT<0, untyped>]>>;
+
+def allocate               : SDNode<"ISD::ALLOCATE", SDTypeProfile<1, 2, [SDTCisPtrTy<0>, SDTCisInt<1>, SDTCisInt<2>]>, [SDNPHasChain, SDNPSideEffect]>;
 
 //===----------------------------------------------------------------------===//
 // Selection DAG Condition Codes

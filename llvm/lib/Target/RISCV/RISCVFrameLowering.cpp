@@ -20,6 +20,7 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/MC/MCDwarf.h"
 #include "llvm/Support/LEB128.h"
@@ -99,7 +100,8 @@ static Align getABIStackAlignment(RISCVABI::ABI ABI) {
 
 RISCVFrameLowering::RISCVFrameLowering(const RISCVSubtarget &STI)
     : TargetFrameLowering(
-          StackGrowsDown, getABIStackAlignment(STI.getTargetABI()),
+          STI.hasStdExtZhm() ? StackGrowsUp : StackGrowsDown, 
+          getABIStackAlignment(STI.getTargetABI()),
           /*LocalAreaOffset=*/0,
           /*TransientStackAlignment=*/getABIStackAlignment(STI.getTargetABI()),
           STI.isStackRealignmentSupported()),
@@ -1266,16 +1268,12 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
     MinCSFI = CSI[0].getFrameIdx();
     MaxCSFI = CSI[CSI.size() - 1].getFrameIdx();
   }
-  
-  if (Subtarget.hasStdExtZhm()){
-    FrameReg = SPReg;
-    Offset = StackOffset::getFixed(- MFI.getObjectOffset(FI));
-    return Offset;
-  }
 
   if (FI >= MinCSFI && FI <= MaxCSFI) {
     FrameReg = SPReg;
-    if (FirstSPAdjustAmount)
+    if (Subtarget.hasStdExtZhm())
+      Offset = StackOffset::getFixed(RVFI->getCalleeSavedStackSize() + Subtarget.getXLen() / 8) - Offset;
+    else if (FirstSPAdjustAmount)
       Offset += StackOffset::getFixed(FirstSPAdjustAmount);
     else
       Offset += StackOffset::getFixed(getStackSizeWithRVVPadding(MF));
@@ -1358,7 +1356,7 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
 
   // This case handles indexing off both SP and BP.
   // If indexing off SP, there must not be any var sized objects
-  assert(FrameReg == RISCVABI::getBPReg() || !MFI.hasVarSizedObjects() || MF.getSubtarget<RISCVSubtarget>().hasStdExtZhm());
+  assert(FrameReg == RISCVABI::getBPReg() || !MFI.hasVarSizedObjects());
 
   // When using SP to access frame objects, we need to add RVV stack size.
   //
@@ -1390,21 +1388,15 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   // The total amount of padding surrounding RVV objects is described by
   // RVV->getRVVPadding() and it can be zero. It allows us to align the RVV
   // objects to the required alignment.
+  StackOffset StackSize;
   if (MFI.getStackID(FI) == TargetStackID::Default) {
     if (MFI.isFixedObjectIndex(FI)) {
       assert(!RI->hasStackRealignment(MF) &&
              "Can't index across variable sized realign");
-      Offset += StackOffset::get(getStackSizeWithRVVPadding(MF),
+      StackSize = StackOffset::get(getStackSizeWithRVVPadding(MF),
                                  RVFI->getRVVStackSize());
-                                 
-      if (MF.getSubtarget<RISCVSubtarget>().hasStdExtZhm())
-        Offset = StackOffset::get(getStackSizeWithRVVPadding(MF),
-                                 RVFI->getRVVStackSize()) - Offset;
     } else {
-      Offset += StackOffset::getFixed(MFI.getStackSize());
-                                 
-      if (MF.getSubtarget<RISCVSubtarget>().hasStdExtZhm())
-        Offset = StackOffset::getFixed(MFI.getStackSize()) - Offset;
+      StackSize = StackOffset::getFixed(MFI.getStackSize());
     }
   } else if (MFI.getStackID(FI) == TargetStackID::ScalableVector) {
     // Ensure the base of the RVV stack is correctly aligned: add on the
@@ -1412,9 +1404,13 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
     int ScalarLocalVarSize = MFI.getStackSize() -
                              RVFI->getCalleeSavedStackSize() -
                              RVFI->getVarArgsSaveSize() + RVFI->getRVVPadding();
-    Offset += StackOffset::get(ScalarLocalVarSize, RVFI->getRVVStackSize());
+    StackSize = StackOffset::get(ScalarLocalVarSize, RVFI->getRVVStackSize());
   }
-  return Offset;
+
+  if (Subtarget.hasStdExtZhm())
+    return StackSize - Offset;
+
+  return StackSize + Offset;
 }
 
 void RISCVFrameLowering::determineCalleeSaves(MachineFunction &MF,

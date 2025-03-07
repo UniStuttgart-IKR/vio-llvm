@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVFrameLowering.h"
+#include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "RISCVMachineFunctionInfo.h"
 #include "RISCVSubtarget.h"
 #include "llvm/BinaryFormat/Dwarf.h"
@@ -625,9 +626,25 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
   bool IsRV64 = STI.is64Bit();
 
   // Simply allocate the stack if it's not big enough to require a probe.
-  if (!NeedProbe || Offset <= ProbeSize) {
-    RI->adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackOffset::getFixed(-Offset),
-                  MachineInstr::FrameSetup, getStackAlign());
+  if (!NeedProbe || Offset <= ProbeSize || STI.hasStdExtZhm()) {
+
+    if (STI.hasStdExtZhm()) {
+      //For Zhm Extension, frame lowering is just allocating a Frame-Object
+      if (RealStackSize > 16383){
+        BuildMI(MBB, MBBI, DL, TII->get(RISCV::PseudoLI), RISCV::X6)
+            .addImm(RealStackSize);
+        BuildMI(MBB, MBBI, DL, TII->get(RISCV::ALC), SPReg)
+            .addReg(RISCV::X6)
+            .setMIFlags(MachineInstr::FrameSetup);
+      } else {
+        BuildMI(MBB, MBBI, DL, TII->get(RISCV::ALCI), SPReg)
+            .addImm(Offset)
+            .setMIFlags(MachineInstr::FrameSetup);
+      }
+    } else {
+      RI->adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackOffset::getFixed(-Offset),
+                    MachineInstr::FrameSetup, getStackAlign());
+    }
 
     if (EmitCFI) {
       // Emit ".cfi_def_cfa_offset RealStackSize"
@@ -637,6 +654,9 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
           .addCFIIndex(CFIIndex)
           .setMIFlag(MachineInstr::FrameSetup);
     }
+
+    if (STI.hasStdExtZhm())
+      return;
 
     if (NeedProbe && DynAllocation) {
       // s[d|w] zero, 0(sp)
@@ -844,19 +864,6 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   // Early exit if there is no need to allocate on the stack
   if (RealStackSize == 0 && !MFI.adjustsStack() && RVVStackSize == 0)
     return;
-
-  //For Zhm Extension, frame lowering is just allocating a Frame-Object
-  if (MF.getSubtarget<RISCVSubtarget>().hasStdExtZhm()){
-    //RealStackSize = alignTo(MFI.getStackSize() + RVFI->getRVVPadding() + STI.getXLen()/8, Align(MF.getSubtarget<RISCVSubtarget>().getXLen() / 8));
-    if (RealStackSize > 16383){
-      MF.getFunction().getContext().diagnose(DiagnosticInfoUnsupported{
-          MF.getFunction(), "Frames larger than 16384 Bytes are not allowed with Zhm."});
-    }
-    BuildMI(MBB, MBBI, DL, TII->get(RISCV::ALCI), SPReg)
-        .addImm(MFI.getStackSize() + 16) //FIXME: this is overallocating but will be fixed later!
-        .setMIFlags(MachineInstr::FrameSetup);
-    return;
-  }
 
   // If the stack pointer has been marked as reserved, then produce an error if
   // the frame requires stack allocation

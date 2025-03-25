@@ -17,6 +17,7 @@
 #include "llvm/CodeGen/MIRYamlMapping.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h"
 
 namespace llvm {
 
@@ -46,6 +47,8 @@ template <> struct MappingTraits<RISCVMachineFunctionInfo> {
 /// and contains private RISCV-specific information for each MachineFunction.
 class RISCVMachineFunctionInfo : public MachineFunctionInfo {
 private:
+  /// Pointer to varargs object for zhm
+  SDValue VarArgsObjectNode;
   /// FrameIndex for start of varargs area
   int VarArgsFrameIndex = 0;
   /// Size of the save area used for varargs
@@ -90,6 +93,9 @@ public:
 
   int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
   void setVarArgsFrameIndex(int Index) { VarArgsFrameIndex = Index; }
+
+  SDValue getVarArgsObject() const { return VarArgsObjectNode; }
+  void setVarArgsObject(SDValue Object) { VarArgsObjectNode = Object; }
 
   unsigned getVarArgsSaveSize() const { return VarArgsSaveSize; }
   void setVarArgsSaveSize(int Size) { VarArgsSaveSize = Size; }

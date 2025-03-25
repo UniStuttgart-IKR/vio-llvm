@@ -1,0 +1,28 @@
+DIR_TO_INSTALL=/u/bulk/home/stud/leylknci/vio-llvm/install_rt
+LLVM_BIN_PATH=/u/bulk/home/stud/leylknci/vio-llvm/install/bin
+TARGET_BASE="riscv32-unknown-elf"
+TARGET="-march=rv32i_zbb_zhm -O3"
+
+
+cmake compiler-rt \
+    -DCMAKE_INSTALL_PREFIX=${DIR_TO_INSTALL} \
+    -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+    -DCOMPILER_RT_OS_DIR="baremetal" \
+    -DCOMPILER_RT_BUILD_BUILTINS=ON \
+    -DCOMPILER_RT_BUILD_SANITIZERS=OFF \
+    -DCOMPILER_RT_BUILD_XRAY=OFF \
+    -DCOMPILER_RT_BUILD_LIBFUZZER=OFF \
+    -DCOMPILER_RT_BUILD_PROFILE=OFF \
+    -DCMAKE_C_COMPILER=${LLVM_BIN_PATH}/clang \
+    -DCMAKE_C_COMPILER_TARGET=$TARGET_BASE \
+    -DCMAKE_ASM_COMPILER_TARGET=$TARGET_BASE \
+    -DCMAKE_AR=${LLVM_BIN_PATH}/llvm-ar \
+    -DCMAKE_NM=${LLVM_BIN_PATH}/llvm-nm \
+    -DCMAKE_RANLIB=${LLVM_BIN_PATH}/llvm-ranlib \
+    -DCOMPILER_RT_BAREMETAL_BUILD=ON \
+    -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON \
+    -DLLVM_CONFIG_PATH=${LLVM_BIN_PATH}/llvm-config \
+    -DCMAKE_C_FLAGS=$TARGET \
+    -DCMAKE_ASM_FLAGS=$TARGET
+
+make && make install

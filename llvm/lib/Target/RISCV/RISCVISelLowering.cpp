@@ -8821,13 +8821,22 @@ SDValue RISCVTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
   RISCVMachineFunctionInfo *FuncInfo = MF.getInfo<RISCVMachineFunctionInfo>();
 
   SDLoc DL(Op);
-  SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
+  EVT PtrVT = getPointerTy(DAG.getDataLayout());
+  int FI = FuncInfo->getVarArgsFrameIndex();
+  SDValue FIN = DAG.getFrameIndex(FI,
                                  getPointerTy(MF.getDataLayout()));
+  SDValue Chain = Op.getOperand(0);
 
+  if (Subtarget.hasStdExtZhm()) {
+    FIN = DAG.getLoad(
+        PtrVT, DL, Chain, FIN,
+        MachinePointerInfo::getFixedStack(MF, FI, 0));
+    Chain = FIN.getValue(1);
+  }
   // vastart just stores the address of the VarArgsFrameIndex slot into the
   // memory location argument.
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
-  return DAG.getStore(Op.getOperand(0), DL, FI, Op.getOperand(1),
+  return DAG.getStore(Chain, DL, FIN, Op.getOperand(1),
                       MachinePointerInfo(SV));
 }
 
@@ -20976,27 +20985,68 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     // Size of the vararg save area. For now, the varargs save area is either
     // zero or large enough to hold a0-a7.
     int VarArgsSaveSize = XLenInBytes * (ArgRegs.size() - Idx);
-    int FI;
+    int FI = 0;
+    SDValue ArgObj;
+    MachinePointerInfo TargetInfo = MachinePointerInfo();
+    Align RequiredAlign(XLenInBytes);
+
+    if (Subtarget.hasStdExtZhm()) {
+      Register VReg = RegInfo.createVirtualRegister(&RISCV::GPRRegClass);
+      RegInfo.addLiveIn(RISCV::X17, VReg);
+      ArgObj = DAG.getCopyFromReg(Chain, DL, VReg, getPointerTy(MF.getDataLayout()));
+      Chain = ArgObj.getValue(1);
+    }
 
     // If all registers are allocated, then all varargs must be passed on the
     // stack and we don't need to save any argregs.
     if (VarArgsSaveSize == 0) {
-      int VaArgOffset = CCInfo.getStackSize();
-      FI = MFI.CreateFixedObject(XLenInBytes, VaArgOffset, true);
-    } else {
-      int VaArgOffset = -VarArgsSaveSize;
-      FI = MFI.CreateFixedObject(VarArgsSaveSize, VaArgOffset, true);
-
-      // If saving an odd number of registers then create an extra stack slot to
-      // ensure that the frame pointer is 2*XLEN-aligned, which in turn ensures
-      // offsets to even-numbered registered remain 2*XLEN-aligned.
-      if (Idx % 2) {
-        MFI.CreateFixedObject(
-            XLenInBytes, VaArgOffset - static_cast<int>(XLenInBytes), true);
-        VarArgsSaveSize += XLenInBytes;
+      if (Subtarget.hasStdExtZhm()) {
+        FI = MFI.CreateStackObject(XLenInBytes, RequiredAlign, false);
+        SDValue Store = DAG.getStore(
+            Chain, DL, ArgObj,
+            DAG.getFrameIndex(FI, PtrVT),
+            MachinePointerInfo());
+        OutChains.push_back(Store);
+      } else {
+        int VaArgOffset = CCInfo.getStackSize();
+        FI = MFI.CreateFixedObject(XLenInBytes, VaArgOffset, true);
       }
+    } else {
+      SDValue FIN;
+      if (Subtarget.hasStdExtZhm()) {
+        SDValue SizeNode = SDValue(DAG.getMachineNode(RISCV::ALCI, DL, XLenVT, ArgObj), 0);
+        SDValue AlcLen = DAG.getNode(ISD::ADD, DL, XLenVT, SizeNode, DAG.getConstant(VarArgsSaveSize, DL, XLenVT));
 
-      SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
+        SDValue Ops[] = {Chain, AlcLen, DAG.getConstant(0, DL, XLenVT)};
+        SDVTList VTs = DAG.getVTList(PtrVT, MVT::Other);
+        SDValue NewArgObj = DAG.getNode(ISD::ALLOCATE, DL, VTs, Ops);
+        Chain = DAG.getMemcpy(NewArgObj.getValue(1), DL, NewArgObj.getValue(0), ArgObj, 
+                      SizeNode, RequiredAlign,
+                      /*IsVolatile=*/false,
+                      /*AlwaysInline=*/false, /*CI*/ nullptr, false,
+                      MachinePointerInfo(), MachinePointerInfo());
+        FIN = DAG.getNode(ISD::ADD, DL, PtrVT, NewArgObj, SizeNode);
+        FI = MFI.CreateStackObject(XLenInBytes, RequiredAlign, false);
+        SDValue Store = DAG.getStore(
+            Chain, DL, NewArgObj,
+            DAG.getFrameIndex(FI, PtrVT),
+            MachinePointerInfo());
+        OutChains.push_back(Store);
+      } else {
+        int VaArgOffset = -VarArgsSaveSize;
+        FI = MFI.CreateFixedObject(VarArgsSaveSize, VaArgOffset, true);
+
+        // If saving an odd number of registers then create an extra stack slot to
+        // ensure that the frame pointer is 2*XLEN-aligned, which in turn ensures
+        // offsets to even-numbered registered remain 2*XLEN-aligned.
+        if (Idx % 2) {
+          MFI.CreateFixedObject(
+              XLenInBytes, VaArgOffset - static_cast<int>(XLenInBytes), true);
+          VarArgsSaveSize += XLenInBytes;
+        }
+
+        FIN = DAG.getFrameIndex(FI, PtrVT);
+      }
 
       // Copy the integer registers that may have been used for passing varargs
       // to the vararg save area.
@@ -21004,9 +21054,11 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
         const Register Reg = RegInfo.createVirtualRegister(RC);
         RegInfo.addLiveIn(ArgRegs[I], Reg);
         SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, XLenVT);
+        if (!Subtarget.hasStdExtZhm())
+          TargetInfo = MachinePointerInfo::getFixedStack(MF, FI, (I - Idx) * XLenInBytes);
         SDValue Store = DAG.getStore(
             Chain, DL, ArgValue, FIN,
-            MachinePointerInfo::getFixedStack(MF, FI, (I - Idx) * XLenInBytes));
+            TargetInfo);
         OutChains.push_back(Store);
         FIN =
             DAG.getMemBasePlusOffset(FIN, TypeSize::getFixed(XLenInBytes), DL);
@@ -21459,6 +21511,7 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
 
   // Get a count of how many bytes are to be pushed on the stack.
   unsigned NumBytes = ArgCCInfo.getStackSize();
+  unsigned NumArgObjBytes = 0;
 
   // Create local copies for byval args
   SmallVector<SDValue, 8> ByValArgs;
@@ -21466,7 +21519,6 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
     ISD::ArgFlagsTy Flags = Outs[i].Flags;
     if (!Flags.isByVal())
       continue;
-
     SDValue Arg = OutVals[i];
     unsigned Size = Flags.getByValSize();
     Align Alignment = Flags.getNonZeroByValAlign();
@@ -21479,12 +21531,6 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
                             SDNodeFlags::NoUnsignedWrap);
     SizeNode = DAG.getNode(ISD::AND, DL, SizeNode.getValueType(), SizeNode,
                             DAG.getSignedConstant(~AlignMask, DL, XLenVT));
-/*
-    int FI =
-        MF.getFrameInfo().CreateStackObject(Size, Alignment, false);
-    SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
-    SDValue SizeNode = DAG.getConstant(Size, DL, XLenVT);
-*/
 
     SDValue Ops[] = {Chain, SizeNode, ZeroNode};
     SDVTList VTs = DAG.getVTList(PtrVT, MVT::Other);
@@ -21505,7 +21551,6 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
 
   SDValue SpilledArgsPtr = DAG.getNode(ISD::ALLOCATE, DL, AlcVTs, Chain, ZeroNode, ZeroNode);
   MachinePointerInfo SpilledArgsInfo = MachinePointerInfo();
-  unsigned NumArgObjBytes = 0;
 
   for (unsigned i = 0, j = 0, e = ArgLocs.size(), OutIdx = 0; i != e;
        ++i, ++OutIdx) {
@@ -21606,8 +21651,7 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
       // Queue up the argument copies and emit them at the end.
       RegsToPass.push_back(std::make_pair(VA.getLocReg(), ArgValue));
     } else {
-      assert(VA.isMemLoc() && "Argument not register or memory");
-
+      NumArgObjBytes += ArgValue.getValueSizeInBits()/8;
       // Work out the address of the stack slot.
       SDValue Address =
           DAG.getNode(ISD::ADD, DL, PtrVT, SpilledArgsPtr,
@@ -21665,7 +21709,7 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
   for (auto &Reg : RegsToPass)
     Ops.push_back(DAG.getRegister(Reg.first, Reg.second.getValueType()));
 
-  if (SpilledArgsPtr) {
+  if (NumArgObjBytes != 0) {
     Ops.push_back(DAG.getRegister(RISCV::X17, PtrVT));
   }
 

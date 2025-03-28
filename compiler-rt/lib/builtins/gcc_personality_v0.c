@@ -114,6 +114,9 @@ static uintptr_t readEncodedPointer(const uint8_t **data, uint8_t encoding) {
     compilerrt_abort();
     break;
   }
+/*
+TERRIBLE HACK!! REMOVE ON RELEASE!!!!
+
 
   // then add relative offset
   switch (encoding & 0x70) {
@@ -137,7 +140,7 @@ static uintptr_t readEncodedPointer(const uint8_t **data, uint8_t encoding) {
   if (encoding & DW_EH_PE_indirect) {
     result = *((const uintptr_t *)result);
   }
-
+*/
   *data = p;
   return result;
 }

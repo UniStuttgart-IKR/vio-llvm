@@ -143,6 +143,8 @@ def sm3p1 : RISCVBuiltin<"unsigned int(unsigned int)">;
 let Features = "zhm" in {
 def alci   : RISCVBuiltin<"void*(unsigned int)">;
 def alci_d : RISCVBuiltin<"void*(unsigned int)">;
+def sep    : RISCVBuiltin<"unsigned char(void*)">;
+def clr    : RISCVBuiltin<"void(void*)">;
 } // Features = "zhm"
 
 let Features = "zhm,32bit" in {
@@ -153,8 +155,8 @@ def qsz_32    : RISCVBuiltin<"unsigned int(void*)">;
 def dtp_32    : RISCVBuiltin<"void*(unsigned int, unsigned int)">;
 def btd_32    : RISCVBuiltin<"unsigned int(void*)">;
 def itd_32    : RISCVBuiltin<"unsigned int(void*)">;
-def lw_x      : RISCVBuiltin<"unsigned int(void*)">;
-def sw_x      : RISCVBuiltin<"void(void*, unsigned int)">;
+def lt_32     : RISCVBuiltin<"unsigned int(void*)">;
+def st_32     : RISCVBuiltin<"void(void*, unsigned int)">;
 }// Features = "zhm,32bit"
 
 let Features = "zhm,64bit" in {
@@ -165,8 +167,8 @@ def qsz_64    : RISCVBuiltin<"uint64_t(void*)">;
 def dtp_64    : RISCVBuiltin<"void*(uint64_t, uint64_t)">;
 def btd_64    : RISCVBuiltin<"uint64_t(void*)">;
 def itd_64    : RISCVBuiltin<"uint64_t(void*)">;
-def ld_x      : RISCVBuiltin<"uint64_t(void*)">;
-def sd_x      : RISCVBuiltin<"void( void*, uint64_t)">;
+def lt_64     : RISCVBuiltin<"uint64_t(void*)">;
+def st_64     : RISCVBuiltin<"void(void*, uint64_t)">;
 } // Features = "zhm,32bit"
 
 } // Attributes = [Const, NoThrow]

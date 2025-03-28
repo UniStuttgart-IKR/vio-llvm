@@ -1890,26 +1890,17 @@ let TargetPrefix = "riscv" in {
   class RiscvZhmAlci
       : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty],
               [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
-  class RiscvZhmLWX
-      : Intrinsic<[llvm_i32_ty], [llvm_ptr_ty],
-              [IntrReadMem, IntrWillReturn]>;
-  class RiscvZhmSWX
-      : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty],
-              [IntrWriteMem]>;
-  class RiscvZhmLDX
-      : Intrinsic<[llvm_i64_ty], [llvm_ptr_ty],
-              [IntrReadMem, IntrWillReturn]>;
-  class RiscvZhmSDX
-      : Intrinsic<[], [llvm_ptr_ty, llvm_i64_ty],
+  class RiscvZhmSep
+      : Intrinsic<[llvm_i1_ty], [llvm_ptr_ty],
+              [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
+  class RiscvZhmClr
+      : Intrinsic<[], [llvm_ptr_ty],
               [IntrWriteMem]>;
 
   def int_riscv_alci   : RiscvZhmAlci;
   def int_riscv_alci_d : RiscvZhmAlci;
-  def int_riscv_lw_x   : RiscvZhmLWX;
-  def int_riscv_sw_x   : RiscvZhmSWX;
-  def int_riscv_ld_x   : RiscvZhmLDX;
-  def int_riscv_sd_x   : RiscvZhmSDX;
-
+  def int_riscv_sep    : RiscvZhmSep;
+  def int_riscv_clr    : RiscvZhmClr;
 
   class RiscvZhmAlc_32
       : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty],
@@ -1920,6 +1911,12 @@ let TargetPrefix = "riscv" in {
   class RiscvZhmDTP_32
       : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty, llvm_i32_ty],
               [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
+  class RiscvZhmLt_32
+      : Intrinsic<[llvm_i32_ty], [llvm_ptr_ty],
+              [IntrReadMem, IntrWillReturn]>;
+  class RiscvZhmSt_32
+      : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty],
+              [IntrWriteMem]>;
   
   def int_riscv_alc_32    : RiscvZhmAlc_32;
   def int_riscv_alc_d_32  : RiscvZhmAlc_32;
@@ -1928,6 +1925,8 @@ let TargetPrefix = "riscv" in {
   def int_riscv_dtp_32    : RiscvZhmDTP_32;
   def int_riscv_btd_32    : RiscvZhmReadObject_32;
   def int_riscv_itd_32    : RiscvZhmReadObject_32;
+  def int_riscv_lt_32     : RiscvZhmLt_32;
+  def int_riscv_st_32     : RiscvZhmSt_32;
 
 
   class RiscvZhmAlc_64
@@ -1939,6 +1938,12 @@ let TargetPrefix = "riscv" in {
   class RiscvZhmDTP_64
       : Intrinsic<[llvm_ptr_ty], [llvm_i64_ty, llvm_i64_ty],
               [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
+  class RiscvZhmLt_64
+      : Intrinsic<[llvm_i64_ty], [llvm_ptr_ty],
+              [IntrReadMem, IntrWillReturn]>;
+  class RiscvZhmSt_64
+      : Intrinsic<[], [llvm_ptr_ty, llvm_i64_ty],
+              [IntrWriteMem]>;
   
   def int_riscv_alc_64    : RiscvZhmAlc_64;
   def int_riscv_alc_d_64  : RiscvZhmAlc_64;
@@ -1947,6 +1952,8 @@ let TargetPrefix = "riscv" in {
   def int_riscv_dtp_64    : RiscvZhmDTP_64;
   def int_riscv_btd_64    : RiscvZhmReadObject_64;
   def int_riscv_itd_64    : RiscvZhmReadObject_64;
+  def int_riscv_lt_64     : RiscvZhmLt_64;
+  def int_riscv_st_64     : RiscvZhmSt_64;
 
 } // TargetPrefix = "riscv"
 

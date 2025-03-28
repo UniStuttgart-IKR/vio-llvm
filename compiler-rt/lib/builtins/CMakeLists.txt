@@ -753,6 +753,7 @@ set(riscv_SOURCES
   riscv/fp_mode.c
   riscv/save.S
   riscv/restore.S
+  riscv/memcpy.S
   ${GENERIC_SOURCES}
   ${GENERIC_TF_SOURCES}
 )

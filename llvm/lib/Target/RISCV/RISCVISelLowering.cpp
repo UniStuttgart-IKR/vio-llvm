@@ -21014,7 +21014,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     } else {
       SDValue FIN;
       if (Subtarget.hasStdExtZhm()) {
-        SDValue SizeNode = SDValue(DAG.getMachineNode(RISCV::ALCI, DL, XLenVT, ArgObj), 0);
+        SDValue SizeNode = SDValue(DAG.getMachineNode(RISCV::QSZ, DL, XLenVT, ArgObj), 0);
         SDValue AlcLen = DAG.getNode(ISD::ADD, DL, XLenVT, SizeNode, DAG.getConstant(VarArgsSaveSize, DL, XLenVT));
 
         SDValue Ops[] = {Chain, AlcLen, DAG.getConstant(0, DL, XLenVT)};
@@ -22231,6 +22231,7 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(SF_VC_V_VVW_SE)
   NODE_NAME_CASE(SF_VC_V_FVW_SE)
   NODE_NAME_CASE(PROBED_ALLOCA)
+  NODE_NAME_CASE(QSZ)
   }
   // clang-format on
   return nullptr;

@@ -630,7 +630,7 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
 
     if (STI.hasStdExtZhm()) {
       //For Zhm Extension, frame lowering is just allocating a Frame-Object
-      if (RealStackSize > 16383){
+      if (RealStackSize > 4095){
         BuildMI(MBB, MBBI, DL, TII->get(RISCV::PseudoLI), RISCV::X6)
             .addImm(RealStackSize);
         BuildMI(MBB, MBBI, DL, TII->get(RISCV::ALC), SPReg)

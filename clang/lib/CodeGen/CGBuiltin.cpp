@@ -23698,17 +23698,23 @@ Value *CodeGenFunction::EmitRISCVBuiltinExpr(unsigned BuiltinID,
   case RISCV::BI__builtin_riscv_itd_64:
     ID = Intrinsic::riscv_itd_64;
     break;
-  case RISCV::BI__builtin_riscv_lw_x:
-    ID = Intrinsic::riscv_lw_x;
+  case RISCV::BI__builtin_riscv_sep:
+    ID = Intrinsic::riscv_sep;
     break;
-  case RISCV::BI__builtin_riscv_sw_x:
-    ID = Intrinsic::riscv_sw_x;
+  case RISCV::BI__builtin_riscv_clr:
+    ID = Intrinsic::riscv_clr;
     break;
-  case RISCV::BI__builtin_riscv_ld_x:
-    ID = Intrinsic::riscv_ld_x;
+  case RISCV::BI__builtin_riscv_lt_32:
+    ID = Intrinsic::riscv_lt_32;
     break;
-  case RISCV::BI__builtin_riscv_sd_x:
-    ID = Intrinsic::riscv_sd_x;
+  case RISCV::BI__builtin_riscv_st_32:
+    ID = Intrinsic::riscv_st_32;
+    break;
+  case RISCV::BI__builtin_riscv_lt_64:
+    ID = Intrinsic::riscv_lt_64;
+    break;
+  case RISCV::BI__builtin_riscv_st_64:
+    ID = Intrinsic::riscv_st_64;
     break;
 
     // Vector builtins are handled from here.

@@ -11,6 +11,7 @@
 #include "Symbols.h"
 #include "SyntheticSections.h"
 #include "Target.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Support/ELFAttributes.h"
 #include "llvm/Support/LEB128.h"
 #include "llvm/Support/RISCVAttributeParser.h"
@@ -751,6 +752,25 @@ static void relaxCall(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
   }
 }
 
+// Relax R_RISCV_CALL/R_RISCV_CALL_PLT auipc+jalr to c.j, c.jal, or jal.
+static void relaxGOTOff(Ctx &ctx, const InputSection &sec, size_t i, uint64_t loc,
+    Relocation &r, uint32_t &remove) {
+  const Symbol &sym = *r.sym;
+
+  const uint64_t insnPair = read64le(sec.content().data() + r.offset);
+  const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
+  const uint64_t dest = (sym.getVA(ctx)) + r.addend;
+
+  const int64_t displace = dest - loc;
+
+  if (r.isGlobal() && ~r.isUndefined()) {
+    sec.relaxAux->relocTypes[i] = R_RISCV_CALL;
+    sec.relaxAux->writes.push_back(displace);
+    sec.relaxAux->writes.push_back(rd);
+    remove = 0;
+  }
+}
+
 // Relax local-exec TLS when hi20 is zero.
 static void relaxTlsLe(Ctx &ctx, const InputSection &sec, size_t i,
                        uint64_t loc, Relocation &r, uint32_t &remove) {
@@ -840,6 +860,9 @@ static bool relax(Ctx &ctx, InputSection &sec) {
     case R_RISCV_CALL_PLT:
       if (relaxable(relocs, i))
         relaxCall(ctx, sec, i, loc, r, remove);
+      break;
+    case RE_RISCV_GOT_OFF: 
+      relaxGOTOff(ctx, sec, i, loc, r, remove);
       break;
     case R_RISCV_TPREL_HI20:
     case R_RISCV_TPREL_ADD:
@@ -996,6 +1019,16 @@ void RISCV::finalizeRelax(int passes) const {
           case R_RISCV_JAL:
             skip = 4;
             write32le(p, aux.writes[writesIdx++]);
+            break;
+          case R_RISCV_CALL:
+            // we want to relax a R_RISCV_GOT_OFF to a call
+            // we need a auipc first for the high 20 bits of the replacement (this will replace the lw xX, Y(gp))
+            uint32_t disp = aux.writes[writesIdx++];
+            uint32_t rd = aux.writes[writesIdx++];
+            write32le(p,  0x6F | (disp & 0xFFFFF000) | (rd << 7));
+            // then we need to set the low bits of the jalr accordingly
+            //TODO: put together a jalr instruction here write32le(p + 4,  0x6F | (disp & 0xFFF) | (rd << 7));
+            skip = 8;
             break;
           case R_RISCV_32:
             // Used by relaxTlsLe to write a uint32_t then suppress the handling

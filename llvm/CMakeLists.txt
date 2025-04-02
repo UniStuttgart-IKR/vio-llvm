@@ -513,6 +513,8 @@ set(LLVM_ALL_EXPERIMENTAL_TARGETS
   DirectX
   M68k
   Xtensa
+  ObjectiveRISC
+  IKRRISC2
 )
 
 # List of targets with JIT support:

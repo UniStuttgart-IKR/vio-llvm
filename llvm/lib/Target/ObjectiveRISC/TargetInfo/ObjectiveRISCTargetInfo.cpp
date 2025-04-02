@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "TargetInfo/ObjectiveRISCTargetInfo.h"
+#include "ObjectiveRISCTargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
 using namespace llvm;
 
@@ -15,6 +15,6 @@ Target &llvm::getTheObjectiveRISCTarget() {
 	return TheObjectiveRISCTarget;
 }
 
-extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeSparcTargetInfo() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeObjectiveRiscTargetInfo() {
 	RegisterTarget<Triple::objrisc, /*HasJIT=*/false> X(getTheObjectiveRISCTarget(), "objectiverisc", "Objective-RISC", "ObjectiveRISC");
 }

@@ -84,6 +84,8 @@ StringRef Triple::getArchTypeName(ArchType Kind) {
   case x86_64:         return "x86_64";
   case xcore:          return "xcore";
   case xtensa:         return "xtensa";
+  case ikrrisc2:       return "ikrrisc2";
+  case objrisc:        return "objrisc";
   }
 
   llvm_unreachable("Invalid ArchType!");
@@ -943,6 +945,7 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::hexagon:
   case Triple::hsail64:
   case Triple::hsail:
+  case Triple::ikrrisc2:
   case Triple::kalimba:
   case Triple::lanai:
   case Triple::loongarch32:
@@ -954,6 +957,7 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::msp430:
   case Triple::nvptx64:
   case Triple::nvptx:
+  case Triple::objrisc:
   case Triple::ppc64le:
   case Triple::ppcle:
   case Triple::r600:
@@ -1656,6 +1660,7 @@ unsigned Triple::getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::dxil:
   case llvm::Triple::hexagon:
   case llvm::Triple::hsail:
+  case llvm::Triple::ikrrisc2:
   case llvm::Triple::kalimba:
   case llvm::Triple::lanai:
   case llvm::Triple::loongarch32:
@@ -1663,6 +1668,7 @@ unsigned Triple::getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
   case llvm::Triple::nvptx:
+  case llvm::Triple::objrisc:
   case llvm::Triple::ppc:
   case llvm::Triple::ppcle:
   case llvm::Triple::r600:
@@ -1766,6 +1772,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::dxil:
   case Triple::hexagon:
   case Triple::hsail:
+  case Triple::ikrrisc2:
   case Triple::kalimba:
   case Triple::lanai:
   case Triple::loongarch32:
@@ -1773,6 +1780,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::mips:
   case Triple::mipsel:
   case Triple::nvptx:
+  case Triple::objrisc:
   case Triple::ppc:
   case Triple::ppcle:
   case Triple::r600:
@@ -1831,10 +1839,12 @@ Triple Triple::get64BitArchVariant() const {
   case Triple::csky:
   case Triple::dxil:
   case Triple::hexagon:
+  case Triple::ikrrisc2:
   case Triple::kalimba:
   case Triple::lanai:
   case Triple::m68k:
   case Triple::msp430:
+  case Triple::objrisc:
   case Triple::r600:
   case Triple::shave:
   case Triple::sparcel:

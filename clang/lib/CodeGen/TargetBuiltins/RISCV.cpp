@@ -407,6 +407,50 @@ Value *CodeGenFunction::EmitRISCVBuiltinExpr(unsigned BuiltinID,
     ID = Intrinsic::riscv_cv_alu_subuRN;
     break;
 
+  //Zhm
+  case RISCV::BI__builtin_riscv_alci:
+    ID = Intrinsic::riscv_alci;
+    break;
+  case RISCV::BI__builtin_riscv_alc_32:
+    ID = Intrinsic::riscv_alc_32;
+    break;
+  case RISCV::BI__builtin_riscv_alc_64:
+    ID = Intrinsic::riscv_alc_64;
+    break;
+  case RISCV::BI__builtin_riscv_alci_d:
+    ID = Intrinsic::riscv_alci_d;
+    break;
+  case RISCV::BI__builtin_riscv_alc_d_32:
+    ID = Intrinsic::riscv_alc_d_32;
+    break;
+  case RISCV::BI__builtin_riscv_alc_d_64:
+    ID = Intrinsic::riscv_alc_d_64;
+    break;
+  case RISCV::BI__builtin_riscv_qsz_32:
+    ID = Intrinsic::riscv_qsz_32;
+    break;
+  case RISCV::BI__builtin_riscv_qsz_64:
+    ID = Intrinsic::riscv_qsz_64;
+    break;
+  case RISCV::BI__builtin_riscv_dtp_32:
+    ID = Intrinsic::riscv_dtp_32;
+    break;
+  case RISCV::BI__builtin_riscv_dtp_64:
+    ID = Intrinsic::riscv_dtp_64;
+    break;
+  case RISCV::BI__builtin_riscv_btd_32:
+    ID = Intrinsic::riscv_btd_32;
+    break;
+  case RISCV::BI__builtin_riscv_btd_64:
+    ID = Intrinsic::riscv_btd_64;
+    break;
+  case RISCV::BI__builtin_riscv_itd_32:
+    ID = Intrinsic::riscv_itd_32;
+    break;
+  case RISCV::BI__builtin_riscv_itd_64:
+    ID = Intrinsic::riscv_itd_64;
+    break;
+
     // Vector builtins are handled from here.
 #include "clang/Basic/riscv_vector_builtin_cg.inc"
 

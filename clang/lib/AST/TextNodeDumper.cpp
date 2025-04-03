@@ -423,6 +423,7 @@ void TextNodeDumper::Visit(const OpenACCClause *C) {
     case OpenACCClauseKind::FirstPrivate:
     case OpenACCClauseKind::Link:
     case OpenACCClauseKind::NoCreate:
+    case OpenACCClauseKind::NoHost:
     case OpenACCClauseKind::NumGangs:
     case OpenACCClauseKind::NumWorkers:
     case OpenACCClauseKind::Present:
@@ -434,6 +435,7 @@ void TextNodeDumper::Visit(const OpenACCClause *C) {
     case OpenACCClauseKind::UseDevice:
     case OpenACCClauseKind::Vector:
     case OpenACCClauseKind::VectorLength:
+    case OpenACCClauseKind::Invalid:
       // The condition expression will be printed as a part of the 'children',
       // but print 'clause' here so it is clear what is happening from the dump.
       OS << " clause";
@@ -500,9 +502,15 @@ void TextNodeDumper::Visit(const OpenACCClause *C) {
       OS << " clause Operator: "
          << cast<OpenACCReductionClause>(C)->getReductionOp();
       break;
-    default:
-      // Nothing to do here.
-      break;
+    case OpenACCClauseKind::Bind:
+      OS << " clause";
+      if (cast<OpenACCBindClause>(C)->isIdentifierArgument())
+        OS << " identifier '"
+           << cast<OpenACCBindClause>(C)->getIdentifierArgument()->getName()
+           << "'";
+      else
+        AddChild(
+            [=] { Visit(cast<OpenACCBindClause>(C)->getStringArgument()); });
     }
   }
   dumpPointer(C);
@@ -1019,10 +1027,6 @@ void clang::TextNodeDumper::dumpNestedNameSpecifier(const NestedNameSpecifier *N
       OS << " TypeSpec";
       dumpType(QualType(NNS->getAsType(), 0));
       break;
-    case NestedNameSpecifier::TypeSpecWithTemplate:
-      OS << " TypeSpecWithTemplate";
-      dumpType(QualType(NNS->getAsType(), 0));
-      break;
     case NestedNameSpecifier::Global:
       OS << " Global";
       break;
@@ -1294,6 +1298,8 @@ void TextNodeDumper::dumpBareTemplateName(TemplateName TN) {
     OS << " index " << STS->getIndex();
     if (std::optional<unsigned int> PackIndex = STS->getPackIndex())
       OS << " pack_index " << *PackIndex;
+    if (STS->getFinal())
+      OS << " final";
     if (const TemplateTemplateParmDecl *P = STS->getParameter())
       AddChild("parameter", [=] { Visit(P); });
     dumpDeclRef(STS->getAssociatedDecl(), "associated");
@@ -2120,6 +2126,8 @@ void TextNodeDumper::VisitSubstTemplateTypeParmType(
   VisitTemplateTypeParmDecl(T->getReplacedParameter());
   if (auto PackIndex = T->getPackIndex())
     OS << " pack_index " << *PackIndex;
+  if (T->getFinal())
+    OS << " final";
 }
 
 void TextNodeDumper::VisitSubstTemplateTypeParmPackType(
@@ -3073,6 +3081,30 @@ void TextNodeDumper::VisitOpenACCDeclareDecl(const OpenACCDeclareDecl *D) {
   OS << " " << D->getDirectiveKind();
 
   for (const OpenACCClause *C : D->clauses())
+    AddChild([=] {
+      Visit(C);
+      for (const Stmt *S : C->children())
+        AddChild([=] { Visit(S); });
+    });
+}
+void TextNodeDumper::VisitOpenACCRoutineDecl(const OpenACCRoutineDecl *D) {
+  OS << " " << D->getDirectiveKind();
+
+  dumpSourceRange(SourceRange{D->getLParenLoc(), D->getRParenLoc()});
+
+  AddChild([=] { Visit(D->getFunctionReference()); });
+
+  for (const OpenACCClause *C : D->clauses())
+    AddChild([=] {
+      Visit(C);
+      for (const Stmt *S : C->children())
+        AddChild([=] { Visit(S); });
+    });
+}
+
+void TextNodeDumper::VisitOpenACCRoutineDeclAttr(
+    const OpenACCRoutineDeclAttr *A) {
+  for (const OpenACCClause *C : A->Clauses)
     AddChild([=] {
       Visit(C);
       for (const Stmt *S : C->children())

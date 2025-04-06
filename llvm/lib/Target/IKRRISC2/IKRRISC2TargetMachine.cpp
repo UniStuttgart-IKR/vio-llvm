@@ -10,6 +10,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "IKRRISC2TargetMachine.h"
+#include "IKRRISC2Subtarget.h"
 #include "TargetInfo/IKRRISC2TargetInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
@@ -36,7 +37,8 @@ IKRRISC2TargetMachine::IKRRISC2TargetMachine(const Target &T, const Triple &TT,
                                        std::optional<Reloc::Model> RM,
                                        std::optional<CodeModel::Model> CM,
                                        CodeGenOptLevel OL, bool JIT)
-    : CodeGenTargetMachineImpl(T, getDataLayout(), TT, CPU, FS, Options, getEffectiveRelocModel(RM), getEffectiveCodeModel(CM, CodeModel::Small), OL) {
+    : CodeGenTargetMachineImpl(T, getDataLayout(), TT, CPU, FS, Options, getEffectiveRelocModel(RM), getEffectiveCodeModel(CM, CodeModel::Small), OL),
+      Subtarget(TT, CPU, FS, *this) {
   //initAsmInfo();
 }
 

@@ -14,19 +14,24 @@
 #define LLVM_LIB_TARGET_IKRRISC2_IKRRISC2TARGETMACHINE_H
 
 #include "llvm/CodeGen/CodeGenTargetMachineImpl.h"
+#include "IKRRISC2Subtarget.h"
 #include "llvm/Target/TargetMachine.h"
+#include "IKRRISC2FrameLowering.h"
 #include <optional>
 
 namespace llvm {
 
 class IKRRISC2TargetMachine : public CodeGenTargetMachineImpl {
+  IKRRISC2Subtarget Subtarget;
 public:
   IKRRISC2TargetMachine(const Target &T, const Triple &TT, StringRef CPU,
-                     StringRef FS, const TargetOptions &Options,
-                     std::optional<Reloc::Model> RM,
-                     std::optional<CodeModel::Model> CM, CodeGenOptLevel OL,
-                     bool JIT);
+                        StringRef FS, const TargetOptions &Options,
+                        std::optional<Reloc::Model> RM,
+                        std::optional<CodeModel::Model> CM, CodeGenOptLevel OL,
+                        bool JIT);
   ~IKRRISC2TargetMachine() override;
+
+  const IKRRISC2Subtarget *getSubtargetImpl() const { return &Subtarget; }
 };
 
 } // end namespace llvm

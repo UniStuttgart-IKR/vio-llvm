@@ -14,17 +14,17 @@ let Namespace = "IKRRISC2" in {
 
 include "IKRRISC2RegisterInfo.td"
 //include "IKRRISC2CallingConv.td"
-//include "IKRRISC2InstrInfo.td"
+include "IKRRISC2InstrInfo.td"
 
 def : ProcessorModel<"generic", NoSchedModel, []>;
 
-/*
+
 def IKRRISC2InstrInfo : InstrInfo {
   let guessInstructionProperties = 0;
 }
-*/
+
 def IKRRISC2 : Target {
-//   let InstructionSet = IKRRISC2InstrInfo;
+  let InstructionSet = IKRRISC2InstrInfo;
 //   let AssemblyParsers = [RISCVAsmParser];
 //   let AssemblyWriters = [RISCVAsmWriter];
 //   let AllowRegisterRenaming = 1;

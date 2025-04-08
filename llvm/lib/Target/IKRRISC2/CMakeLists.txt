@@ -2,7 +2,7 @@ add_llvm_component_group(IKRRISC2)
 
 set(LLVM_TARGET_DEFINITIONS IKRRISC2.td)
 
-# tablegen(LLVM IKRRISC2GenInstrInfo.inc -gen-instr-info)
+tablegen(LLVM IKRRISC2GenInstrInfo.inc      -gen-instr-info)
 tablegen(LLVM IKRRISC2GenRegisterInfo.inc   -gen-register-info)
 tablegen(LLVM IKRRISC2GenSubtargetInfo.inc  -gen-subtarget)
 

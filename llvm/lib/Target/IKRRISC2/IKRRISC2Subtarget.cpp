@@ -36,6 +36,6 @@ void IKRRISC2Subtarget::anchor() {}
 IKRRISC2Subtarget::IKRRISC2Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
                              const IKRRISC2TargetMachine &TM)
     : IKRRISC2GenSubtargetInfo(TT, CPU, /*TuneCPU*/ CPU, FS),
-      FrameLowering() {
+      FrameLowering(), RegisterInfo() {
         
 }

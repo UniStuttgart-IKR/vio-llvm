@@ -16,13 +16,14 @@
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "IKRRISC2FrameLowering.h"
+#include "MCTargetDesc/IKRRISC2MCTargetDesc.h"
 
 #define GET_REGINFO_HEADER
 #include "IKRRISC2GenRegisterInfo.inc"
 
 namespace llvm {
 struct IKRRISC2RegisterInfo : public IKRRISC2GenRegisterInfo {
-  IKRRISC2RegisterInfo();
+  IKRRISC2RegisterInfo() : IKRRISC2GenRegisterInfo(IKRRISC2::R31) {}
 
   /// Code Generation virtual methods...
   const MCPhysReg *getCalleeSavedRegs(const MachineFunction *MF) const override;

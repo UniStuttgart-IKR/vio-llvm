@@ -21,4 +21,9 @@
 namespace llvm {
   
 }
+
+// Defines symbolic names for IKRRISC2 registers.
+#define GET_REGINFO_ENUM
+#include "IKRRISC2GenRegisterInfo.inc"
+
 #endif

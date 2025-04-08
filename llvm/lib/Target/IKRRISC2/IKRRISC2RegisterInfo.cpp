@@ -21,6 +21,7 @@
 #include "llvm/IR/Type.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "MCTargetDesc/IKRRISC2MCTargetDesc.h"
 
 using namespace llvm;
 
@@ -42,7 +43,7 @@ BitVector IKRRISC2RegisterInfo::getReservedRegs(const MachineFunction &MF) const
 	BitVector Reserved(32 * 2);
 
 	Reserved.set(IKRRISC2::R30);	// sp
-	//Reserved.set(IKRRISC2::R31);	// ra
+	Reserved.set(IKRRISC2::R31);	// ra
 
 	return Reserved;
 }
@@ -72,5 +73,5 @@ IKRRISC2RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 }
 
 Register IKRRISC2RegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-	//return IKRRISC2::R30;
+	return IKRRISC2::R30;
 }

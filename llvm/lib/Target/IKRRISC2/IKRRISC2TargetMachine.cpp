@@ -39,7 +39,7 @@ IKRRISC2TargetMachine::IKRRISC2TargetMachine(const Target &T, const Triple &TT,
                                        CodeGenOptLevel OL, bool JIT)
     : CodeGenTargetMachineImpl(T, getDataLayout(), TT, CPU, FS, Options, getEffectiveRelocModel(RM), getEffectiveCodeModel(CM, CodeModel::Small), OL),
       Subtarget(TT, CPU, FS, *this) {
-  //initAsmInfo();
+  initAsmInfo();
 }
 
 IKRRISC2TargetMachine::~IKRRISC2TargetMachine() = default;

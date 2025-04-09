@@ -18,14 +18,17 @@ include "IKRRISC2InstrInfo.td"
 
 def : ProcessorModel<"generic", NoSchedModel, []>;
 
-
 def IKRRISC2InstrInfo : InstrInfo {
   let guessInstructionProperties = 0;
+}
+
+def IRKRISC2AsmWriter : AsmWriter {
+  int PassSubtarget = 1;
 }
 
 def IKRRISC2 : Target {
   let InstructionSet = IKRRISC2InstrInfo;
 //   let AssemblyParsers = [RISCVAsmParser];
-//   let AssemblyWriters = [RISCVAsmWriter];
-//   let AllowRegisterRenaming = 1;
+  let AssemblyWriters = [IRKRISC2AsmWriter];
+  let AllowRegisterRenaming = 1;
 }

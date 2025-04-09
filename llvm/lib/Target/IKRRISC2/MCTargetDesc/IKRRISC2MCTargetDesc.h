@@ -19,11 +19,23 @@
 #include <memory>
 
 namespace llvm {
-  
+class MCContext;
+class MCInstrInfo;
+class MCRegisterInfo;
+class MCSubtargetInfo;
+class Target;
 }
 
 // Defines symbolic names for IKRRISC2 registers.
 #define GET_REGINFO_ENUM
 #include "IKRRISC2GenRegisterInfo.inc"
+
+// Defines symbolic names for IKRRISC2 instructions.
+#define GET_INSTRINFO_ENUM
+#define GET_INSTRINFO_MC_HELPER_DECLS
+#include "IKRRISC2GenInstrInfo.inc"
+
+#define GET_SUBTARGETINFO_ENUM
+#include "IKRRISC2GenSubtargetInfo.inc"
 
 #endif

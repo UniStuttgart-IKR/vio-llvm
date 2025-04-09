@@ -11,13 +11,23 @@
 //===----------------------------------------------------------------------===//
 
 #include "IKRRISC2MCTargetDesc.h"
+#include "IKRRISC2InstPrinter.h"
+#include "IKRRISC2MCAsmInfo.h"
 #include "TargetInfo/IKRRISC2TargetInfo.h"
+#include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/ErrorHandling.h"
 
+namespace IKRRISC2Op {
+    const static unsigned OPERAND_UNKNOWN = llvm::MCOI::OPERAND_UNKNOWN;
+}
+
+#define GET_INSTRINFO_MC_DESC
+#define ENABLE_INSTR_PREDICATE_VERIFIER
+#include "IKRRISC2GenInstrInfo.inc"
 
 #define GET_REGINFO_MC_DESC
 #include "IKRRISC2GenRegisterInfo.inc"
@@ -33,6 +43,28 @@ static MCRegisterInfo *createIKRRISC2MCRegisterInfo(const Triple &TT) {
   return X;
 }
 
+static MCInstrInfo *createIKRRISC2MCInstrInfo() {
+  MCInstrInfo *X = new MCInstrInfo();
+  InitIKRRISC2MCInstrInfo(X);
+  return X;
+}
+
+static MCInstPrinter *createIKRRISC2MCInstPrinter(const Triple &T,
+                                                   unsigned SyntaxVariant,
+                                                   const MCAsmInfo &MAI,
+                                                   const MCInstrInfo &MII,
+                                                   const MCRegisterInfo &MRI) {
+  return new IKRRISC2InstPrinter(MAI, MII, MRI);
+}
+
+static MCAsmInfo *createIKRRISC2MCAsmInfo(const MCRegisterInfo &MRI,
+                                           const Triple &TT,
+                                           const MCTargetOptions &Options) {
+  MCAsmInfo *MAI = new IKRRISC2MCAsmInfo(TT);
+
+  return MAI;
+}
+
 static MCSubtargetInfo *
 createIKRRISC2MCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
     return createIKRRISC2MCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS);
@@ -41,12 +73,12 @@ createIKRRISC2MCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeIKRRISC2TargetMC() {
     for (Target *T : {&getTheIKRRISC2Target()}) {
         TargetRegistry::RegisterMCRegInfo(*T, createIKRRISC2MCRegisterInfo);
-        //TargetRegistry::RegisterMCInstrInfo(*T, createLoongArchMCInstrInfo);
+        TargetRegistry::RegisterMCInstrInfo(*T, createIKRRISC2MCInstrInfo);
         TargetRegistry::RegisterMCSubtargetInfo(*T, createIKRRISC2MCSubtargetInfo);
-        //TargetRegistry::RegisterMCAsmInfo(*T, createLoongArchMCAsmInfo);
+        TargetRegistry::RegisterMCAsmInfo(*T, createIKRRISC2MCAsmInfo);
         //TargetRegistry::RegisterMCCodeEmitter(*T, createLoongArchMCCodeEmitter);
         //TargetRegistry::RegisterMCAsmBackend(*T, createLoongArchAsmBackend);
-        //TargetRegistry::RegisterMCInstPrinter(*T, createLoongArchMCInstPrinter);
+        TargetRegistry::RegisterMCInstPrinter(*T, createIKRRISC2MCInstPrinter);
         //TargetRegistry::RegisterMCInstrAnalysis(*T, createLoongArchInstrAnalysis);
         //TargetRegistry::RegisterELFStreamer(*T, createLoongArchELFStreamer);
         //TargetRegistry::RegisterObjectTargetStreamer(

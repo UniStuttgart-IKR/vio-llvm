@@ -250,6 +250,8 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
   case dxil:        return "dx";
 
   case xtensa:      return "xtensa";
+
+  case ikrrisc2:    return "ikrrisc2";
   }
 }
 
@@ -488,6 +490,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
     .Case("loongarch64", loongarch64)
     .Case("dxil", dxil)
     .Case("xtensa", xtensa)
+    .Case("ikrrisc2", ikrrisc2)
     .Default(UnknownArch);
 }
 
@@ -634,6 +637,7 @@ static Triple::ArchType parseArch(StringRef ArchName) {
                  "dxilv1.4", "dxilv1.5", "dxilv1.6", "dxilv1.7", "dxilv1.8",
                  Triple::dxil)
           .Case("xtensa", Triple::xtensa)
+          .Case("ikrrisc2", Triple::ikrrisc2)
           .Default(Triple::UnknownArch);
 
   // Some architectures require special parsing logic just to compute the

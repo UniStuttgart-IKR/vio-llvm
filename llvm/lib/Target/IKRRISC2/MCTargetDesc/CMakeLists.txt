@@ -6,6 +6,7 @@ add_llvm_component_library(LLVMIKRRISC2Desc
   LINK_COMPONENTS
   MC
   Support
+  IKRRISC2Info
   TargetParser
 
   ADD_TO_COMPONENT

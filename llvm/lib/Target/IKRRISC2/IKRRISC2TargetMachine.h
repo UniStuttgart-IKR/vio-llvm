@@ -22,6 +22,7 @@
 namespace llvm {
 
 class IKRRISC2TargetMachine : public CodeGenTargetMachineImpl {
+  std::unique_ptr<TargetLoweringObjectFile> TLOF;
   IKRRISC2Subtarget Subtarget;
 public:
   IKRRISC2TargetMachine(const Target &T, const Triple &TT, StringRef CPU,
@@ -32,6 +33,13 @@ public:
   ~IKRRISC2TargetMachine() override;
 
   const IKRRISC2Subtarget *getSubtargetImpl() const { return &Subtarget; }
+
+  // Pass Pipeline Configuration
+  TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
+  
+  TargetLoweringObjectFile *getObjFileLowering() const override {
+    return TLOF.get();
+  }
 };
 
 } // end namespace llvm

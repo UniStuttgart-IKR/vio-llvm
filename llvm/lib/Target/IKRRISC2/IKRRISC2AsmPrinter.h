@@ -47,6 +47,12 @@ public:
     MCOperand lowerOperand(const MachineOperand &MO, unsigned Offset = 0) const;
     // Lower MachineInstr MI to MCInst OutMI.
     void lowerToMCInst(const MachineInstr *MI, MCInst &OutMI) const;
+
+    bool runOnMachineFunction(MachineFunction &MF) override {
+      AsmPrinter::runOnMachineFunction(MF);
+      // Emit the XRay table for this function.
+      return false;
+    }
 };
 } // end namespace llvm
 

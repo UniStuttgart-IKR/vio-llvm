@@ -23,7 +23,8 @@ def IKRRISC2InstrInfo : InstrInfo {
 }
 
 def IRKRISC2AsmWriter : AsmWriter {
-  int PassSubtarget = 1;
+  string AsmWriterClassName = "InstPrinter";
+  bit isMCAsmWriter = 1;
 }
 
 def IKRRISC2 : Target {

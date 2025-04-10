@@ -24,11 +24,14 @@
 using namespace llvm;
 
 #define DEBUG_TYPE "asm-printer"
-
 #include "IKRRISC2GenAsmWriter.inc"
 
 static void printExpr(const MCExpr *Expr, raw_ostream &OS) {
     
+}
+
+bool IKRRISC2InstPrinter::applyTargetSpecificCLOption(StringRef Opt) {
+  return false;
 }
 
 void IKRRISC2InstPrinter::printOperand(const MCOperand &MC, raw_ostream &O) {
@@ -45,7 +48,7 @@ void IKRRISC2InstPrinter::printOperand(const MCOperand &MC, raw_ostream &O) {
 void IKRRISC2InstPrinter::printInst(const MCInst *MI, uint64_t Address,
                                   StringRef Annot, const MCSubtargetInfo &STI,
                                   raw_ostream &O) {
-  printInstruction(MI, Address, STI, O);
+  printInstruction(MI, Address, O);
   printAnnotation(O, Annot);
 }
 
@@ -53,7 +56,6 @@ void IKRRISC2InstPrinter::printRegName(raw_ostream &O, MCRegister Reg) {
   O << getRegisterName(Reg);
 }
 
-void IKRRISC2InstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
-                                       const MCSubtargetInfo &STI, raw_ostream &O) {
+void IKRRISC2InstPrinter::printOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
   printOperand(MI->getOperand(OpNo), O);
 }

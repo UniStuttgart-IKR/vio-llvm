@@ -16,6 +16,7 @@
 
 #include "IKRRISC2FrameLowering.h"
 #include "IKRRISC2RegisterInfo.h"
+#include "IKRRISC2InstrInfo.h"
 
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
@@ -43,6 +44,7 @@ class IKRRISC2Subtarget : public IKRRISC2GenSubtargetInfo {
 protected:
     IKRRISC2FrameLowering FrameLowering;
     IKRRISC2RegisterInfo RegisterInfo;
+    IKRRISC2InstrInfo InstrInfo;
 public:
   /// This constructor initializes the data members to match that
   /// of the specified triple.
@@ -61,6 +63,10 @@ public:
 
     const IKRRISC2RegisterInfo *getRegisterInfo() const override {
         return &RegisterInfo;
+    }
+
+    const IKRRISC2InstrInfo *getInstrInfo() const override {
+        return &InstrInfo;
     }
 };
 } // namespace llvm

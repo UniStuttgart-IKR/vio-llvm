@@ -9,6 +9,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "IKRRISC2.h"
 #include "IKRRISC2TargetMachine.h"
 #include "IKRRISC2Subtarget.h"
 #include "TargetInfo/IKRRISC2TargetInfo.h"

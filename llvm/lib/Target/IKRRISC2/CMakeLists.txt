@@ -13,6 +13,7 @@ add_public_tablegen_target(IKRRISC2CommonTableGen)
 add_llvm_target(IKRRISC2CodeGen
   IKRRISC2AsmPrinter.cpp
   IKRRISC2FrameLowering.cpp
+  IKRRISC2ISelDAGToDAG.cpp
   IKRRISC2InstrInfo.cpp
   IKRRISC2RegisterInfo.cpp
   IKRRISC2Subtarget.cpp

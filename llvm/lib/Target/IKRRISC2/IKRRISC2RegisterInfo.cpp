@@ -56,7 +56,7 @@ bool IKRRISC2RegisterInfo::isReservedReg(const MachineFunction &MF,
 const TargetRegisterClass*
 IKRRISC2RegisterInfo::getPointerRegClass(const MachineFunction &MF,
 																			unsigned Kind) const {
-	//return &IKRRISC2::PR;
+    //return &IKRRISC2::GPRRegClass;
 }
 
 static void replaceFI(MachineFunction &MF, MachineBasicBlock::iterator II,

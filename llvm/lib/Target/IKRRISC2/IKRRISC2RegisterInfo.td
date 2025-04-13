@@ -48,4 +48,4 @@ def R29:	IKRRISC2Reg<"r29",	29>;
 def R30:	IKRRISC2Reg<"r30",	30, ["sp"]>;
 def R31:	IKRRISC2Reg<"r31",	31, ["ra"]>;
 
-def GPR : RegisterClass<"IKRRISC2", [i32], 32, (sequence "R%u", 0, 31)>;
+def GPR : RegisterClass<"IKRRISC2", [i32], 32, (add (sequence "R%u", 0, 31))>;

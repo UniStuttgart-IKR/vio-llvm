@@ -15,6 +15,7 @@
 #define LLVM_LIB_TARGET_IKRRISC2_IKRRISC2SUBTARGET_H
 
 #include "IKRRISC2FrameLowering.h"
+#include "IKRRISC2ISelLowering.h"
 #include "IKRRISC2RegisterInfo.h"
 #include "IKRRISC2InstrInfo.h"
 
@@ -45,6 +46,8 @@ protected:
     IKRRISC2FrameLowering FrameLowering;
     IKRRISC2RegisterInfo RegisterInfo;
     IKRRISC2InstrInfo InstrInfo;
+    IKRRISC2TargetLowering TLInfo;
+    SelectionDAGTargetInfo TSInfo;
 public:
   /// This constructor initializes the data members to match that
   /// of the specified triple.
@@ -67,6 +70,13 @@ public:
 
     const IKRRISC2InstrInfo *getInstrInfo() const override {
         return &InstrInfo;
+    }
+
+    const IKRRISC2TargetLowering *getTargetLowering() const override {
+      return &TLInfo;
+    }
+    const SelectionDAGTargetInfo *getSelectionDAGInfo() const override {
+      return &TSInfo;
     }
 };
 } // namespace llvm

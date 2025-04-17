@@ -7,6 +7,7 @@ tablegen(LLVM IKRRISC2GenInstrInfo.inc      -gen-instr-info)
 tablegen(LLVM IKRRISC2GenRegisterInfo.inc   -gen-register-info)
 tablegen(LLVM IKRRISC2GenSubtargetInfo.inc  -gen-subtarget)
 tablegen(LLVM IKRRISC2GenDAGISel.inc        -gen-dag-isel)
+tablegen(LLVM IKRRISC2GenCallingConv.inc    -gen-callingconv)
 
 add_public_tablegen_target(IKRRISC2CommonTableGen)
 

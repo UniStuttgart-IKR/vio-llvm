@@ -13,7 +13,7 @@ let Namespace = "IKRRISC2" in {
 }
 
 include "IKRRISC2RegisterInfo.td"
-//include "IKRRISC2CallingConv.td"
+include "IKRRISC2CallingConv.td"
 include "IKRRISC2InstrInfo.td"
 
 def : ProcessorModel<"generic", NoSchedModel, []>;

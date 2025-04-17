@@ -27,6 +27,7 @@ using namespace llvm;
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeIKRRISC2Target() {
   RegisterTargetMachine<IKRRISC2TargetMachine> X(getTheIKRRISC2Target());
   auto *PR = PassRegistry::getPassRegistry();
+  initializeIKRRISC2DAGToDAGISelLegacyPass(*PR);
 }
 
 static std::string getDataLayout() {
@@ -93,7 +94,7 @@ void IKRRISC2PassConfig::addIRPasses() {
 */
 bool IKRRISC2PassConfig::addInstSelector() {
   // Install an instruction selector.
-  //addPass(createIKRRISC2ISelDag(getIKRRISC2TargetMachine()));
+  addPass(createIKRRISC2ISelDag(getIKRRISC2TargetMachine()));
   //addPass(createIKRRISC2GlobalBaseRegPass());
   return false;
 }

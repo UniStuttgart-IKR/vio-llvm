@@ -33,6 +33,7 @@ public:
   ~IKRRISC2TargetMachine() override;
 
   const IKRRISC2Subtarget *getSubtargetImpl() const { return &Subtarget; }
+  const IKRRISC2Subtarget *getSubtargetImpl(const Function &) const override { return &Subtarget; }
 
   // Pass Pipeline Configuration
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;

@@ -30,17 +30,17 @@ using namespace llvm;
 
 const MCPhysReg*
 IKRRISC2RegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
-    //return CSR_SaveList;
+    return CSR_SaveList;
 }
 
 const uint32_t *
 IKRRISC2RegisterInfo::getCallPreservedMask(const MachineFunction &MF,
                                         CallingConv::ID CC) const {
-    //return CSR_RegMask;
+    return CSR_RegMask;
 }
 
 BitVector IKRRISC2RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
-	BitVector Reserved(32 * 2);
+	BitVector Reserved(getNumRegs());
 
 	Reserved.set(IKRRISC2::R30);	// sp
 	Reserved.set(IKRRISC2::R31);	// ra
@@ -48,15 +48,8 @@ BitVector IKRRISC2RegisterInfo::getReservedRegs(const MachineFunction &MF) const
 	return Reserved;
 }
 
-bool IKRRISC2RegisterInfo::isReservedReg(const MachineFunction &MF,
-																			MCRegister Reg) const {
+bool IKRRISC2RegisterInfo::isReservedReg(const MachineFunction &MF, MCRegister Reg) const {
 	return getReservedRegs(MF)[Reg];
-}
-
-const TargetRegisterClass*
-IKRRISC2RegisterInfo::getPointerRegClass(const MachineFunction &MF,
-																			unsigned Kind) const {
-    //return &IKRRISC2::GPRRegClass;
 }
 
 static void replaceFI(MachineFunction &MF, MachineBasicBlock::iterator II,

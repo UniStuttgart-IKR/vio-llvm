@@ -35,9 +35,6 @@ struct IKRRISC2RegisterInfo : public IKRRISC2GenRegisterInfo {
   BitVector getReservedRegs(const MachineFunction &MF) const override;
   bool isReservedReg(const MachineFunction &MF, MCRegister Reg) const;
 
-  const TargetRegisterClass *getPointerRegClass(const MachineFunction &MF,
-                                                unsigned Kind) const override;
-
   bool eliminateFrameIndex(MachineBasicBlock::iterator II,
                           int SPAdj, unsigned FIOperandNum,
                           RegScavenger *RS = nullptr) const override;

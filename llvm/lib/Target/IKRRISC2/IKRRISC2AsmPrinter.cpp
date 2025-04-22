@@ -49,7 +49,7 @@ void IKRRISC2AsmPrinter::printOperand(const MachineInstr *MI, int OpNo,
   case MachineOperand::MO_Register:
   case MachineOperand::MO_Immediate: {
     MCOperand MC = lowerOperand(MI->getOperand(OpNo));
-    IKRRISC2InstPrinter::printOperand(MC, O);
+    O << MO.getImm();
     break;
   }
   default:

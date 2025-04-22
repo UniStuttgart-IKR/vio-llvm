@@ -23,6 +23,7 @@ namespace llvm {
 namespace IKRRISC2ISD {
 enum NodeType : unsigned  {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
+  RET,
 };
 }
 

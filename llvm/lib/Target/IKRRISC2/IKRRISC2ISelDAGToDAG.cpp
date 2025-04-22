@@ -14,6 +14,7 @@
 
 #include "IKRRISC2ISelDAGToDAG.h"
 #include "MCTargetDesc/IKRRISC2MCTargetDesc.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -33,7 +34,39 @@ INITIALIZE_PASS(IKRRISC2DAGToDAGISelLegacy, DEBUG_TYPE, PASS_NAME, false,
 
 void IKRRISC2DAGToDAGISel::Select(SDNode *Node) {
   // Select the default instruction.
-  SelectCode(Node);
+  switch (Node->getOpcode()) {
+    case ISD::SHL:
+    case ISD::SRL:
+    case ISD::SRA:
+    case ISD::ROTL:
+    case ISD::ROTR:
+    selectShiftLikes(Node);
+
+    default:
+    SelectCode(Node);
+  }
+}
+
+
+void IKRRISC2DAGToDAGISel::
+selectShiftLikes(SDNode *Node) const {
+  SDValue Op = SDValue(Node);
+  SDLoc DL();
+  SDValue Value = Node->getOperand(0);
+  SDValue Shamt = Node->getOperand(1);
+  SDValue OneNode = CurDAG->getConstant(1, DL, MVT::i32);
+
+  ConstantSDNode *ConstShamt = dyn_cast<ConstantSDNode>(Shamt);
+  if (ConstShamt && ConstShamt->getZExtValue() < 5) {
+    //if shamt is already const 1, shift is already legal
+    if (ConstShamt->getZExtValue() == 1)
+      return;
+
+    for (unsigned i = 0; i < ConstShamt->getZExtValue(); ++i){
+      Value = CurDAG->getNode(Node->getOpcode(), DL, Node->getValueType(0), Value, OneNode);
+    }
+    
+  }
 }
 
 /// This pass converts a legalized DAG into a M68k-specific DAG,

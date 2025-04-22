@@ -27,7 +27,7 @@ IKRRISC2MCAsmInfo::IKRRISC2MCAsmInfo(const Triple &TT) {
   Data32bitsDirective = "\t.word\t";
   Data64bitsDirective = "\t.dword\t";
   ZeroDirective = "\t.space\t";
-  CommentString = "#";
+  CommentString = ";";
   SupportsDebugInformation = true;
   DwarfRegNumForCFI = true;
   ExceptionsType = ExceptionHandling::DwarfCFI;

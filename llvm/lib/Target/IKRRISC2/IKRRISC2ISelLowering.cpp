@@ -19,12 +19,16 @@
 #include "IKRRISC2TargetMachine.h"
 #include "MCTargetDesc/IKRRISC2MCTargetDesc.h"
 #include "llvm/CodeGen/CallingConvLower.h"
+#include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/MC/MCRegister.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
@@ -155,6 +159,8 @@ bool IKRRISC2TargetLowering::isOffsetFoldingLegal(
 
 const char *IKRRISC2TargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch ((IKRRISC2ISD::NodeType) Opcode) {
+    case IKRRISC2ISD::RET:
+      return "IKRRISC2ISD::RET";
   }
   return nullptr;
 }
@@ -234,10 +240,37 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   }
 }
 
+//===----------------------------------------------------------------------===//
+// Calling conventions
+//===----------------------------------------------------------------------===//
+
+#include "IKRRISC2GenCallingConv.inc"
+
 SDValue IKRRISC2TargetLowering::LowerFormalArguments(
     SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL,
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  // Assign locations to all of the incoming arguments.
+  SmallVector<CCValAssign, 16> ArgLocs;
+  CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
+                 *DAG.getContext());
+
+  CCInfo.AnalyzeFormalArguments(Ins, CC_IKRRISC2);
+
+  for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
+    CCValAssign &VA = ArgLocs[i];
+
+    if (VA.isRegLoc()) {
+      EVT RegVT = VA.getLocVT();
+      Register Reg = MF.addLiveIn(VA.getLocReg(), &IKRRISC2::GPRRegClass);
+      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegVT);
+      InVals.push_back(ArgValue);
+    }
+  }
+
   return Chain;
 }
 
@@ -261,7 +294,38 @@ IKRRISC2TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv, boo
                                     const SmallVectorImpl<ISD::OutputArg> &Outs,
                                     const SmallVectorImpl<SDValue> &OutVals, const SDLoc &DL,
                                     SelectionDAG &DAG) const {
-  return Chain;
+  MachineFunction &MF = DAG.getMachineFunction();
+
+  // Assign locations to each returned value.
+  SmallVector<CCValAssign, 16> RetLocs;
+  CCState RetCCInfo(CallConv, IsVarArg, MF, RetLocs, *DAG.getContext());
+  RetCCInfo.AnalyzeReturn(Outs, RetCC_IKRRISC2);
+
+  SDValue Glue;
+  // Copy the result values into the output registers.
+  SmallVector<SDValue, 4> RetOps;
+  RetOps.push_back(Chain);
+  for (unsigned I = 0, E = RetLocs.size(); I != E; ++I) {
+    CCValAssign &VA = RetLocs[I];
+    SDValue RetValue = OutVals[I];
+
+    // Make the return register live on exit.
+    assert(VA.isRegLoc() && "Can only return in registers!");
+
+    // Chain and glue the copies together.
+    Register Reg = VA.getLocReg();
+    Chain = DAG.getCopyToReg(Chain, DL, Reg, RetValue, Glue);
+    Glue = Chain.getValue(1);
+    RetOps.push_back(DAG.getRegister(Reg, VA.getLocVT()));
+  }
+
+  // Update chain and glue.
+  RetOps[0] = Chain;
+  if (Glue.getNode())
+    RetOps.push_back(Glue);
+
+  // Quick exit for void returns
+  return DAG.getNode(IKRRISC2ISD::RET, DL, MVT::Other, RetOps);
 }
 
 bool
@@ -269,6 +333,10 @@ IKRRISC2TargetLowering::decomposeMulByConstant(LLVMContext &Context, EVT VT,
                                               SDValue C) const {
   return false;
 }
+
+//===----------------------------------------------------------------------===//
+// Custom insertion
+//===----------------------------------------------------------------------===//
 
 MachineBasicBlock *
 IKRRISC2TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,

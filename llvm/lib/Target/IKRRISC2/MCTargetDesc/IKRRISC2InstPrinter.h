@@ -36,7 +36,7 @@ public:
   static const char *getRegisterName(MCRegister Reg);
 
   // Print the given operand.
-  static void printOperand(const MCOperand &MO, raw_ostream &O);
+  void printOperand(const MCOperand &MO, raw_ostream &O);
 
   // Override MCInstPrinter.
   void printRegName(raw_ostream &O, MCRegister Reg) override;

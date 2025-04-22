@@ -59,10 +59,11 @@ def simm26 : IKRRISC2SImmLeafOp<26>;
 //===----------------------------------------------------------------------===//
 class IKRRISC2InstrFormat;
 
-def IKRRISC2FormatI  : IKRRISC2InstrFormat;
-def IKRRISC2FormatR1 : IKRRISC2InstrFormat;
-def IKRRISC2FormatR2 : IKRRISC2InstrFormat;
-def IKRRISC2FormatB  : IKRRISC2InstrFormat;
+def IKRRISC2FormatI       : IKRRISC2InstrFormat;
+def IKRRISC2FormatR1      : IKRRISC2InstrFormat;
+def IKRRISC2FormatR2      : IKRRISC2InstrFormat;
+def IKRRISC2FormatB       : IKRRISC2InstrFormat;
+def IKRRISC2FormatPseudo  : IKRRISC2InstrFormat;
 
 
 class IKRRISC2Instr<dag outs, dag ins, IKRRISC2InstrFormat fmt>
@@ -168,7 +169,15 @@ class IKRRISC2InstrB1<string opcstr, bits<3> opcval, list<dag> pattern>
     let Inst{17-0}  = si18;
 }
 
-
+// Pseudo instructions
+class Pseudo<dag outs, dag ins, string asmstr, list<dag> pattern>
+    : IKRRISC2Instr<outs, ins, IKRRISC2FormatPseudo> {
+  let AsmString = asmstr;
+  let Pattern = pattern;
+  let isPseudo = 1;
+  let isCodeGenOnly = 1;
+  let Size = 4;
+}
 
 //===----------------------------------------------------------------------===//
 // Instructions
@@ -232,3 +241,15 @@ let mayLoad = 0, mayStore = 1, hasSideEffects = 0 in {
     def SDD   : IKRRISC2InstrISImm<"sdd", 0x14,    [(store GPR:$rc, (add GPR:$rb, simm16:$si16))]>;
     def SDR   : IKRRISC2InstrR2<"sdr",    0x14,    [(store GPR:$rc, (add GPR:$rb, GPR:$ra))]>;
 }
+
+
+//===----------------------------------------------------------------------===//
+// Custom ISDs
+//===----------------------------------------------------------------------===//
+
+def ikrrisc2_ret  : SDNode<"IKRRISC2ISD::RET", SDTNone,
+                          [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
+
+let isBarrier = 1, isReturn = 1, isTerminator = 1 in
+def PseudoRET : Pseudo<(outs), (ins), "jmp\t\tra", [(ikrrisc2_ret)]>,
+                PseudoInstExpansion<(JMP R31)>;

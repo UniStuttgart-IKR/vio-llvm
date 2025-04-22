@@ -19,7 +19,6 @@
 #include "llvm/MC/MCRegister.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
@@ -40,7 +39,7 @@ void IKRRISC2InstPrinter::printOperand(const MCOperand &MC, raw_ostream &O) {
   else if (MC.isImm())
     O << MC.getImm();
   else if (MC.isExpr())
-    printExpr(MC.getExpr(), O);
+    MC.getExpr()->print(O, &MAI);
   else
     report_fatal_error("Invalid operand");
 }

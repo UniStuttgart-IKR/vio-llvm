@@ -35,7 +35,7 @@ public:
                                 const IKRRISC2Subtarget &STI);
 
   MVT getScalarShiftAmountTy(const DataLayout &, EVT LHSTy) const override {
-    return LHSTy.getSizeInBits() <= 32 ? MVT::i32 : MVT::i64;
+    return MVT::i1;
   }
 
   EVT getSetCCResultType(const DataLayout &, LLVMContext &,
@@ -44,6 +44,8 @@ public:
       return MVT::i32;
     return VT.changeVectorElementTypeToInteger();
   }
+
+  SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
@@ -96,6 +98,9 @@ public:
 
 private:
   const IKRRISC2Subtarget &Subtarget;
+
+  SDValue performShiftLikeCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue lowerShiftLikes(SDValue Op, SelectionDAG &DAG) const;
 };
 
 } // end namespace llvm

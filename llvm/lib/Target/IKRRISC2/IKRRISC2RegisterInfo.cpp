@@ -42,6 +42,7 @@ IKRRISC2RegisterInfo::getCallPreservedMask(const MachineFunction &MF,
 BitVector IKRRISC2RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 	BitVector Reserved(getNumRegs());
 
+	Reserved.set(IKRRISC2::R0);	// zero
 	Reserved.set(IKRRISC2::R30);	// sp
 	Reserved.set(IKRRISC2::R31);	// ra
 

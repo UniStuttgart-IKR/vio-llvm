@@ -17,6 +17,7 @@
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/raw_ostream.h"
+#include <map>
 
 using namespace llvm;
 
@@ -33,39 +34,50 @@ INITIALIZE_PASS(IKRRISC2DAGToDAGISelLegacy, DEBUG_TYPE, PASS_NAME, false,
                 false)
 
 void IKRRISC2DAGToDAGISel::Select(SDNode *Node) {
-  // Select the default instruction.
   switch (Node->getOpcode()) {
-    case ISD::SHL:
+    /*case ISD::SHL:
     case ISD::SRL:
     case ISD::SRA:
     case ISD::ROTL:
     case ISD::ROTR:
-    selectShiftLikes(Node);
+      selectShiftLikes(Node);
+      break;*/
 
+    // Select the default instruction.
     default:
-    SelectCode(Node);
+      SelectCode(Node);
   }
 }
 
-
 void IKRRISC2DAGToDAGISel::
-selectShiftLikes(SDNode *Node) const {
-  SDValue Op = SDValue(Node);
-  SDLoc DL();
+selectShiftLikes(SDNode *Node) {
+  SDValue Op = SDValue(Node, 0);
+  SDLoc DL(Op);
+
   SDValue Value = Node->getOperand(0);
   SDValue Shamt = Node->getOperand(1);
   SDValue OneNode = CurDAG->getConstant(1, DL, MVT::i32);
 
+  //Expand constant shifts to multiple single shifts
   ConstantSDNode *ConstShamt = dyn_cast<ConstantSDNode>(Shamt);
   if (ConstShamt && ConstShamt->getZExtValue() < 5) {
     //if shamt is already const 1, shift is already legal
-    if (ConstShamt->getZExtValue() == 1)
+    if (ConstShamt->getZExtValue() == 1){
+      SelectCode(Node);
       return;
-
-    for (unsigned i = 0; i < ConstShamt->getZExtValue(); ++i){
-      Value = CurDAG->getNode(Node->getOpcode(), DL, Node->getValueType(0), Value, OneNode);
     }
-    
+
+    SDValue Res = Value;
+    //Replace multi-shift with single shifts
+    for (unsigned i = 0; i < ConstShamt->getZExtValue(); ++i){
+      Res = CurDAG->getNode(Node->getOpcode(), DL, Op.getValueType(), Res, OneNode);
+    }
+    ReplaceNode(Node, Res.getNode());
+    //Convert Target Independant single shifts to machine shifts
+    for (SDValue Current = Res; Current != Value; Current = Current->getOperand(0)) {
+      SelectCode(Current.getNode());
+    }
+    return;
   }
 }
 

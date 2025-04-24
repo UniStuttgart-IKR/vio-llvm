@@ -34,18 +34,11 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <deque>
+#include <map>
 
 using namespace llvm;
 
 #define DEBUG_TYPE "IKRRISC2-lower"
-
-// Return true if we must use long (in fact, indirect) function call.
-// It's simplified version, production implimentation must
-// resolve a functions in ROM (usually glibc functions)
-static bool isLongCall(const char *str) {
-  // Currently always use long calls
-  return true;
-}
 
 IKRRISC2TargetLowering::IKRRISC2TargetLowering(const TargetMachine &TM,
                                            const IKRRISC2Subtarget &STI)
@@ -120,13 +113,17 @@ IKRRISC2TargetLowering::IKRRISC2TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
   setOperationAction(ISD::UDIVREM, MVT::i32, Expand);
 
+  setTargetDAGCombine({ISD::SHL, ISD::SRL, ISD::SRA, ISD::ROTL, ISD::ROTR});
   setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
+  setOperationAction(ISD::SHL, MVT::i32, Custom);
+  setOperationAction(ISD::SRL, MVT::i32, Custom);
+  setOperationAction(ISD::SRA, MVT::i32, Custom);
+  setOperationAction(ISD::ROTL, MVT::i32, Custom);
+  setOperationAction(ISD::ROTR, MVT::i32, Custom);
 
   setOperationAction(ISD::BSWAP, MVT::i32, Expand);
-  setOperationAction(ISD::ROTL, MVT::i32, Expand);
-  setOperationAction(ISD::ROTR, MVT::i32, Expand);
   setOperationAction(ISD::CTPOP, MVT::i32, Expand);
   setOperationAction(ISD::CTTZ, MVT::i32, Expand);
   setOperationAction(ISD::CTLZ, MVT::i32, Expand);
@@ -150,12 +147,49 @@ IKRRISC2TargetLowering::IKRRISC2TargetLowering(const TargetMachine &TM,
   computeRegisterProperties(STI.getRegisterInfo());
 }
 
+SDValue IKRRISC2TargetLowering::performShiftLikeCombine(SDNode *N,
+                                                 DAGCombinerInfo &DCI) const {
+
+  return SDValue(N, 0);
+  SDLoc DL(N);
+  SDValue Res = DCI.DAG.getNode(N->getOpcode(), DL, MVT::i32, N->getOperand(0), N->getOperand(1));
+  return DCI.CombineTo(N, Res, false);
+  SDValue Op1 = N->getOperand(1);
+  ConstantSDNode *ConstShamt = dyn_cast<ConstantSDNode>(Op1);
+
+  if (!ConstShamt)
+    return SDValue();
+
+  if (ConstShamt->getZExtValue() > 1)
+    return SDValue(N, 0);
+
+llvm_unreachable("Should not custom lower this!");
+  DCI.CombineTo(N, SDValue(N, 0), false);
+  return SDValue(N, 0);
+}
+
+SDValue IKRRISC2TargetLowering::PerformDAGCombine(SDNode *N,
+                                                 DAGCombinerInfo &DCI) const {
+                                                  return SDValue(N, 0);
+  SDLoc DL(N);
+  switch (N->getOpcode()) {
+    case ISD::SHL:
+    case ISD::SRL:
+    case ISD::SRA:
+    case ISD::ROTL:
+    case ISD::ROTR:
+      return performShiftLikeCombine(N, DCI);
+
+    default:
+      return SDValue();
+  }
+}
+
 bool IKRRISC2TargetLowering::isOffsetFoldingLegal(
     const GlobalAddressSDNode *GA) const {
   // The IKRRISC2 target isn't yet aware of offsets.
   return false;
 }
-
 
 const char *IKRRISC2TargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch ((IKRRISC2ISD::NodeType) Opcode) {
@@ -236,8 +270,40 @@ void IKRRISC2TargetLowering::LowerAsmOperandForConstraint(
 SDValue IKRRISC2TargetLowering::
 LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
-  default: llvm_unreachable("Should not custom lower this!");
+    case ISD::SHL:
+    case ISD::SRL:
+    case ISD::SRA:
+    case ISD::ROTL:
+    case ISD::ROTR:
+      return lowerShiftLikes(Op, DAG);
+
+    default: llvm_unreachable("Should not custom lower this!");
   }
+}
+
+SDValue IKRRISC2TargetLowering::
+lowerShiftLikes(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+
+  SDValue Value = Op.getOperand(0);
+  SDValue Shamt = Op.getOperand(1);
+  SDValue OneNode = DAG.getConstant(1, DL, MVT::i32);
+
+  //Expand constant shifts to multiple single shifts
+  ConstantSDNode *ConstShamt = dyn_cast<ConstantSDNode>(Shamt);
+  if (ConstShamt && ConstShamt->getZExtValue() < 5) {
+    //if shamt is already const 1, shift is already legal
+    if (ConstShamt->getZExtValue() == 1){
+      return Op;
+    }
+
+    //Replace multi-shift with single shifts
+    for (unsigned i = 0; i < ConstShamt->getZExtValue(); ++i){
+      Value = DAG.getNode(Op->getOpcode(), DL, Op.getValueType(), Value, OneNode);
+    }
+    return Value;
+  }
+  return Op;
 }
 
 //===----------------------------------------------------------------------===//

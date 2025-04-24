@@ -39,7 +39,7 @@ public:
   #include "IKRRISC2GenDAGISel.inc"
 
   private:
-    voif selectShiftLikes(SDNode *Node) const;
+    void selectShiftLikes(SDNode *Node);
 };
 
 class IKRRISC2DAGToDAGISelLegacy : public SelectionDAGISelLegacy {

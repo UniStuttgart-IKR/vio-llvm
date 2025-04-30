@@ -23,7 +23,14 @@ namespace llvm {
 namespace IKRRISC2ISD {
 enum NodeType : unsigned  {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
+  AND1I,
+  NEG,
+  NOT,
   RET,
+  SELECT,
+  SHIFT_REG,
+  SWAPB,
+  SWAPH,
 };
 }
 
@@ -101,6 +108,10 @@ private:
 
   SDValue performShiftLikeCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue lowerShiftLikes(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerSelect(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerSetCC(SDValue Op, SelectionDAG &DAG) const;
+
+  MachineBasicBlock *emitShift(MachineInstr &MI, MachineBasicBlock *MBB) const;
 };
 
 } // end namespace llvm

@@ -37,6 +37,7 @@ public:
 
   // Print the given operand.
   void printOperand(const MCOperand &MO, raw_ostream &O);
+  void printBranchTarget(const MCInst *MI, int OpNo, raw_ostream &OS);
 
   // Override MCInstPrinter.
   void printRegName(raw_ostream &O, MCRegister Reg) override;

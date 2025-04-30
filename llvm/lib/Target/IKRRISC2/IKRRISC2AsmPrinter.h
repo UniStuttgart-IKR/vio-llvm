@@ -34,6 +34,10 @@ public:
         : AsmPrinter(TM, std::move(Streamer)), STI(TM.getMCSubtargetInfo()) {}
 
     StringRef getPassName() const override { return "IKRRISC2 Assembly Printer"; }
+    
+    void emitStartOfAsmFile(Module &M) override;
+    void emitEndOfAsmFile(Module &M) override;
+
     void emitInstruction(const MachineInstr *MI) override;
 
     void printOperand(const MachineInstr *MI, int opNum, raw_ostream &O);
@@ -53,6 +57,38 @@ public:
       // Emit the XRay table for this function.
       return false;
     }
+
+private:
+      MCOperand lowerSymbolOperand(const MachineOperand &MO,
+                                    MachineOperand::MachineOperandType MOTy,
+                                    unsigned Offset) const;
+
+      Twine endString =
+      "\n\n"
+      "\n;             +    '                                      o                             +"
+      "\n;      '    .                            *        +   +  o'        o o    . *        +             o"
+      "\n;                   '  *                            '              .  o."
+      "\n;            '        .                 *       .              o                    '  _.."
+      "\n;  .     o      |            '   o                 +  .                      o       '`-. `. .   '  .'"
+      "\n;        *    --o--            *        '              +      .             .   .        \  \        ."
+      "\n; .o ' .   _|   |        '       *  *                +* '   *           o    *   +.      |  |    '."
+      "\n;           |                   .     *                                             '    /  /     *."
+      "\n;     o                    +            _|_   .       +         +   .           '    _.-`_.`     |"
+      "\n;              .           *'  .         |  +                   +  + o+     o         '''      - o -'"
+      "\n;            '        .  .   .       '    .        '         .'               o                  | o'"
+      "\n;    .      *.       '        +.+  '  .    '  o    . '      +.    + '     . * .+  .'        . '"
+      "\n;   .   'o+.        .    +     Created by Leyla's beautiful LLVM Backend         '    *     .'.   .*   ."
+      "\n;        ...  .  |        .     .   o   +           .                            .  .            o"
+      "\n;'    .  '     --o--    .                          ' .    .      o       '             _|_ .    *     ."
+      "\n;    +   * .     |          + '           *             .                            .  |      ."
+      "\n;.'       .       *               .     .   *' o  +   '           *              '                 + +"
+      "\n;      '          .        '           + +         '.     .         *  .                       +      |"
+      "\n;      .                                                             o         +      '     .        -+-"
+      "\n;                                     .+    o'                 .       '              '               |"
+      "\n;      .   o        *                                                           '"
+      "\n;                +   +                        o                       '   .     .        ."
+      "\n;                                                                                       +"
+      "\n;            '                                                     '";
 };
 } // end namespace llvm
 

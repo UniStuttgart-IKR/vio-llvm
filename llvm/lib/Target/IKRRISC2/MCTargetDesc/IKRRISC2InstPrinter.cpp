@@ -19,6 +19,7 @@
 #include "llvm/MC/MCRegister.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/Debug.h"
 
 using namespace llvm;
 
@@ -57,4 +58,28 @@ void IKRRISC2InstPrinter::printRegName(raw_ostream &O, MCRegister Reg) {
 
 void IKRRISC2InstPrinter::printOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
   printOperand(MI->getOperand(OpNo), O);
+}
+
+void IKRRISC2InstPrinter::printBranchTarget(const MCInst *MI, int OpNo,
+                                          raw_ostream &O) {
+  if (OpNo >= MI->size()) {
+    // Not all operands are correctly disassembled at the moment. This means
+    // that some machine instructions won't have all the necessary operands
+    // set.
+    // To avoid asserting, print <unknown> instead until the necessary support
+    // has been implemented.
+    O << "<unknown>";
+    return;
+  }
+  const MCOperand &MC = MI->getOperand(OpNo);
+  if (MI->getOperand(OpNo).isImm()) {
+    int64_t Val = MC.getImm() + 4;
+    O << ". ";
+    if (Val > 0)
+      O << '+';
+    O << Val;
+  } else if (MC.isExpr())
+    MC.getExpr()->print(O, &MAI);
+  else
+    llvm_unreachable("Invalid operand");
 }

@@ -18,10 +18,6 @@ class IKRRISC2Op<ValueType vt = i32> : Operand<vt> {
     let OperandNamespace = "IKRRISC2Op";
 }
 
-def bratarget : IKRRISC2Op<OtherVT> {
-  let EncoderMethod = "getBranchTargetOpValue";
-}
-
 class IKRRISC2UImmOp<int bitsNum> : IKRRISC2Op {
     let MCOperandPredicate = [{
         int64_t Imm;
@@ -48,10 +44,61 @@ class IKRRISC2SImmLeafOp<int bitsNum> :
 
 
 def uimm16 : IKRRISC2UImmLeafOp<16>;
+def uimm32 : IKRRISC2UImmLeafOp<32>;
 
 def simm16 : IKRRISC2SImmLeafOp<16>;
 def simm18 : IKRRISC2SImmLeafOp<18>;
 def simm26 : IKRRISC2SImmLeafOp<26>;
+
+
+def IKRRISC2BRTargetAsmOperand : AsmOperandClass {
+  let Name = "BRTarget";
+  let ParserMethod = "parseBRTarget";
+  let PredicateMethod = "isImm";
+  let RenderMethod = "addImmOperands";
+}
+
+def brtarget : Operand<OtherVT> {
+  let PrintMethod = "printBranchTarget";
+  let EncoderMethod = "getBranchTargetEncoding";
+  let DecoderMethod = "decodeBranchOperand";
+  let ParserMatchClass = IKRRISC2BRTargetAsmOperand;
+}
+
+// A 14-bit constant
+def negimm16 : IKRRISC2SImmOp<16>, ImmLeaf<i32, [{
+  return (Imm & 0xFFFF0000) == 0xFFFF0000;
+}]>;
+// Round up Imm
+def TruncToHalf : SDNodeXForm<imm, [{
+  return CurDAG->getConstant(((N->getZExtValue() & 0xFFFF), SDLoc(N),
+                               N->getValueType(0));
+}]>;
+
+//===----------------------------------------------------------------------===//
+// Custom ISDs
+//===----------------------------------------------------------------------===//
+
+def SDT_IKRRISC2_IntUnaryOp : SDTypeProfile<1, 1, [
+  SDTCisInt<0>, SDTCisInt<1>
+]>;
+def ikrrisc2_swaph  : SDNode<"IKRRISC2ISD::SWAPH", SDT_IKRRISC2_IntUnaryOp,[]>;
+def ikrrisc2_swapb  : SDNode<"IKRRISC2ISD::SWAPB", SDT_IKRRISC2_IntUnaryOp,[]>;
+def ikrrisc2_not    : SDNode<"IKRRISC2ISD::NOT", SDT_IKRRISC2_IntUnaryOp,[]>;
+def ikrrisc2_neg    : SDNode<"IKRRISC2ISD::NEG", SDT_IKRRISC2_IntUnaryOp,[]>;
+
+def SDT_IKRRISC2_IntBinaryOp : SDTypeProfile<1, 2, [
+  SDTCisInt<0>, SDTCisInt<1>, SDTCisInt<2>
+]>;
+def ikrrisc2_and1i  : SDNode<"IKRRISC2ISD::AND1I", SDT_IKRRISC2_IntBinaryOp,[]>;
+
+def SDT_IKRRISC2_SHIFTREG : SDTypeProfile<1, 3, [
+  SDTCisInt<0>, SDTCisInt<1>, SDTCisInt<2>, SDTCisInt<3>
+]>;
+def ikrrisc2_shift_reg: SDNode<"IKRRISC2ISD::SHIFT_REG", SDT_IKRRISC2_SHIFTREG, []>;
+
+def ikrrisc2_ret  : SDNode<"IKRRISC2ISD::RET", SDTNone,
+                          [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
 
 //===----------------------------------------------------------------------===//
@@ -147,10 +194,10 @@ class IKRRISC2InstrR0<string opcstr, bits<6> opcval, list<dag> pattern>
 }
 
 class IKRRISC2InstrB0<string opcstr, bits<6> opcval, list<dag> pattern>
-		: IKRRISC2Instr<(outs), (ins bratarget:$si26), IKRRISC2FormatB> {
+		: IKRRISC2Instr<(outs), (ins brtarget:$si26), IKRRISC2FormatB> {
     bits<26> si26;
 
-	let AsmString = opcstr # !if(!lt(!size(opcstr), 4), "\t", "") # "\t" # "#$si26";
+	let AsmString = opcstr # !if(!lt(!size(opcstr), 4), "\t", "") # "\t" # "$si26";
     let Pattern = pattern;
 
     let Inst{31-26} = opcval;
@@ -158,10 +205,10 @@ class IKRRISC2InstrB0<string opcstr, bits<6> opcval, list<dag> pattern>
 }
 
 class IKRRISC2InstrB1<string opcstr, bits<3> opcval, list<dag> pattern>
-		: IKRRISC2InstrReg<(outs), (ins GPR:$rc, bratarget:$si18), IKRRISC2FormatB> {
+		: IKRRISC2InstrReg<(outs), (ins GPR:$rc, brtarget:$si18), IKRRISC2FormatB> {
     bits<18> si18;
 
-	let AsmString = opcstr # !if(!lt(!size(opcstr), 4), "\t", "") # "\t" # "$rc := #$si18";
+	let AsmString = opcstr # !if(!lt(!size(opcstr), 4), "\t", "") # "\t" # "$rc, $si18";
     let Pattern = pattern;
 
     let Inst{31-26} = 62;
@@ -188,7 +235,7 @@ let mayLoad = 0, mayStore = 0, hasSideEffects = 0 in {
     def ADDLI : IKRRISC2InstrIUImm<"addli", 0x01,  [(set GPR:$rc, (add GPR:$rb, uimm16:$ui16))]>;
     def ADDHI : IKRRISC2InstrIUImm<"addhi", 0x02,  []>;
     def AND0I : IKRRISC2InstrIUImm<"and0i", 0x04,  [(set GPR:$rc, (and GPR:$rb, uimm16:$ui16))]>;
-    def AND1I : IKRRISC2InstrIUImm<"and1i", 0x05,  []>;
+    def AND1I : IKRRISC2InstrIUImm<"and1i", 0x05,  [(set GPR:$rc, (ikrrisc2_and1i GPR:$rb, uimm16:$ui16))]>;
     def ORI   : IKRRISC2InstrIUImm<"ori",   0x06,  [(set GPR:$rc, (or  GPR:$rb, uimm16:$ui16))]>;
     def XORI  : IKRRISC2InstrIUImm<"xori",  0x07,  [(set GPR:$rc, (xor GPR:$rb, uimm16:$ui16))]>;
 
@@ -208,9 +255,9 @@ let mayLoad = 0, mayStore = 0, hasSideEffects = 0 in {
     def ROR   : IKRRISC2InstrR1<"ror",   0x2D, 1,  [(set GPR:$rc, (rotr GPR:$rb, 1))]>;
     def EXTB  : IKRRISC2InstrR1<"extb",  0x30, 0,  [(set GPR:$rc, (sext_inreg GPR:$rb, i8))]>;
     def EXTH  : IKRRISC2InstrR1<"exth",  0x31, 0,  [(set GPR:$rc, (sext_inreg GPR:$rb, i16))]>;
-    def SWAPB : IKRRISC2InstrR1<"swapb", 0x32, 0,  []>;
-    def SWAPH : IKRRISC2InstrR1<"swaph", 0x2C, 16, []>;
-    def NOT   : IKRRISC2InstrR1<"not",   0x32, 0,  []>;
+    def SWAPB : IKRRISC2InstrR1<"swapb", 0x32, 0,  [(set GPR:$rc, (ikrrisc2_swapb GPR:$rb))]>;
+    def SWAPH : IKRRISC2InstrR1<"swaph", 0x2C, 16, [(set GPR:$rc, (ikrrisc2_swaph GPR:$rb))]>;
+    def NOT   : IKRRISC2InstrR1<"not",   0x32, 0,  [(set GPR:$rc, (ikrrisc2_not GPR:$rb))]>;
     def JMP   : IKRRISC2InstrR0<"jmp",   0x3C,     []>;
     def JSR   : IKRRISC2InstrR0<"jsr",   0x3D,     []>;
 
@@ -225,7 +272,7 @@ let mayLoad = 0, mayStore = 0, hasSideEffects = 0, isBranch = 1, isTerminator = 
     def BSR   : IKRRISC2InstrB0<"bsr",  0x3D,      []>;
 
     def BEQ   : IKRRISC2InstrB1<"beq",   0,        [(brcc SETEQ, GPR:$rc, 0, bb:$si18)]>;
-    def BNE   : IKRRISC2InstrB1<"bne",   1,        [(brcc SETNE, GPR:$rc, 0, bb:$si18)]>;
+    def BNE   : IKRRISC2InstrB1<"bne",   1,        [(brcc SETNE, GPR:$rc, 0, bb:$si18), (brcond GPR:$rc, bb:$si18)]>;
     def BLT   : IKRRISC2InstrB1<"blt",   1,        [(brcc SETLT, GPR:$rc, 0, bb:$si18)]>;
     def BGT   : IKRRISC2InstrB1<"bgt",   1,        [(brcc SETGT, GPR:$rc, 0, bb:$si18)]>;
     def BGE   : IKRRISC2InstrB1<"bge",   1,        [(brcc SETGE, GPR:$rc, 0, bb:$si18)]>;
@@ -242,14 +289,55 @@ let mayLoad = 0, mayStore = 1, hasSideEffects = 0 in {
     def SDR   : IKRRISC2InstrR2<"sdr",    0x14,    [(store GPR:$rc, (add GPR:$rb, GPR:$ra))]>;
 }
 
-
 //===----------------------------------------------------------------------===//
-// Custom ISDs
+// Patterns and Stuff
 //===----------------------------------------------------------------------===//
 
-def ikrrisc2_ret  : SDNode<"IKRRISC2ISD::RET", SDTNone,
-                          [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
+//Branch Patterns
+def : Pat<(brcc SETEQ,  GPR:$rb, GPR:$ra, bb:$si18), (BEQ (CMPU GPR:$rb, GPR:$ra), bb:$si18)>;
+def : Pat<(brcc SETNE,  GPR:$rb, GPR:$ra, bb:$si18), (BNE (CMPU GPR:$rb, GPR:$ra), bb:$si18)>;
+def : Pat<(brcc SETGT,  GPR:$rb, GPR:$ra, bb:$si18), (BGT (CMPS GPR:$rb, GPR:$ra), bb:$si18)>;
+def : Pat<(brcc SETUGT, GPR:$rb, GPR:$ra, bb:$si18), (BGT (CMPU GPR:$rb, GPR:$ra), bb:$si18)>;
+def : Pat<(brcc SETGE,  GPR:$rb, GPR:$ra, bb:$si18), (BGE (CMPS GPR:$rb, GPR:$ra), bb:$si18)>;
+def : Pat<(brcc SETUGE, GPR:$rb, GPR:$ra, bb:$si18), (BGE (CMPU GPR:$rb, GPR:$ra), bb:$si18)>;
+def : Pat<(brcc SETLT,  GPR:$rb, GPR:$ra, bb:$si18), (BLT (CMPS GPR:$rb, GPR:$ra), bb:$si18)>;
+def : Pat<(brcc SETULT, GPR:$rb, GPR:$ra, bb:$si18), (BLT (CMPU GPR:$rb, GPR:$ra), bb:$si18)>;
+def : Pat<(brcc SETLE,  GPR:$rb, GPR:$ra, bb:$si18), (BLE (CMPS GPR:$rb, GPR:$ra), bb:$si18)>;
+def : Pat<(brcc SETULE, GPR:$rb, GPR:$ra, bb:$si18), (BLE (CMPU GPR:$rb, GPR:$ra), bb:$si18)>;
+
+def : Pat<(brcc SETEQ,  GPR:$rb, uimm16:$ui16, bb:$si18), (BEQ (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+def : Pat<(brcc SETNE,  GPR:$rb, uimm16:$ui16, bb:$si18), (BNE (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+def : Pat<(brcc SETGT,  GPR:$rb, simm16:$si16, bb:$si18), (BGT (CMPSI GPR:$rb, simm16:$si16), bb:$si18)>;
+def : Pat<(brcc SETUGT, GPR:$rb, uimm16:$ui16, bb:$si18), (BGT (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+def : Pat<(brcc SETGE,  GPR:$rb, simm16:$si16, bb:$si18), (BGE (CMPSI GPR:$rb, simm16:$si16), bb:$si18)>;
+def : Pat<(brcc SETUGE, GPR:$rb, uimm16:$ui16, bb:$si18), (BGE (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+def : Pat<(brcc SETLT,  GPR:$rb, simm16:$si16, bb:$si18), (BLT (CMPSI GPR:$rb, simm16:$si16), bb:$si18)>;
+def : Pat<(brcc SETULT, GPR:$rb, uimm16:$ui16, bb:$si18), (BLT (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+def : Pat<(brcc SETLE,  GPR:$rb, simm16:$si16, bb:$si18), (BLE (CMPSI GPR:$rb, simm16:$si16), bb:$si18)>;
+def : Pat<(brcc SETULE, GPR:$rb, uimm16:$ui16, bb:$si18), (BLE (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+
+def : Pat<(brcc SETEQ,  uimm16:$ui16, GPR:$rb, bb:$si18), (BEQ (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+def : Pat<(brcc SETNE,  uimm16:$ui16, GPR:$rb, bb:$si18), (BNE (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+def : Pat<(brcc SETGT,  simm16:$si16, GPR:$rb, bb:$si18), (BLE (CMPSI GPR:$rb, simm16:$si16), bb:$si18)>;
+def : Pat<(brcc SETUGT, uimm16:$ui16, GPR:$rb, bb:$si18), (BLE (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+def : Pat<(brcc SETGE,  simm16:$si16, GPR:$rb, bb:$si18), (BLT (CMPSI GPR:$rb, simm16:$si16), bb:$si18)>;
+def : Pat<(brcc SETUGE, uimm16:$ui16, GPR:$rb, bb:$si18), (BLT (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+def : Pat<(brcc SETLT,  simm16:$si16, GPR:$rb, bb:$si18), (BGE (CMPSI GPR:$rb, simm16:$si16), bb:$si18)>;
+def : Pat<(brcc SETULT, uimm16:$ui16, GPR:$rb, bb:$si18), (BGE (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+def : Pat<(brcc SETLE,  simm16:$si16, GPR:$rb, bb:$si18), (BGT (CMPSI GPR:$rb, simm16:$si16), bb:$si18)>;
+def : Pat<(brcc SETULE, uimm16:$ui16, GPR:$rb, bb:$si18), (BGT (CMPUI GPR:$rb, uimm16:$ui16), bb:$si18)>;
+
+
+def : Pat<(ikrrisc2_neg GPR:$ra), (SUB R0, GPR:$ra)>;
+def : Pat<(simm16:$si16), (ADDI R0, simm16:$si16)>;
+def : Pat<(uimm16:$ui16), (ADDLI R0, uimm16:$ui16)>;
 
 let isBarrier = 1, isReturn = 1, isTerminator = 1 in
 def PseudoRET : Pseudo<(outs), (ins), "jmp\t\tra", [(ikrrisc2_ret)]>,
                 PseudoInstExpansion<(JMP R31)>;
+
+let usesCustomInserter = 1 in {
+  def SHIFT_REG : Pseudo<(outs GPR:$dst), (ins GPR:$src, GPR:$shamt, uimm32:$kind),
+                     "!select $dst, $src, $shamt, $kind",
+                     [(set i32:$dst, (ikrrisc2_shift_reg i32:$src, i32:$shamt, imm:$kind))]>;
+}

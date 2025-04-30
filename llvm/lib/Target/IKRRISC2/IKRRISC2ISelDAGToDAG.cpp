@@ -35,13 +35,13 @@ INITIALIZE_PASS(IKRRISC2DAGToDAGISelLegacy, DEBUG_TYPE, PASS_NAME, false,
 
 void IKRRISC2DAGToDAGISel::Select(SDNode *Node) {
   switch (Node->getOpcode()) {
-    /*case ISD::SHL:
+    case ISD::SHL:
     case ISD::SRL:
     case ISD::SRA:
     case ISD::ROTL:
     case ISD::ROTR:
       selectShiftLikes(Node);
-      break;*/
+      break;
 
     // Select the default instruction.
     default:
@@ -60,7 +60,7 @@ selectShiftLikes(SDNode *Node) {
 
   //Expand constant shifts to multiple single shifts
   ConstantSDNode *ConstShamt = dyn_cast<ConstantSDNode>(Shamt);
-  if (ConstShamt && ConstShamt->getZExtValue() < 5) {
+  if (ConstShamt) {
     //if shamt is already const 1, shift is already legal
     if (ConstShamt->getZExtValue() == 1){
       SelectCode(Node);

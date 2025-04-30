@@ -48,10 +48,12 @@ void IKRRISC2AsmPrinter::printOperand(const MachineInstr *MI, int OpNo,
   switch (MO.getType()) {
   case MachineOperand::MO_Register:
   case MachineOperand::MO_Immediate: {
-    MCOperand MC = lowerOperand(MI->getOperand(OpNo));
     O << MO.getImm();
     break;
   }
+  case MachineOperand::MO_MachineBasicBlock:
+    MO.getMBB()->getSymbol()->print(O, MAI);
+    return;
   default:
     llvm_unreachable("unknown operand type");
   }
@@ -92,6 +94,50 @@ bool IKRRISC2AsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
   return false;
 }
 
+MCOperand
+IKRRISC2AsmPrinter::lowerSymbolOperand(const MachineOperand &MO,
+                                     MachineOperand::MachineOperandType MOTy,
+                                     unsigned Offset) const {
+  const MCSymbol *Symbol;
+
+  switch (MOTy) {
+  case MachineOperand::MO_GlobalAddress:
+    Symbol = getSymbol(MO.getGlobal());
+    Offset += MO.getOffset();
+    break;
+  case MachineOperand::MO_MachineBasicBlock:
+    Symbol = MO.getMBB()->getSymbol();
+    break;
+  case MachineOperand::MO_BlockAddress:
+    Symbol = GetBlockAddressSymbol(MO.getBlockAddress());
+    Offset += MO.getOffset();
+    break;
+  case MachineOperand::MO_ExternalSymbol:
+    Symbol = GetExternalSymbolSymbol(MO.getSymbolName());
+    Offset += MO.getOffset();
+    break;
+  case MachineOperand::MO_JumpTableIndex:
+    break;
+  case MachineOperand::MO_ConstantPoolIndex:
+    break;
+  default:
+    report_fatal_error("<unknown operand type>");
+  }
+
+  const MCExpr *ME = MCSymbolRefExpr::create(Symbol, OutContext);
+
+  if (Offset) {
+    // Assume offset is never negative.
+    assert(Offset > 0);
+
+    const MCConstantExpr *OffsetExpr =
+        MCConstantExpr::create(Offset, OutContext);
+    ME = MCBinaryExpr::createAdd(ME, OffsetExpr, OutContext);
+  }
+
+  return MCOperand::createExpr(ME);
+}
+
 void IKRRISC2AsmPrinter::lowerToMCInst(const MachineInstr *MI,
                                      MCInst &OutMI) const {
   OutMI.setOpcode(MI->getOpcode());
@@ -125,12 +171,21 @@ MCOperand IKRRISC2AsmPrinter::lowerOperand(const MachineOperand &MO,
   case MachineOperand::MO_ExternalSymbol:
   case MachineOperand::MO_JumpTableIndex:
   case MachineOperand::MO_ConstantPoolIndex:
-    break;
+    return lowerSymbolOperand(MO, MOTy, Offset);
   default:
     report_fatal_error("unknown operand type");
   }
 
   return MCOperand();
+}
+
+
+void IKRRISC2AsmPrinter::emitStartOfAsmFile(Module &M){
+
+}
+
+void IKRRISC2AsmPrinter::emitEndOfAsmFile(Module &M){
+  OutStreamer->emitRawText(endString);
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeIKRRISC2AsmPrinter() {

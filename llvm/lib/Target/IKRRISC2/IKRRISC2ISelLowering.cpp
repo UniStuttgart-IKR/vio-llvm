@@ -26,6 +26,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/MC/MCRegister.h"
 #include "llvm/Support/Casting.h"
@@ -33,8 +34,10 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cstdint>
 #include <deque>
 #include <map>
+#include <utility>
 
 using namespace llvm;
 
@@ -60,8 +63,8 @@ IKRRISC2TargetLowering::IKRRISC2TargetLowering(const TargetMachine &TM,
   setBooleanContents(ZeroOrOneBooleanContent);
 
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1, Expand);
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8, Expand);
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
+  //setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8, Expand); legal
+  //setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand); legal
 
   setOperationAction(ISD::BITCAST, MVT::i32, Expand);
   setOperationAction(ISD::BITCAST, MVT::f32, Expand);
@@ -89,16 +92,13 @@ IKRRISC2TargetLowering::IKRRISC2TargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::BR_CC, MVT::i32, Legal);
   setOperationAction(ISD::BR_CC, MVT::i64, Expand);
-  setOperationAction(ISD::BR_CC, MVT::f32, Expand);
 
-  setOperationAction(ISD::SELECT, MVT::i32, Expand);
+  setOperationAction(ISD::SELECT, MVT::i32, Custom);
   setOperationAction(ISD::SELECT_CC, MVT::i32, Expand);
-  setOperationAction(ISD::SETCC, MVT::i32, Expand);
+  setOperationAction(ISD::SETCC, MVT::i32, Custom);
 
-  setCondCodeAction(ISD::SETGT, MVT::i32, Expand);
-  setCondCodeAction(ISD::SETLE, MVT::i32, Expand);
-  setCondCodeAction(ISD::SETUGT, MVT::i32, Expand);
-  setCondCodeAction(ISD::SETULE, MVT::i32, Expand);
+  setOperationAction(ISD::SCMP, MVT::i32, Legal);
+  setOperationAction(ISD::UCMP, MVT::i32, Legal);
 
   setOperationAction(ISD::MUL, MVT::i32, Expand);
   setOperationAction(ISD::MULHU, MVT::i32, Expand);
@@ -113,7 +113,7 @@ IKRRISC2TargetLowering::IKRRISC2TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
   setOperationAction(ISD::UDIVREM, MVT::i32, Expand);
 
-  setTargetDAGCombine({ISD::SHL, ISD::SRL, ISD::SRA, ISD::ROTL, ISD::ROTR});
+  //setTargetDAGCombine({ISD::SHL, ISD::SRL, ISD::SRA, ISD::ROTL, ISD::ROTR});
   setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
@@ -150,22 +150,9 @@ IKRRISC2TargetLowering::IKRRISC2TargetLowering(const TargetMachine &TM,
 SDValue IKRRISC2TargetLowering::performShiftLikeCombine(SDNode *N,
                                                  DAGCombinerInfo &DCI) const {
 
-  return SDValue(N, 0);
-  SDLoc DL(N);
-  SDValue Res = DCI.DAG.getNode(N->getOpcode(), DL, MVT::i32, N->getOperand(0), N->getOperand(1));
-  return DCI.CombineTo(N, Res, false);
-  SDValue Op1 = N->getOperand(1);
-  ConstantSDNode *ConstShamt = dyn_cast<ConstantSDNode>(Op1);
-
-  if (!ConstShamt)
-    return SDValue();
-
-  if (ConstShamt->getZExtValue() > 1)
-    return SDValue(N, 0);
-
-llvm_unreachable("Should not custom lower this!");
-  DCI.CombineTo(N, SDValue(N, 0), false);
-  return SDValue(N, 0);
+  return SDValue(N, 0); //is already hanled
+  return SDValue();                 //needs standard handling
+  //return Dag.getNode ...          //custom handling
 }
 
 SDValue IKRRISC2TargetLowering::PerformDAGCombine(SDNode *N,
@@ -195,6 +182,22 @@ const char *IKRRISC2TargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch ((IKRRISC2ISD::NodeType) Opcode) {
     case IKRRISC2ISD::RET:
       return "IKRRISC2ISD::RET";
+    case IKRRISC2ISD::SWAPH:
+      return "IKRRISC2ISD::SWAPH";
+    case IKRRISC2ISD::SWAPB:
+      return "IKRRISC2ISD::SWAPB";
+    case IKRRISC2ISD::AND1I:
+      return "IKRRISC2ISD::AND1I";
+    case IKRRISC2ISD::NOT:
+      return "IKRRISC2ISD::NOT";
+    case IKRRISC2ISD::NEG:
+      return "IKRRISC2ISD::NEG";
+    case IKRRISC2ISD::SELECT:
+      return "IKRRISC2ISD::SELECT";
+    case IKRRISC2ISD::SHIFT_REG:
+      return "IKRRISC2ISD::SHIFT_REG";
+    default:
+      return "Unnamed Node";
   }
   return nullptr;
 }
@@ -277,6 +280,11 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     case ISD::ROTR:
       return lowerShiftLikes(Op, DAG);
 
+    case ISD::SELECT:
+      return lowerSelect(Op, DAG);
+    case ISD::SETCC:
+      return lowerSetCC(Op, DAG);
+
     default: llvm_unreachable("Should not custom lower this!");
   }
 }
@@ -287,21 +295,146 @@ lowerShiftLikes(SDValue Op, SelectionDAG &DAG) const {
 
   SDValue Value = Op.getOperand(0);
   SDValue Shamt = Op.getOperand(1);
-  SDValue OneNode = DAG.getConstant(1, DL, MVT::i32);
 
   //Expand constant shifts to multiple single shifts
   ConstantSDNode *ConstShamt = dyn_cast<ConstantSDNode>(Shamt);
-  if (ConstShamt && ConstShamt->getZExtValue() < 5) {
+  if (ConstShamt) {
     //if shamt is already const 1, shift is already legal
+    uint64_t shamt = ConstShamt->getZExtValue();
     if (ConstShamt->getZExtValue() == 1){
       return Op;
     }
-
-    //Replace multi-shift with single shifts
-    for (unsigned i = 0; i < ConstShamt->getZExtValue(); ++i){
-      Value = DAG.getNode(Op->getOpcode(), DL, Op.getValueType(), Value, OneNode);
+    if (shamt >= 24 && Op->getOpcode() != ISD::ROTL && Op->getOpcode() != ISD::ROTR){
+      SDValue Trunc = DAG.getNode(IKRRISC2ISD::AND1I, DL, Op.getValueType(), Op,
+                                      DAG.getConstant(0, DL, MVT::i32));
+      SDValue Swap = DAG.getNode(IKRRISC2ISD::SWAPH, DL, Op.getValueType(), Trunc);
+      Swap = DAG.getNode(IKRRISC2ISD::SWAPB, DL, Op.getValueType(), Swap);
+      SDNodeFlags Flags;
+      if (Op->getOpcode() == ISD::SRA)
+        Swap = DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, Op.getValueType(), Swap,
+                                DAG.getValueType(MVT::i8));
+      return DAG.getNode(Op->getOpcode(), DL, Op.getValueType(), Swap,
+                              DAG.getConstant(shamt - 24, DL, MVT::i32));
     }
-    return Value;
+
+    if (shamt >= 16){
+      SDValue Swap = DAG.getNode(IKRRISC2ISD::SWAPH, DL, Op.getValueType(), Value);
+
+      if (Op->getOpcode() == ISD::SHL)
+        Swap = DAG.getNode(IKRRISC2ISD::AND1I, DL, Op.getValueType(), Swap,
+                                DAG.getConstant(0xFF00, DL, MVT::i32));
+      else if (Op->getOpcode() == ISD::SRL)
+        Swap = DAG.getNode(ISD::AND, DL, Op.getValueType(), Swap,
+                                DAG.getConstant((1 << 16)-1, DL, MVT::i32));
+      else if (Op->getOpcode() == ISD::SRA)
+        Swap = DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, Op.getValueType(), Swap,
+                                DAG.getValueType(MVT::i16));
+
+      SDValue Result = DAG.getNode(Op->getOpcode(), DL, Op.getValueType(), Swap,
+                                    DAG.getConstant(shamt - 16, DL, MVT::i32));
+      return Result;
+    }
+
+  }
+  SDValue ShiftKind = DAG.getConstant(Op->getOpcode(), DL, Op.getValueType());
+  return DAG.getNode(IKRRISC2ISD::SHIFT_REG, DL, Op.getValueType(), Value, Shamt, ShiftKind);
+}
+
+SDValue IKRRISC2TargetLowering::
+lowerSelect(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  EVT Ty = Op.getOperand(0).getValueType();
+  SDValue COND = Op.getOperand(0);
+  SDValue TrueValue = Op.getOperand(1);
+  SDValue FalseValue = Op.getOperand(2);
+
+  SDValue Bitmap = DAG.getNode(IKRRISC2ISD::NEG, DL, Ty, COND);
+  TrueValue = DAG.getNode(ISD::AND, DL, Ty, TrueValue, Bitmap);
+  Bitmap = DAG.getNode(IKRRISC2ISD::NOT, DL, Ty, Bitmap);
+  FalseValue = DAG.getNode(ISD::AND, DL, Ty, FalseValue, Bitmap);
+  return DAG.getNode(ISD::OR, DL, Ty, TrueValue,FalseValue);
+}
+
+static inline bool includesEqualitySetCC(ISD::CondCode Code) {
+  return Code == ISD::SETGE || Code == ISD::SETUGE || Code == ISD::SETLE || Code == ISD::SETULE;
+}
+
+SDValue IKRRISC2TargetLowering::
+lowerSetCC(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  EVT Ty = Op.getOperand(0).getValueType();
+
+  SDValue LHS = Op.getOperand(0);
+  SDValue RHS = Op.getOperand(1);
+  ISD::CondCode CC = cast<CondCodeSDNode>(Op->getOperand(2))->get();
+  SDValue Const1 = DAG.getConstant(1, DL, Ty);
+  SDValue Res;
+
+  if ((!isa<ConstantSDNode>(LHS) && !isa<ConstantSDNode>(RHS) && includesEqualitySetCC(CC))
+    ||  isa<ConstantSDNode>(LHS)){
+    CC = ISD::getSetCCInverse(CC, Ty);
+    LHS = Op.getOperand(1);
+    RHS = Op.getOperand(0);
+  }
+
+  switch(CC){
+    //ANDI (CMPS L,R), 1
+    case ISD::SETNE:
+      Res =  DAG.getNode(ISD::UCMP, DL, Ty, LHS, RHS);
+      return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
+    //ANDI (NOT (CMPS L,R)), 1
+    case ISD::SETEQ:
+      Res =  DAG.getNode(ISD::UCMP, DL, Ty, LHS, RHS);
+      Res =  DAG.getNode(IKRRISC2ISD::NOT, DL, Ty, Res);
+      return DAG.getNode(ISD::AND, DL, Ty, Res, Const1);
+    //CMPS L,R
+    case ISD::SETGT:
+      Res =  DAG.getNode(ISD::SCMP, DL, Ty, LHS, RHS);
+      Res =  DAG.getNode(ISD::ADD,  DL, Ty, Res, Const1);
+      return DAG.getNode(ISD::SRL,  DL, Ty, Res, Const1);
+    //CMPU L,R
+    case ISD::SETUGT:
+      Res =  DAG.getNode(ISD::UCMP, DL, Ty, LHS, RHS);
+      Res =  DAG.getNode(ISD::ADD,  DL, Ty, Res, Const1);
+      return DAG.getNode(ISD::SRL,  DL, Ty, Res, Const1);
+    //CMPU (ADD (CMPS L,R), 1), 0
+    case ISD::SETGE:
+      Res =  DAG.getNode(ISD::SCMP, DL, Ty, LHS, RHS);
+      Res =  DAG.getNode(IKRRISC2ISD::NOT, DL, Ty, Res);
+      Res =  DAG.getNode(ISD::ROTL, DL, Ty, LHS, Const1);
+      return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
+    //CMPU (ADD (CMPU L,R), 1), 0
+    case ISD::SETUGE:
+      Res =  DAG.getNode(ISD::SCMP, DL, Ty, LHS, RHS);
+      Res =  DAG.getNode(IKRRISC2ISD::NOT, DL, Ty, Res);
+      Res =  DAG.getNode(ISD::ROTL, DL, Ty, LHS, Const1);
+      return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
+    //CMPS R,L
+    case ISD::SETLT:
+      Res =  DAG.getNode(ISD::SCMP, DL, Ty, RHS, LHS);
+      Res =  DAG.getNode(ISD::ROTL, DL, Ty, LHS, Const1);
+      return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
+    //CMPU R,L
+    case ISD::SETULT:
+      Res =  DAG.getNode(ISD::UCMP, DL, Ty, RHS, LHS);
+      Res =  DAG.getNode(ISD::ROTL, DL, Ty, LHS, Const1);
+      return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
+    //CMPU (ADD (CMPS L,R), 1), 0
+    case ISD::SETLE:
+      Res =  DAG.getNode(ISD::SCMP, DL, Ty, RHS, LHS);
+      Res =  DAG.getNode(ISD::ADD,  DL, Ty, Res, Const1);
+      Res =  DAG.getNode(IKRRISC2ISD::NOT, DL, Ty, Res);
+      Res =  DAG.getNode(ISD::SRL,  DL, Ty, Res, Const1);
+      return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
+    //CMPU (ADD (CMPU L,R), 1), 0
+    case ISD::SETULE:
+      Res =  DAG.getNode(ISD::UCMP, DL, Ty, RHS, LHS);
+      Res =  DAG.getNode(ISD::ADD,  DL, Ty, Res, Const1);
+      Res =  DAG.getNode(IKRRISC2ISD::NOT, DL, Ty, Res);
+      Res =  DAG.getNode(ISD::SRL,  DL, Ty, Res, Const1);
+      return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
+    default:
+      return Op;
   }
   return Op;
 }
@@ -317,7 +450,6 @@ SDValue IKRRISC2TargetLowering::LowerFormalArguments(
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL,
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
   MachineFunction &MF = DAG.getMachineFunction();
-  MachineFrameInfo &MFI = MF.getFrameInfo();
 
   // Assign locations to all of the incoming arguments.
   SmallVector<CCValAssign, 16> ArgLocs;
@@ -404,10 +536,98 @@ IKRRISC2TargetLowering::decomposeMulByConstant(LLVMContext &Context, EVT VT,
 // Custom insertion
 //===----------------------------------------------------------------------===//
 
+
+MachineBasicBlock *
+IKRRISC2TargetLowering::emitShift(MachineInstr &MI,
+                                   MachineBasicBlock *MBB) const {
+  const TargetInstrInfo &TII = *Subtarget.getInstrInfo();
+  MachineRegisterInfo &MRI = MBB->getParent()->getRegInfo();
+  DebugLoc DL = MI.getDebugLoc();
+
+  MachineOperand &Value = MI.getOperand(1);
+  MachineOperand &Shamt = MI.getOperand(2);
+  unsigned ShiftKind = 0;
+  switch (MI.getOperand(3).getImm()) {
+    case ISD::SHL:
+      ShiftKind = IKRRISC2::LSL;
+      break;
+    case ISD::SRA:
+      ShiftKind = IKRRISC2::ASR;
+      break;
+    case ISD::SRL:
+      ShiftKind = IKRRISC2::LSR;
+      break;
+    case ISD::ROTL:
+      ShiftKind = IKRRISC2::ROL;
+      break;
+    case ISD::ROTR:
+      ShiftKind = IKRRISC2::ROR;
+      break;
+  }
+
+  // To "insert" a SELECT_CC instruction, we actually have to insert
+  // CopyMBB and SinkMBB  blocks and add branch to MBB. We build phi
+  // operation in SinkMBB like phi (TrueVakue,FalseValue), where TrueValue
+  // is passed from MMB and FalseValue is passed from CopyMBB.
+  //   MBB
+  //   |
+  //   |  ShiftMBB
+  //   |    /  \
+  //   BranchMBB
+  //   |
+  //   SinkMBB
+  // The incoming instruction knows the
+  // destination vreg to set, the condition code register to branch on, the
+  // true/false values to select between, and a branch opcode to use.
+  const BasicBlock *LLVM_BB = MBB->getBasicBlock();
+  MachineFunction::iterator It = ++MBB->getIterator();
+
+  MachineFunction *F = MBB->getParent();
+  MachineBasicBlock *ShiftMBB = F->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *BranchMBB = F->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *SinkMBB = F->CreateMachineBasicBlock(LLVM_BB);
+
+  F->insert(It, ShiftMBB);
+  F->insert(It, BranchMBB);
+  F->insert(It, SinkMBB);
+
+  // Transfer the remainder of MBB and its successor edges to SinkMBB.
+  SinkMBB->splice(SinkMBB->begin(), MBB,
+                  std::next(MachineBasicBlock::iterator(MI)), MBB->end());
+  SinkMBB->transferSuccessorsAndUpdatePHIs(MBB);
+
+  MBB->addSuccessor(BranchMBB);
+  BranchMBB->addSuccessor(SinkMBB);
+  BranchMBB->addSuccessor(ShiftMBB);
+  ShiftMBB->addSuccessor(BranchMBB);
+
+  BuildMI(MBB, DL, TII.get(IKRRISC2::BRA))
+      .addMBB(BranchMBB);
+
+  BuildMI(BranchMBB, DL, TII.get(IKRRISC2::BNE))
+      .addReg(Shamt.getReg())
+      .addMBB(ShiftMBB);
+
+  Register ShiftResult = MRI.createVirtualRegister(&IKRRISC2::GPRRegClass);
+  BuildMI(ShiftMBB, DL, TII.get(ShiftKind))
+      .addReg(Value.getReg());
+
+  BuildMI(ShiftMBB, DL, TII.get(IKRRISC2::ADDI))
+      .addReg(Shamt.getReg())
+      .addImm(-1);
+
+  MI.eraseFromParent(); // The pseudo instruction is gone now.
+  return SinkMBB;
+}
+
 MachineBasicBlock *
 IKRRISC2TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
                                                  MachineBasicBlock *BB) const {
   switch (MI.getOpcode()) {
-  default: llvm_unreachable("Unknown SELECT_CC!");
+    case IKRRISC2::SHIFT_REG:
+      return emitShift(MI, BB);
+    default:
+      LLVM_DEBUG(dbgs() << "\nOpcode " << MI.getOpcode());
+      llvm_unreachable(" was flagged as custom insert, but not handeled in ISelLowering :(");
   }
 }

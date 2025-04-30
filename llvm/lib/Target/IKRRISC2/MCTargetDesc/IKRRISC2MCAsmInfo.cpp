@@ -27,6 +27,12 @@ IKRRISC2MCAsmInfo::IKRRISC2MCAsmInfo(const Triple &TT) {
   Data32bitsDirective = "\t.word\t";
   Data64bitsDirective = "\t.dword\t";
   ZeroDirective = "\t.space\t";
+  HasIdentDirective = false;
+  IsLittleEndian = false;
+  HasFunctionAlignment = false;
+  HasDotTypeDotSizeDirective = false;
+  HasSingleParameterDotFile = false;
+  UseMotorolaIntegers = true;
   CommentString = ";";
   SupportsDebugInformation = true;
   DwarfRegNumForCFI = true;

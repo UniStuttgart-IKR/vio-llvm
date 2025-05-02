@@ -65,15 +65,9 @@ def brtarget : Operand<OtherVT> {
   let ParserMatchClass = IKRRISC2BRTargetAsmOperand;
 }
 
-// A 14-bit constant
-def negimm16 : IKRRISC2SImmOp<16>, ImmLeaf<i32, [{
-  return (Imm & 0xFFFF0000) == 0xFFFF0000;
-}]>;
-// Round up Imm
-def TruncToHalf : SDNodeXForm<imm, [{
-  return CurDAG->getConstant(((N->getZExtValue() & 0xFFFF), SDLoc(N),
-                               N->getValueType(0));
-}]>;
+def immBm : IKRRISC2UImmLeafOp<16> {
+  let PrintMethod = "printImmBitmap";
+}
 
 //===----------------------------------------------------------------------===//
 // Custom ISDs
@@ -140,6 +134,17 @@ class IKRRISC2InstrIUImm<string opcstr, bits<6> opcval, list<dag> pattern>
     bits<16> ui16;
 
 	let AsmString = opcstr # !if(!lt(!size(opcstr), 4), "\t", "") # "\t" # "$rc := $rb,#$ui16";
+    let Pattern = pattern;
+
+    let Inst{31-26} = opcval;
+    let Inst{15-0}  = ui16;
+}
+
+class IKRRISC2InstrIBMImm<string opcstr, bits<6> opcval, list<dag> pattern>
+		: IKRRISC2InstrRegReg<(outs GPR:$rc), (ins GPR:$rb, immBm:$bm16), IKRRISC2FormatI> {
+    bits<16> ui16;
+
+	let AsmString = opcstr # !if(!lt(!size(opcstr), 4), "\t", "") # "\t" # "$rc := $rb,#$bm16";
     let Pattern = pattern;
 
     let Inst{31-26} = opcval;
@@ -231,13 +236,13 @@ class Pseudo<dag outs, dag ins, string asmstr, list<dag> pattern>
 //===----------------------------------------------------------------------===//
 
 let mayLoad = 0, mayStore = 0, hasSideEffects = 0 in {
-    def ADDI  : IKRRISC2InstrISImm<"addi",  0x00,  [(set GPR:$rc, (add GPR:$rb, simm16:$si16))]>;
-    def ADDLI : IKRRISC2InstrIUImm<"addli", 0x01,  [(set GPR:$rc, (add GPR:$rb, uimm16:$ui16))]>;
-    def ADDHI : IKRRISC2InstrIUImm<"addhi", 0x02,  []>;
-    def AND0I : IKRRISC2InstrIUImm<"and0i", 0x04,  [(set GPR:$rc, (and GPR:$rb, uimm16:$ui16))]>;
-    def AND1I : IKRRISC2InstrIUImm<"and1i", 0x05,  [(set GPR:$rc, (ikrrisc2_and1i GPR:$rb, uimm16:$ui16))]>;
-    def ORI   : IKRRISC2InstrIUImm<"ori",   0x06,  [(set GPR:$rc, (or  GPR:$rb, uimm16:$ui16))]>;
-    def XORI  : IKRRISC2InstrIUImm<"xori",  0x07,  [(set GPR:$rc, (xor GPR:$rb, uimm16:$ui16))]>;
+    def ADDI  : IKRRISC2InstrISImm<"addi",   0x00, [(set GPR:$rc, (add GPR:$rb, simm16:$si16))]>;
+    def ADDLI : IKRRISC2InstrIUImm<"addli",  0x01, [(set GPR:$rc, (add GPR:$rb, uimm16:$ui16))]>;
+    def ADDHI : IKRRISC2InstrIUImm<"addhi",  0x02, []>;
+    def AND0I : IKRRISC2InstrIBMImm<"and0i", 0x04, [(set GPR:$rc, (and GPR:$rb, immBm:$bm16))]>;
+    def AND1I : IKRRISC2InstrIBMImm<"and1i", 0x05, [(set GPR:$rc, (ikrrisc2_and1i GPR:$rb, immBm:$bm16))]>;
+    def ORI   : IKRRISC2InstrIBMImm<"ori",   0x06, [(set GPR:$rc, (or  GPR:$rb, immBm:$bm16))]>;
+    def XORI  : IKRRISC2InstrIBMImm<"xori",  0x07, [(set GPR:$rc, (xor GPR:$rb, immBm:$bm16))]>;
 
     def ADD   : IKRRISC2InstrR2<"add",   0x00,     [(set GPR:$rc, (add GPR:$rb, GPR:$ra))]>;
     def ADDX  : IKRRISC2InstrR2<"addx",  0x20,     []>;

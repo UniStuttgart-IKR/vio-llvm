@@ -30,6 +30,11 @@ class IKRRISC2InstrInfo : public IKRRISC2GenInstrInfo {
 public:
     explicit IKRRISC2InstrInfo(IKRRISC2Subtarget &STI);
 
+    void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+                    const DebugLoc &DL, Register DestReg, Register SrcReg,
+                    bool KillSrc, bool RenamableDest = false,
+                    bool RenamableSrc = false) const override;
+
 };
 }
 #endif

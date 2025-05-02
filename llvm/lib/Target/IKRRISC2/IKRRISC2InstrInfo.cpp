@@ -26,3 +26,16 @@ IKRRISC2InstrInfo::IKRRISC2InstrInfo(IKRRISC2Subtarget &STI)
     : IKRRISC2GenInstrInfo() {}
 
 
+
+void IKRRISC2InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
+                                    MachineBasicBlock::iterator MBBI,
+                                    const DebugLoc &DL, Register DestReg,
+                                    Register SrcReg, bool KillSrc,
+                                    bool RenamableDest, bool RenamableSrc) const {
+    if (IKRRISC2::GPRRegClass.contains(DestReg, SrcReg))
+        BuildMI(MBB, MBBI, DL, get(IKRRISC2::OR), DestReg)
+            .addReg(SrcReg, getKillRegState(KillSrc))
+            .addReg(SrcReg, getKillRegState(KillSrc));
+    else
+        report_fatal_error("Impossible reg-to-reg copy");
+}

@@ -181,11 +181,11 @@ MCOperand IKRRISC2AsmPrinter::lowerOperand(const MachineOperand &MO,
 
 
 void IKRRISC2AsmPrinter::emitStartOfAsmFile(Module &M){
-
+  OutStreamer->emitRawText(startString);
 }
 
 void IKRRISC2AsmPrinter::emitEndOfAsmFile(Module &M){
-  OutStreamer->emitRawText(endString);
+  //OutStreamer->emitRawText(endString);
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeIKRRISC2AsmPrinter() {

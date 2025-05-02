@@ -111,7 +111,7 @@ private:
   SDValue lowerSelect(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSetCC(SDValue Op, SelectionDAG &DAG) const;
 
-  MachineBasicBlock *emitShift(MachineInstr &MI, MachineBasicBlock *MBB) const;
+  MachineBasicBlock *emitShiftLikeLoop(MachineInstr &MI, MachineBasicBlock *MBB) const;
 };
 
 } // end namespace llvm

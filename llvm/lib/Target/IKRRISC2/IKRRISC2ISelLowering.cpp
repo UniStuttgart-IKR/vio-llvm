@@ -387,46 +387,46 @@ lowerSetCC(SDValue Op, SelectionDAG &DAG) const {
       Res =  DAG.getNode(ISD::UCMP, DL, Ty, LHS, RHS);
       Res =  DAG.getNode(IKRRISC2ISD::NOT, DL, Ty, Res);
       return DAG.getNode(ISD::AND, DL, Ty, Res, Const1);
-    //CMPS L,R
+    //SRL (ADDI (CMPS L,R), 1), 1
     case ISD::SETGT:
       Res =  DAG.getNode(ISD::SCMP, DL, Ty, LHS, RHS);
       Res =  DAG.getNode(ISD::ADD,  DL, Ty, Res, Const1);
       return DAG.getNode(ISD::SRL,  DL, Ty, Res, Const1);
-    //CMPU L,R
+    //SRL (ADDI (CMPU L,R), 1), 1
     case ISD::SETUGT:
       Res =  DAG.getNode(ISD::UCMP, DL, Ty, LHS, RHS);
       Res =  DAG.getNode(ISD::ADD,  DL, Ty, Res, Const1);
       return DAG.getNode(ISD::SRL,  DL, Ty, Res, Const1);
-    //CMPU (ADD (CMPS L,R), 1), 0
+    //AND (ROL (NOT (CMPS L,R))), 1
     case ISD::SETGE:
       Res =  DAG.getNode(ISD::SCMP, DL, Ty, LHS, RHS);
       Res =  DAG.getNode(IKRRISC2ISD::NOT, DL, Ty, Res);
       Res =  DAG.getNode(ISD::ROTL, DL, Ty, LHS, Const1);
       return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
-    //CMPU (ADD (CMPU L,R), 1), 0
+    //AND (ROL (NOT (CMPU L,R))), 1
     case ISD::SETUGE:
       Res =  DAG.getNode(ISD::SCMP, DL, Ty, LHS, RHS);
       Res =  DAG.getNode(IKRRISC2ISD::NOT, DL, Ty, Res);
       Res =  DAG.getNode(ISD::ROTL, DL, Ty, LHS, Const1);
       return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
-    //CMPS R,L
+    //AND (ROL (CMPS L,R)), 1
     case ISD::SETLT:
       Res =  DAG.getNode(ISD::SCMP, DL, Ty, RHS, LHS);
       Res =  DAG.getNode(ISD::ROTL, DL, Ty, LHS, Const1);
       return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
-    //CMPU R,L
+    //AND (ROL (CMPU L,R)), 1
     case ISD::SETULT:
       Res =  DAG.getNode(ISD::UCMP, DL, Ty, RHS, LHS);
       Res =  DAG.getNode(ISD::ROTL, DL, Ty, LHS, Const1);
       return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
-    //CMPU (ADD (CMPS L,R), 1), 0
+    //AND (SRL (NOT (ADD (CMPS L,R), 1))), 1
     case ISD::SETLE:
       Res =  DAG.getNode(ISD::SCMP, DL, Ty, RHS, LHS);
       Res =  DAG.getNode(ISD::ADD,  DL, Ty, Res, Const1);
       Res =  DAG.getNode(IKRRISC2ISD::NOT, DL, Ty, Res);
       Res =  DAG.getNode(ISD::SRL,  DL, Ty, Res, Const1);
       return DAG.getNode(ISD::AND,  DL, Ty, Res, Const1);
-    //CMPU (ADD (CMPU L,R), 1), 0
+      //AND (SRL (NOT (ADD (CMPU L,R), 1))), 1
     case ISD::SETULE:
       Res =  DAG.getNode(ISD::UCMP, DL, Ty, RHS, LHS);
       Res =  DAG.getNode(ISD::ADD,  DL, Ty, Res, Const1);
@@ -537,15 +537,18 @@ IKRRISC2TargetLowering::decomposeMulByConstant(LLVMContext &Context, EVT VT,
 //===----------------------------------------------------------------------===//
 
 
+//Because IKR RISC2 only has single bit shift/rotate instructions,
+//we need to emit a loop to shift by a variable length
 MachineBasicBlock *
-IKRRISC2TargetLowering::emitShift(MachineInstr &MI,
+IKRRISC2TargetLowering::emitShiftLikeLoop(MachineInstr &MI,
                                    MachineBasicBlock *MBB) const {
   const TargetInstrInfo &TII = *Subtarget.getInstrInfo();
   MachineRegisterInfo &MRI = MBB->getParent()->getRegInfo();
   DebugLoc DL = MI.getDebugLoc();
 
-  MachineOperand &Value = MI.getOperand(1);
-  MachineOperand &Shamt = MI.getOperand(2);
+  Register Result = MI.getOperand(0).getReg();
+  Register Shamt = MRI.createVirtualRegister(&IKRRISC2::GPRRegClass);
+
   unsigned ShiftKind = 0;
   switch (MI.getOperand(3).getImm()) {
     case ISD::SHL:
@@ -565,10 +568,13 @@ IKRRISC2TargetLowering::emitShift(MachineInstr &MI,
       break;
   }
 
-  // To "insert" a SELECT_CC instruction, we actually have to insert
-  // CopyMBB and SinkMBB  blocks and add branch to MBB. We build phi
-  // operation in SinkMBB like phi (TrueVakue,FalseValue), where TrueValue
-  // is passed from MMB and FalseValue is passed from CopyMBB.
+  // The current Basic Block "MBB" is split in two parts where the
+  // "ShiftReg"-Pseudo-Instruction was placed, everything bevor this
+  // Instruction stays MBB, everything after becomes "SinkMBB".
+  // The "ShiftMBB" is the loop-body, where the register is
+  // successively shifted and the Shamt is decremented by 1 with
+  // each iteration. "BranchMBB" then checks if Shamt reached zero or not.
+  //
   //   MBB
   //   |
   //   |  ShiftMBB
@@ -576,9 +582,7 @@ IKRRISC2TargetLowering::emitShift(MachineInstr &MI,
   //   BranchMBB
   //   |
   //   SinkMBB
-  // The incoming instruction knows the
-  // destination vreg to set, the condition code register to branch on, the
-  // true/false values to select between, and a branch opcode to use.
+  
   const BasicBlock *LLVM_BB = MBB->getBasicBlock();
   MachineFunction::iterator It = ++MBB->getIterator();
 
@@ -604,19 +608,41 @@ IKRRISC2TargetLowering::emitShift(MachineInstr &MI,
   BuildMI(MBB, DL, TII.get(IKRRISC2::BRA))
       .addMBB(BranchMBB);
 
-  BuildMI(BranchMBB, DL, TII.get(IKRRISC2::BNE))
-      .addReg(Shamt.getReg())
-      .addMBB(ShiftMBB);
 
   Register ShiftResult = MRI.createVirtualRegister(&IKRRISC2::GPRRegClass);
-  BuildMI(ShiftMBB, DL, TII.get(ShiftKind))
-      .addReg(Value.getReg());
+  BuildMI(ShiftMBB, DL, TII.get(ShiftKind), ShiftResult)
+      .addReg(Result);
 
-  BuildMI(ShiftMBB, DL, TII.get(IKRRISC2::ADDI))
-      .addReg(Shamt.getReg())
+  Register SubResult = MRI.createVirtualRegister(&IKRRISC2::GPRRegClass);
+  BuildMI(ShiftMBB, DL, TII.get(IKRRISC2::ADDI), SubResult)
+      .addReg(Shamt)
       .addImm(-1);
 
-  MI.eraseFromParent(); // The pseudo instruction is gone now.
+
+  //if we come from MBB:      we select the original Value to be shifted
+  //if we come from ShiftMBB: we select the shifted Value
+  BuildMI(*BranchMBB, BranchMBB->begin(), DL, TII.get(IKRRISC2::PHI),
+          Result)
+      .addReg(MI.getOperand(1).getReg())
+      .addMBB(MBB)
+      .addReg(ShiftResult)
+      .addMBB(ShiftMBB);
+
+  //if we come from MBB:      we select the original Shamt
+  //if we come from ShiftMBB: we select the decremented Shamt
+  BuildMI(BranchMBB, DL, TII.get(IKRRISC2::PHI),
+          Shamt)
+      .addReg(MI.getOperand(2).getReg())
+      .addMBB(MBB)
+      .addReg(SubResult)
+      .addMBB(ShiftMBB);
+
+  BuildMI(BranchMBB, DL, TII.get(IKRRISC2::BNE))
+      .addReg(Shamt)
+      .addMBB(ShiftMBB);
+
+  //finally, erase the pseudo instruction
+  MI.eraseFromParent();
   return SinkMBB;
 }
 
@@ -625,7 +651,7 @@ IKRRISC2TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
                                                  MachineBasicBlock *BB) const {
   switch (MI.getOpcode()) {
     case IKRRISC2::SHIFT_REG:
-      return emitShift(MI, BB);
+      return emitShiftLikeLoop(MI, BB);
     default:
       LLVM_DEBUG(dbgs() << "\nOpcode " << MI.getOpcode());
       llvm_unreachable(" was flagged as custom insert, but not handeled in ISelLowering :(");

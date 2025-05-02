@@ -63,6 +63,16 @@ private:
                                     MachineOperand::MachineOperandType MOTy,
                                     unsigned Offset) const;
 
+      Twine startString =
+      ";o   '   |   o       '     o       ' '  _|_  * .  '        .-.  '     |       \n"
+      ";+'    --+--   + .             o         |           *    ( (     . --o-- * * \n"
+      ";-       |   '      '    o   .    *   '   '    '   '    o  `-' '      |       \n"
+      ";* '  '   *    '   Created by Leyla's beautiful LLVM Backend     . . *        \n"
+      ";-   *  +   '     '     *       *  '   ' '          _|_           '   o '  '  \n"
+      ";+ .           .    ' _|_ '         '      .         |   * .   '   o          \n"
+      ";o   + ' ' ' *    '    |    *     *  *     . .   '                +    '    ' \n"
+      "\n";
+
       Twine endString =
       "\n\n"
       "\n;             +    '                                      o                             +"

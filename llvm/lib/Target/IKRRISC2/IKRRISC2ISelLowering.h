@@ -56,6 +56,8 @@ public:
 
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
+  
+
   const char *getTargetNodeName(unsigned Opcode) const override;
 
   std::pair<unsigned, const TargetRegisterClass *>

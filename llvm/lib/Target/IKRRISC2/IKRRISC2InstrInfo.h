@@ -35,6 +35,38 @@ public:
                     bool KillSrc, bool RenamableDest = false,
                     bool RenamableSrc = false) const override;
 
+    // Branch analysis.
+    bool analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
+                        MachineBasicBlock *&FBB,
+                        SmallVectorImpl<MachineOperand> &Cond,
+                        bool AllowModify = false) const override;
+    unsigned removeBranch(MachineBasicBlock &MBB,
+                        int *BytesRemoved = nullptr) const override;
+    unsigned insertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
+                            MachineBasicBlock *FBB, ArrayRef<MachineOperand> Cond,
+                            const DebugLoc &DL,
+                            int *BytesAdded = nullptr) const override;
+    bool
+    reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const override;
+
+private:
+
+    static inline
+    bool isCondBranchOpcode(int Opc) {
+        return Opc == IKRRISC2::BEQ || Opc == IKRRISC2::BNE || Opc == IKRRISC2::BLT 
+            || Opc == IKRRISC2::BGT || Opc == IKRRISC2::BLE || Opc == IKRRISC2::BGE;
+    }
+
+    static inline
+    bool isUncondBranchOpcode(int Opc) {
+        return Opc == IKRRISC2::BRA || Opc == IKRRISC2::BSR;
+    }
+
+    static inline
+    bool isUncondJumpOpcode(int Opc) {
+        return Opc == IKRRISC2::JMP || Opc == IKRRISC2::JSR;
+    }
+
 };
 }
 #endif

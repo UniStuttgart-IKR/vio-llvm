@@ -97,14 +97,14 @@ bool IKRRISC2InstrInfo::analyzeBranch(MachineBasicBlock &MBB,
             // to clean up any instructions at the tail of the basic block.
             CantAnalyze = true;
         } else if (isUncondBranchOpcode(I->getOpcode())) {
-            //STANDARD CASE 2
+            // STANDARD CASE 2
             TBB = I->getOperand(0).getMBB();
         } else if (isCondBranchOpcode(I->getOpcode())) {
             // Bail if this is part of a cond-branch chain (too complex to analyze)
             if (!Cond.empty())
                 return true;
 
-            //STANDARD CASE 4
+            // STANDARD CASE 4
             assert(!FBB && "FBB should have been null.");
             FBB = TBB;
             TBB = I->getOperand(1).getMBB();
@@ -158,6 +158,7 @@ bool IKRRISC2InstrInfo::analyzeBranch(MachineBasicBlock &MBB,
         --I;
     }
 
+    // STANDARD CASE 3
     // We made it past the terminators without bailing out - we must have
     // analyzed this branch successfully.
     return false;

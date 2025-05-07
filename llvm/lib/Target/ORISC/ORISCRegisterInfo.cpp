@@ -1,4 +1,4 @@
-//===-- ObjectiveRISCRegisterInfo.cpp - Objective-RISC Register Information ----------------===//
+//===-- ORISCRegisterInfo.cpp - Objective-RISC Register Information ----------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -10,53 +10,56 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ObjectiveRISCRegisterInfo.h"
-#include "ObjectiveRISC.h"
+#include "ORISCRegisterInfo.h"
+#include "ORISCFrameLowering.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "MCTargetDesc/ORISCMCTargetDesc.h"
 
 using namespace llvm;
 
 #define GET_REGINFO_TARGET_DESC
-#include "ObjectiveRISCGenRegisterInfo.inc"
+#include "ORISCGenRegisterInfo.inc"
 
 const MCPhysReg*
-ObjectiveRISCRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
+ORISCRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   return CSR_SaveList;
 }
 
 const uint32_t *
-ObjectiveRISCRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
+ORISCRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
                                         CallingConv::ID CC) const {
   return CSR_RegMask;
 }
 
-BitVector ObjectiveRISCRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
-	BitVector Reserved(32 * 2);
+BitVector ORISCRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
+	BitVector Reserved(getNumRegs());
 
-	Reserved.set(ObjectiveRISC::P28);	// cnst
-	Reserved.set(ObjectiveRISC::P29);	// ctxt
-	Reserved.set(ObjectiveRISC::P30);	// frame
-	Reserved.set(ObjectiveRISC::P31);	// rpc/core
+	Reserved.set(ORISC::D0);	// zero
+	Reserved.set(ORISC::P0);	// null
+	Reserved.set(ORISC::P28);	// cnst
+	Reserved.set(ORISC::P29);	// ctxt
+	Reserved.set(ORISC::P30);	// frame
+	Reserved.set(ORISC::P31);	// rpc/core
 
 	return Reserved;
 }
 
-bool ObjectiveRISCRegisterInfo::isReservedReg(const MachineFunction &MF,
+bool ORISCRegisterInfo::isReservedReg(const MachineFunction &MF,
 																			MCRegister Reg) const {
 	return getReservedRegs(MF)[Reg];
 }
 
 const TargetRegisterClass*
-ObjectiveRISCRegisterInfo::getPointerRegClass(const MachineFunction &MF,
-																			unsigned Kind) const {
-	return &ObjectiveRISC::PR;
+ORISCRegisterInfo::getPointerRegClass(const MachineFunction &MF, unsigned Kind) const {
+	return &ORISC::PRRegClass;
 }
 
 static void replaceFI(MachineFunction &MF, MachineBasicBlock::iterator II,
@@ -66,12 +69,12 @@ static void replaceFI(MachineFunction &MF, MachineBasicBlock::iterator II,
 }
 
 bool
-ObjectiveRISCRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
+ORISCRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 																			 int SPAdj, unsigned FIOperandNum,
 																			 RegScavenger *RS) const {
 	// TODO
 }
 
-Register ObjectiveRISCRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-	return ObjectiveRISC::P30;
+Register ORISCRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
+	return ORISC::P30;
 }

@@ -30,6 +30,7 @@
 #include "Targets/Mips.h"
 #include "Targets/NVPTX.h"
 #include "Targets/OSTargets.h"
+#include "Targets/ORISC.h"
 #include "Targets/PNaCl.h"
 #include "Targets/PPC.h"
 #include "Targets/RISCV.h"
@@ -770,6 +771,8 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
 
   case llvm::Triple::ikrrisc2:
     return std::make_unique<IKRRISC2TargetInfo>(Triple, Opts);
+  case llvm::Triple::orisc:
+    return std::make_unique<ORISCTargetInfo>(Triple, Opts);
   }
 }
 } // namespace targets

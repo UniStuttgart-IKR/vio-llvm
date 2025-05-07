@@ -1,4 +1,4 @@
-//===-- ObjectiveRISCRegisterInfo.h - Objective-RISC Register Information Impl ---*- C++ -*-===//
+//===-- ORISCRegisterInfo.h - Objective-RISC Register Information Impl ---*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -10,36 +10,38 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_OBJECTIVERISC_OBJECTIVERISCREGISTERINFO_H
-#define LLVM_LIB_TARGET_OBJECTIVERISC_OBJECTIVERISCREGISTERINFO_H
+#ifndef LLVM_LIB_TARGET_ORISC_ORISCREGISTERINFO_H
+#define LLVM_LIB_TARGET_ORISC_ORISCREGISTERINFO_H
 
+#include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "ORISCFrameLowering.h"
+#include "MCTargetDesc/ORISCMCTargetDesc.h"
 
 #define GET_REGINFO_HEADER
-#include "ObjectiveRISCGenRegisterInfo.inc"
+#include "ORISCGenRegisterInfo.inc"
 
 namespace llvm {
-struct ObjectiveRISCRegisterInfo : public ObjectiveRISCGenRegisterInfo {
-  ObjectiveRISCRegisterInfo();
+struct ORISCRegisterInfo : public ORISCGenRegisterInfo {
+  ORISCRegisterInfo() : ORISCGenRegisterInfo(ORISC::P31) {}
 
   /// Code Generation virtual methods...
   const MCPhysReg *getCalleeSavedRegs(const MachineFunction *MF) const override;
   const uint32_t *getCallPreservedMask(const MachineFunction &MF,
-                                       CallingConv::ID CC) const override;
+                                      CallingConv::ID CC) const override;
 
   const uint32_t* getRTCallPreservedMask(CallingConv::ID CC) const;
 
   BitVector getReservedRegs(const MachineFunction &MF) const override;
   bool isReservedReg(const MachineFunction &MF, MCRegister Reg) const;
 
-  const TargetRegisterClass *getPointerRegClass(const MachineFunction &MF,
-                                                unsigned Kind) const override;
-
   bool eliminateFrameIndex(MachineBasicBlock::iterator II,
-                           int SPAdj, unsigned FIOperandNum,
-                           RegScavenger *RS = nullptr) const override;
+                          int SPAdj, unsigned FIOperandNum,
+                          RegScavenger *RS = nullptr) const override;
 
   Register getFrameRegister(const MachineFunction &MF) const override;
+
+  const TargetRegisterClass *getPointerRegClass(const MachineFunction &MF, unsigned Kind) const override;
 };
 
 } // end namespace llvm

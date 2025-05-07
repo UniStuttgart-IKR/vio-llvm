@@ -1460,7 +1460,7 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
     return Triple::xtensa;
 
   case ELF::EM_ORISC:
-    return Triple::objrisc;
+    return Triple::orisc;
   case ELF::EM_IKRRISC2:
     return Triple::ikrrisc2;
 

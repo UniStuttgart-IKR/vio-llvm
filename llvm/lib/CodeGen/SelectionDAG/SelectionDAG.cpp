@@ -1667,7 +1667,7 @@ SDValue SelectionDAG::getConstant(const APInt &Val, const SDLoc &DL, EVT VT,
 
 SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
                                   EVT VT, bool isT, bool isO) {
-  assert(VT.isInteger() && "Cannot create FP integer constant!");
+  assert(!VT.isFloatingPoint() && "Cannot create FP integer constant!");
 
   EVT EltVT = VT.getScalarType();
   const ConstantInt *Elt = &Val;
@@ -7214,6 +7214,8 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
   case ISD::XOR:
   case ISD::ADD:
   case ISD::SUB:
+    if (N1.getValueType() == MVT::orisc_pointer)
+      break;
     assert(VT.isInteger() && "This operator does not apply to FP types!");
     assert(N1.getValueType() == N2.getValueType() &&
            N1.getValueType() == VT && "Binary operator types must match!");
@@ -7990,7 +7992,8 @@ static SDValue getMemsetStringVal(EVT VT, const SDLoc &dl, SelectionDAG &DAG,
 SDValue SelectionDAG::getMemBasePlusOffset(SDValue Base, TypeSize Offset,
                                            const SDLoc &DL,
                                            const SDNodeFlags Flags) {
-  EVT VT = Base.getValueType();
+  EVT VT = Base.getValueType().isInteger() ? Base.getValueType() : 
+        EVT::getIntegerVT(*getContext(), Base.getValueType().getFixedSizeInBits());
   SDValue Index;
 
   if (Offset.isScalable())

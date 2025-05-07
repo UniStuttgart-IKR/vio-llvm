@@ -509,7 +509,7 @@ set(LLVM_ALL_EXPERIMENTAL_TARGETS
   DirectX
   M68k
   Xtensa
-  ObjectiveRISC
+  ORISC
   IKRRISC2
 )
 

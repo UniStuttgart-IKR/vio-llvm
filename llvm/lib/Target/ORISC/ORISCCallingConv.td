@@ -1,4 +1,4 @@
-//===-- ObjectiveRISCCallingConv.td - Calling Conventions for Objective-RISC --*- tablegen -*-===//
+//===-- ORISCCallingConv.td - Calling Conventions for Objective-RISC --*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -12,17 +12,18 @@
 //===----------------------------------------------------------------------===//
 
 // Return Values
-def RetCC_ObjectiveRISC : CallingConv<[
+def RetCC_ORISC : CallingConv<[
   CCIfPtr<CCAssignToReg<[P10]>>,	// b0
   CCIfType<[i1, i8, i16], CCPromoteToType<i32>>,
   CCIfType<[i32], CCAssignToReg<[D10, D11, D12, D3]>>,	// a0, a1, a2, a3
+  CCIfType<[orisc_pointer], CCAssignToReg<[P10, P11, P12, P3]>>,
 ]>;
 
 // Parameters
-def CC_ObjectiveRISC : CallingConv<[
+def CC_ORISC : CallingConv<[
   CCIfType<[i1, i8, i16], CCPromoteToType<i32>>,
   CCIfType<[i32], CCAssignToReg<[D10, D11, D12, D3, D4, D5, D6, D7]>>,
-  CCIfType<[ptr], CCAssignToReg<[P10, P11, P12, P3, P4, P5, P6, P7]>>,
+  CCIfType<[orisc_pointer], CCAssignToReg<[P10, P11, P12, P3, P4, P5, P6, P7]>>,
   CCAssignToStack<4, 4>
 ]>;
 

@@ -2670,6 +2670,9 @@ SDValue DAGCombiner::visitADDLike(SDNode *N) {
   if (N1.isUndef())
     return N1;
 
+  if (N0.getValueType() != N1.getValueType())
+    return SDValue();
+
   // fold (add c1, c2) -> c1+c2
   if (SDValue C = DAG.FoldConstantArithmetic(ISD::ADD, DL, VT, {N0, N1}))
     return C;
@@ -2991,7 +2994,8 @@ SDValue DAGCombiner::visitADD(SDNode *N) {
     return V;
 
   // fold (a+b) -> (a|b) iff a and b share no bits.
-  if ((!LegalOperations || TLI.isOperationLegal(ISD::OR, VT)) &&
+  if (N0.getValueType() == N1.getValueType() && 
+      (!LegalOperations || TLI.isOperationLegal(ISD::OR, VT)) &&
       DAG.haveNoCommonBitsSet(N0, N1))
     return DAG.getNode(ISD::OR, DL, VT, N0, N1, SDNodeFlags::Disjoint);
 

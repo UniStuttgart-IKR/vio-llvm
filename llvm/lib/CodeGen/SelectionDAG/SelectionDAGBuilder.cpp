@@ -4345,7 +4345,8 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
 
       // If the index is smaller or larger than intptr_t, truncate or extend
       // it.
-      IdxN = DAG.getSExtOrTrunc(IdxN, dl, N.getValueType());
+      if (N.getValueType().isInteger())
+        IdxN = DAG.getSExtOrTrunc(IdxN, dl, N.getValueType());
 
       SDNodeFlags ScaleFlags;
       // The multiplication of an index by the type size does not wrap the
@@ -4363,7 +4364,7 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
             DAG.getConstant(ElementMul.getZExtValue(), dl, VScaleTy));
         if (IsVectorGEP)
           VScale = DAG.getSplatVector(N.getValueType(), dl, VScale);
-        IdxN = DAG.getNode(ISD::MUL, dl, N.getValueType(), IdxN, VScale,
+        IdxN = DAG.getNode(ISD::MUL, dl, IdxN.getValueType(), IdxN, VScale,
                            ScaleFlags);
       } else {
         // If this is a multiply by a power of two, turn it into a shl
@@ -4371,13 +4372,13 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
         if (ElementMul != 1) {
           if (ElementMul.isPowerOf2()) {
             unsigned Amt = ElementMul.logBase2();
-            IdxN = DAG.getNode(ISD::SHL, dl, N.getValueType(), IdxN,
+            IdxN = DAG.getNode(ISD::SHL, dl, IdxN.getValueType(), IdxN,
                                DAG.getConstant(Amt, dl, IdxN.getValueType()),
                                ScaleFlags);
           } else {
             SDValue Scale = DAG.getConstant(ElementMul.getZExtValue(), dl,
                                             IdxN.getValueType());
-            IdxN = DAG.getNode(ISD::MUL, dl, N.getValueType(), IdxN, Scale,
+            IdxN = DAG.getNode(ISD::MUL, dl, IdxN.getValueType(), IdxN, Scale,
                                ScaleFlags);
           }
         }

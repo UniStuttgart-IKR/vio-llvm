@@ -24,14 +24,11 @@ namespace llvm {
 namespace ORISCISD {
 enum NodeType : unsigned  {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
-  AND1I,
-  NEG,
-  NOT,
+  INDEXED_LOAD,
+  INDEXED_STORE,
+  PTR_ADD,
+  PTR_SUB,
   RET,
-  SELECT,
-  SHIFT_REG,
-  SWAPB,
-  SWAPH,
 };
 }
 
@@ -113,7 +110,9 @@ public:
 private:
   const ORISCSubtarget &Subtarget;
 
-  SDValue performShiftLikeCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performAddSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue lowerLoad(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerAddSub(SDValue Op, SelectionDAG &DAG, bool IsAdd) const;
   SDValue lowerShiftLikes(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSelect(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSetCC(SDValue Op, SelectionDAG &DAG) const;

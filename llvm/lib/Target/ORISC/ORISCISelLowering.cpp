@@ -28,6 +28,7 @@
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGenTypes/MachineValueType.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/MC/MCRegister.h"
 #include "llvm/Support/Casting.h"
@@ -60,8 +61,17 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
 
   setMinFunctionAlignment(Align(4));
 
+  //setTargetDAGCombine({ISD::ADD, ISD::SUB});
+
   setOperationAction(ISD::Constant, MVT::i32, Legal);
   setOperationAction(ISD::Constant, MVT::i64, Expand);
+  AddPromotedToType(ISD::Constant, MVT::orisc_pointer, MVT::i32);
+  setOperationAction(ISD::Constant, MVT::orisc_pointer, Promote);
+  AddPromotedToType(ISD::Constant, MVT::orisc_fatpointer, MVT::i32);
+  setOperationAction(ISD::Constant, MVT::orisc_fatpointer, Promote);
+
+  setOperationAction(ISD::ADD, {MVT::orisc_pointer, MVT::orisc_fatpointer}, Custom);
+  setOperationAction(ISD::SUB, {MVT::orisc_pointer, MVT::orisc_fatpointer}, Custom);
 
   setBooleanContents(ZeroOrOneBooleanContent);
 
@@ -81,24 +91,10 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
     setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1, Promote);
     setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::i1, Promote);
     setLoadExtAction(ISD::EXTLOAD, VT, MVT::i1, Promote);
-    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i8, Expand);
-
-    setIndexedLoadAction({ISD::UNINDEXED, ISD::POST_INC, ISD::POST_DEC}, VT, Expand);
-    setIndexedMaskedLoadAction(ISD::UNINDEXED, VT, Expand);
-    setIndexedMaskedLoadAction(ISD::POST_INC, VT, Expand);
-    setIndexedMaskedLoadAction(ISD::POST_DEC, VT, Expand);
-    setIndexedLoadAction({ISD::PRE_INC, ISD::PRE_DEC}, VT, Legal);
-    setIndexedMaskedLoadAction(ISD::PRE_INC, VT, Legal);
-    setIndexedMaskedLoadAction(ISD::PRE_DEC, VT, Legal);
-
-    setIndexedStoreAction({ISD::UNINDEXED, ISD::POST_INC, ISD::POST_DEC}, VT, Expand);
-    setIndexedMaskedStoreAction(ISD::UNINDEXED, VT, Expand);
-    setIndexedMaskedStoreAction(ISD::POST_INC, VT, Expand);
-    setIndexedMaskedStoreAction(ISD::POST_DEC, VT, Expand);
-    setIndexedStoreAction({ISD::PRE_INC, ISD::PRE_DEC}, VT, Legal);
-    setIndexedMaskedStoreAction(ISD::PRE_INC, VT, Legal);
-    setIndexedMaskedStoreAction(ISD::PRE_DEC, VT, Legal);
   }
+  setOperationAction(ISD::LOAD, MVT::i32, Custom);
+  setOperationAction(ISD::LOAD, MVT::orisc_pointer, Custom);
+  setOperationAction(ISD::LOAD, MVT::orisc_fatpointer, Custom);
 
   setOperationAction(ISD::ConstantPool, PtrVT, Expand);
   setOperationAction(ISD::GlobalAddress, PtrVT, Expand);
@@ -129,7 +125,6 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
   setOperationAction(ISD::UDIVREM, MVT::i32, Expand);
 
-  //setTargetDAGCombine({ISD::SHL, ISD::SRL, ISD::SRA, ISD::ROTL, ISD::ROTR});
   setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
@@ -159,26 +154,26 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   computeRegisterProperties(STI.getRegisterInfo());
 }
 
-SDValue ORISCTargetLowering::performShiftLikeCombine(SDNode *N,
-                                                 DAGCombinerInfo &DCI) const {
-
-  return SDValue(N, 0); //is already hanled
-  return SDValue();                 //needs standard handling
-  //return Dag.getNode ...          //custom handling
+SDValue ORISCTargetLowering::performAddSubCombine(SDNode *N,
+                                                  DAGCombinerInfo &DCI) const {
+  SDLoc DL(N);
+  if (N->getValueType(0) == MVT::orisc_fatpointer) {
+    if (N->getOpcode() == ISD::ADD)
+      return DCI.DAG.getNode(ORISCISD::PTR_ADD, DL, MVT::orisc_fatpointer, N->getOperand(0), N->getOperand(1));
+    
+    return DCI.DAG.getNode(ORISCISD::PTR_SUB, DL, MVT::orisc_fatpointer, N->getOperand(0), N->getOperand(1));
+  }
+  return SDValue();
 }
 
 SDValue ORISCTargetLowering::PerformDAGCombine(SDNode *N,
                                                  DAGCombinerInfo &DCI) const {
                                                   return SDValue(N, 0);
   SDLoc DL(N);
-  cast<LoadSDNode>(N);
   switch (N->getOpcode()) {
-    case ISD::SHL:
-    case ISD::SRL:
-    case ISD::SRA:
-    case ISD::ROTL:
-    case ISD::ROTR:
-      return performShiftLikeCombine(N, DCI);
+    case ISD::ADD:
+    case ISD::SUB:
+      return performAddSubCombine(N, DCI);
 
     default:
       return SDValue();
@@ -195,20 +190,14 @@ const char *ORISCTargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch ((ORISCISD::NodeType) Opcode) {
     case ORISCISD::RET:
       return "ORISCISD::RET";
-    case ORISCISD::SWAPH:
-      return "ORISCISD::SWAPH";
-    case ORISCISD::SWAPB:
-      return "ORISCISD::SWAPB";
-    case ORISCISD::AND1I:
-      return "ORISCISD::AND1I";
-    case ORISCISD::NOT:
-      return "ORISCISD::NOT";
-    case ORISCISD::NEG:
-      return "ORISCISD::NEG";
-    case ORISCISD::SELECT:
-      return "ORISCISD::SELECT";
-    case ORISCISD::SHIFT_REG:
-      return "ORISCISD::SHIFT_REG";
+    case ORISCISD::INDEXED_LOAD:
+      return "ORISCISD::INDEXED_LOAD";
+    case ORISCISD::INDEXED_STORE:
+      return "ORISCISD::INDEXED_STORE";
+    case ORISCISD::PTR_ADD:
+      return "ORISCISD::PTR_ADD";
+    case ORISCISD::PTR_SUB:
+      return "ORISCISD::PTR_SUB";
     default:
       return "Unnamed Node";
   }
@@ -288,9 +277,93 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
     //case ISD::SELECT:
     //  return lowerSelect(Op, DAG);
+    case ISD::LOAD:
+      return lowerLoad(Op, DAG);
+    case ISD::ADD:
+      return lowerAddSub(Op, DAG, true);
+    case ISD::SUB:
+      return lowerAddSub(Op, DAG, false);
 
     default: llvm_unreachable("Should not custom lower this!");
   }
+}
+
+//We only support unindexed Loads with a PTR_ADD/SUB as BaserPtr
+SDValue ORISCTargetLowering::
+lowerLoad(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  LoadSDNode *LoadOp = cast<LoadSDNode>(Op.getNode());
+  
+  //Load randomly happened to be unindexed with PTR_ADD/SUB as BasePtr
+  if (LoadOp->isUnindexed() && LoadOp->getBasePtr()->getOpcode() == ORISCISD::PTR_ADD 
+      && LoadOp->getBasePtr()->getValueType(0) == MVT::orisc_fatpointer)
+    return Op;
+
+  SDValue Chain = LoadOp->getChain();
+  SDValue AddedPointer;
+  SDValue Index;
+  if (LoadOp->isUnindexed() && 
+      (LoadOp->getBasePtr()->getOpcode() == ISD::ADD
+        || LoadOp->getBasePtr()->getOpcode() == ISD::SUB)) {
+    AddedPointer = LoadOp->getBasePtr();
+  } else {
+    if (LoadOp->isIndexed()) {
+      Index = LoadOp->getOffset();
+    } else {
+      Index = DAG.getConstant(0, DL, MVT::i32);
+    }
+    AddedPointer = DAG.getNode(ORISCISD::PTR_ADD, DL, MVT::orisc_fatpointer, LoadOp->getBasePtr(), Index);
+  }
+
+  ISD::LoadExtType Ext = LoadOp->getExtensionType() == ISD::SEXTLOAD ?
+                          ISD::SEXTLOAD : ISD::ZEXTLOAD;
+  return DAG.getExtLoad(Ext, DL, LoadOp->getValueType(0), Chain, 
+                        AddedPointer, LoadOp->getMemoryVT(), LoadOp->getMemOperand());
+}
+
+SDValue ORISCTargetLowering::
+lowerAddSub(SDValue Op, SelectionDAG &DAG, bool IsAdd) const {
+  SDLoc DL(Op);
+  EVT N1Ty = Op.getOperand(0).getValueType();
+  EVT N2Ty = Op.getOperand(1).getValueType();
+  EVT VT =   Op->getValueType(0);
+  //Conventional Integer Adds/Subs are legal!
+  if (!(N1Ty == MVT::orisc_pointer || N1Ty == MVT::orisc_fatpointer
+        || N2Ty == MVT::orisc_pointer || N2Ty == MVT::orisc_fatpointer
+        || VT == MVT::orisc_pointer || VT == MVT::orisc_fatpointer))
+    return Op;
+
+  SDValue N1 = Op.getOperand(0);
+  SDValue N2 = Op.getOperand(1);
+  //Sometimes Constants dont get leaglized correctly to Int-Tys (why)
+  //so we ensure it here
+  if (ConstantSDNode *CN2 = dyn_cast<ConstantSDNode>(N2)) {
+    N2 = DAG.getConstant(*CN2->getConstantIntValue(), DL, MVT::i32);
+    N2Ty = MVT::i32;
+  }
+
+  assert((N1->getValueType(0) == MVT::orisc_pointer 
+        || N1->getValueType(0) == MVT::orisc_fatpointer)
+          && "Operand 0 of PTR_ADD/SUB must be Baser-Pointer");
+  assert(N2->getValueType(0).isInteger()
+          && "Operand 1 of PTR_ADD/SUB must be Integer-Typed");
+
+  //Transform Chained Fat-Pointer Adds/Subs to
+  //single Pointer Add/Sub and chained Int-Add/Subs
+  unsigned IndxOpc;
+  SDValue N3;
+  while (N1->getValueType(0) == MVT::orisc_fatpointer) {
+    IndxOpc = N1.getNode()->getOpcode() == ORISCISD::PTR_SUB ? 
+              ISD::SUB : ISD::ADD;
+    N3 = N1.getNode()->getOperand(1);
+    if (ConstantSDNode *CN3 = dyn_cast<ConstantSDNode>(N3))
+      N3 = DAG.getConstant(*CN3->getConstantIntValue(), DL, N2Ty);
+    N2 = DAG.getNode(IndxOpc, DL, N2Ty, N2, N3);
+    N1 = N1.getNode()->getOperand(0);
+  }
+
+  unsigned Opc = IsAdd ? ORISCISD::PTR_ADD : ORISCISD::PTR_SUB;
+  return DAG.getNode(Opc, DL, MVT::orisc_fatpointer, N1, N2);
 }
 
 /*

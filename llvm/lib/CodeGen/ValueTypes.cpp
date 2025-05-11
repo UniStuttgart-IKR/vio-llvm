@@ -198,7 +198,8 @@ std::string EVT::getEVTString() const {
     return "amdgpuBufferFatPointer";
   case MVT::amdgpuBufferStridedPointer:
     return "amdgpuBufferStridedPointer";
-  case MVT::orisc_pointer: return "pointer";
+  case MVT::orisc_pointer: return "oriscptr";
+  case MVT::orisc_fatpointer: return "oriscfatptr";
   }
 }
 

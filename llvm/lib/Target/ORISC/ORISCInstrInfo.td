@@ -59,6 +59,8 @@ def uimm5  : ORISCUImmLeafOp<5>;
 def uimm10 : ORISCUImmLeafOp<10>;
 def uimm11 : ORISCUImmLeafOp<11>;
 def uimm12 : ORISCUImmLeafOp<12>; 
+def uimm13 : ORISCUImmLeafOp<13>; 
+def uimm14 : ORISCUImmLeafOp<14>; 
 def uimm15 : ORISCUImmLeafOp<15>;
 def uimm20 : ORISCUImmLeafOp<20>;
 
@@ -82,6 +84,15 @@ def brtarget : Operand<OtherVT> {
   let DecoderMethod = "decodeBranchOperand";
   let ParserMatchClass = IKRRISC2BRTargetAsmOperand;
 }
+
+def GetWordsIndex : SDNodeXForm<imm, [{
+	return CurDAG->getTargetConstant((N->getZExtValue() / 4), SDLoc(N),
+                                    N->getValueType(0));
+}]>;
+def GetHalfsIndex : SDNodeXForm<imm, [{
+	return CurDAG->getTargetConstant((N->getZExtValue() / 2), SDLoc(N),
+                                    N->getValueType(0));
+}]>;
 
 //===----------------------------------------------------------------------===//
 // Instruction Formats
@@ -144,22 +155,22 @@ class ORISCInstrRegAttr<string opcodestr>
 
 // Load/Store Instructions with Immediate Index
 class ORISCInstrLoadImmD<string opcodestr>
-		: ORISCInstr<opcodestr, (outs DR:$dy), (ins PR:$px, uimm12:$ix12), "$dy = $px[ix12]", FormatLSU8> {
+		: ORISCInstr<opcodestr, (outs DR:$dy), (ins PR:$px, uimm12:$ix12), "$dy = $px[$ix12]", FormatLSU8> {
 
 }
 
 class ORISCInstrStoreImmD<string opcodestr>
-		: ORISCInstr<opcodestr, (outs), (ins PR:$px, uimm12:$ix12, DR:$dy), "$px[ix12] = $dy", FormatLSU9> {
+		: ORISCInstr<opcodestr, (outs), (ins PR:$px, uimm12:$ix12, DR:$dy), "$px[$ix12] = $dy", FormatLSU9> {
 
 }
 
 class ORISCInstrLoadImmP<string opcodestr>
-		: ORISCInstr<opcodestr, (outs PR:$py), (ins PR:$px, uimm12:$ix12), "$py = $px[ix12]", FormatLSU9> {
+		: ORISCInstr<opcodestr, (outs PR:$py), (ins PR:$px, uimm12:$ix12), "$py = $px[$ix12]", FormatLSU9> {
 
 }
 
 class ORISCInstrStoreImmP<string opcodestr>
-		: ORISCInstr<opcodestr, (outs), (ins PR:$px, uimm12:$ix12, PR:$py), "$px[ix12] = $py", FormatLSU9> {
+		: ORISCInstr<opcodestr, (outs), (ins PR:$px, uimm12:$ix12, PR:$py), "$px[$ix12] = $py", FormatLSU9> {
 
 }
 
@@ -306,6 +317,8 @@ let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
 	def LHS:	ORISCInstrLoadRegD<"lhs">;
 	def LW:		ORISCInstrLoadRegD<"lw">;
 	def LP:		ORISCInstrLoadRegP<"lp">;
+
+	def ADDT:	ORISCInstrRegALU<"add",    1>;
 }
 
 let mayLoad = 0, mayStore = 1, hasSideEffects = 0 in {
@@ -422,35 +435,23 @@ def SDT_ORISC_IStore : SDTypeProfile<0, 3, [       // indexed store
   SDTCisInt<0>, SDTCisVT<1, orisc_pointer>, SDTCisInt<2>
 ]>;
 
-def SDT_ORISC_ILoad : SDTypeProfile<1, 2, [       // indexed load
-  SDTCisInt<0>, SDTCisVT<1, orisc_pointer>, SDTCisInt<2>
-]>;
+def SDT_ORISC_PTRADD : SDTypeProfile<1, 2, []>;
 
-def orisc_ild  : SDNode<"ISD::LOAD"       , SDT_ORISC_ILoad,
-                        [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
-def orisc_pre_ild : PatFrag<(ops       node:$base, node:$offset),
-                            (orisc_ild node:$base, node:$offset), [{
-	ISD::MemIndexedMode AM = cast<LoadSDNode>(N)->getAddressingMode();
-	return AM == ISD::PRE_INC || AM == ISD::PRE_DEC;
-}]>;
-class orisc_sextiload<ValueType MemVT>
-		: PatFrag<(ops node:$base, node:$offset), (orisc_pre_ild node:$base, node:$offset)> {
-  	let IsLoad = true;
-  	let IsSignExtLoad = true;
-	let ScalarMemoryVT = MemVT;
-}
-class orisc_zextiload<ValueType MemVT>
-		: PatFrag<(ops node:$base, node:$offset), (orisc_pre_ild node:$base, node:$offset)> {
-	let IsLoad = true;
-	let IsZeroExtLoad = true;
-	let ScalarMemoryVT = MemVT;
-}
-def orisc_loadi8u  : orisc_zextiload<i8>;
-def orisc_loadi16u : orisc_zextiload<i16>;
-def orisc_loadi32u : orisc_zextiload<i32>;
-def orisc_loadi8s  : orisc_sextiload<i8>;
-def orisc_loadi16s : orisc_sextiload<i16>;
-def orisc_loadi32s : orisc_sextiload<i32>;
+def orisc_ptradd  : SDNode<"ORISCISD::PTR_ADD", SDT_ORISC_PTRADD, []>;
+
+def : Pat<(zextloadi8 (orisc_ptradd PR:$px, uimm12:$ix12)), (LBU_I PR:$px, uimm12:$ix12)>;
+def : Pat<(zextloadi8 (orisc_ptradd PR:$px, DR:$dz)),       (LBU   PR:$px, DR:$dz, 1, 0)>;
+def : Pat<(sextloadi8 (orisc_ptradd PR:$px, uimm12:$ix12)), (LBS_I PR:$px, uimm12:$ix12)>;
+def : Pat<(sextloadi8 (orisc_ptradd PR:$px, DR:$dz)),       (LBS   PR:$px, DR:$dz, 1, 0)>;
+
+def : Pat<(zextloadi16 (orisc_ptradd PR:$px, uimm13:$ix13)), (LHU_I PR:$px, (GetHalfsIndex uimm13:$ix13))>;
+def : Pat<(zextloadi16 (orisc_ptradd PR:$px, DR:$dz)),       (LHU   PR:$px, (SRA DR:$dz, 1), 1, 0)>;
+def : Pat<(sextloadi16 (orisc_ptradd PR:$px, uimm13:$ix13)), (LHS_I PR:$px, (GetHalfsIndex uimm13:$ix13))>;
+def : Pat<(sextloadi16 (orisc_ptradd PR:$px, DR:$dz)),       (LHS   PR:$px, (SRA DR:$dz, 1), 1, 0)>;
+
+def : Pat<(unindexedload (orisc_ptradd PR:$px, uimm14:$ix14)), (LW_I PR:$px, (GetWordsIndex uimm14:$ix14))>;
+def : Pat<(unindexedload (orisc_ptradd PR:$px, DR:$dz)),       (LW   PR:$px, (SRA DR:$dz, 2), 1, 0)>;
+
 
 def orisc_ist  : SDNode<"ISD::STORE"      , SDT_ORISC_IStore,
                         [SDNPHasChain, SDNPMayStore, SDNPMemOperand]>;
@@ -540,17 +541,6 @@ def : PatStoreD<orisc_storei32, SW>;
 def : PatStoreI<orisc_storei8,  SB_I>;
 def : PatStoreI<orisc_storei16, SH_I>;
 def : PatStoreI<orisc_storei32, SW_I>;
-
-def : PatLoadDS<orisc_loadi8s,  LBS>;
-def : PatLoadDU<orisc_loadi8u,  LBU>;
-def : PatLoadIS<orisc_loadi8s,  LBS_I>;
-def : PatLoadIU<orisc_loadi8u,  LBU_I>;
-def : PatLoadDS<orisc_loadi16s, LHS>;
-def : PatLoadDU<orisc_loadi16u, LHU>;
-def : PatLoadIS<orisc_loadi16s, LHS_I>;
-def : PatLoadIU<orisc_loadi16u, LHU_I>;
-def : PatLoadDS<orisc_loadi32s, LW>;
-def : PatLoadIS<orisc_loadi32s, LW_I>;
 
 
 class PatBranch<CondCode Cond, ORISCInstr Inst>

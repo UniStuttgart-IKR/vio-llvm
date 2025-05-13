@@ -18,6 +18,7 @@
 #include "ORISCSubtarget.h"
 #include "ORISCTargetMachine.h"
 #include "MCTargetDesc/ORISCMCTargetDesc.h"
+#include "llvm-c/Types.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
@@ -70,8 +71,8 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   AddPromotedToType(ISD::Constant, MVT::orisc_fatpointer, MVT::i32);
   setOperationAction(ISD::Constant, MVT::orisc_fatpointer, Promote);
 
-  setOperationAction(ISD::ADD, {MVT::orisc_pointer, MVT::orisc_fatpointer}, Custom);
-  setOperationAction(ISD::SUB, {MVT::orisc_pointer, MVT::orisc_fatpointer}, Custom);
+  //setOperationAction(ISD::ADD, {MVT::orisc_pointer, MVT::orisc_fatpointer}, Custom);
+  //setOperationAction(ISD::SUB, {MVT::orisc_pointer, MVT::orisc_fatpointer}, Custom);
 
   setBooleanContents(ZeroOrOneBooleanContent);
 
@@ -88,6 +89,11 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
 
   // No sign extend instructions for i1 and sign extend load i8
   for (MVT VT : MVT::integer_valuetypes()) {
+    for (MVT OtherVT : MVT::integer_valuetypes()) {
+      setTruncStoreAction(VT, OtherVT, Custom);
+      setLoadExtAction({ISD::NON_EXTLOAD, ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD}, VT,
+                      OtherVT, Custom);
+    }
     setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1, Promote);
     setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::i1, Promote);
     setLoadExtAction(ISD::EXTLOAD, VT, MVT::i1, Promote);
@@ -279,10 +285,6 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     //  return lowerSelect(Op, DAG);
     case ISD::LOAD:
       return lowerLoad(Op, DAG);
-    case ISD::ADD:
-      return lowerAddSub(Op, DAG, true);
-    case ISD::SUB:
-      return lowerAddSub(Op, DAG, false);
 
     default: llvm_unreachable("Should not custom lower this!");
   }
@@ -293,94 +295,82 @@ SDValue ORISCTargetLowering::
 lowerLoad(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   LoadSDNode *LoadOp = cast<LoadSDNode>(Op.getNode());
-  
-  //Load randomly happened to be unindexed with PTR_ADD/SUB as BasePtr
-  if (LoadOp->isUnindexed() && LoadOp->getBasePtr()->getOpcode() == ORISCISD::PTR_ADD 
-      && LoadOp->getBasePtr()->getValueType(0) == MVT::orisc_fatpointer)
+
+  if (LoadOp->getBasePtr()->getOpcode() == ORISCISD::PTR_ADD)
     return Op;
 
   SDValue Chain = LoadOp->getChain();
-  SDValue AddedPointer;
-  SDValue Index;
-  if (LoadOp->isUnindexed() && 
-      (LoadOp->getBasePtr()->getOpcode() == ISD::ADD
-        || LoadOp->getBasePtr()->getOpcode() == ISD::SUB)) {
-    AddedPointer = LoadOp->getBasePtr();
+  EVT VT = LoadOp->getBasePtr().getValueType();
+  SDValue Base, Index;
+  if (VT == MVT::orisc_pointer) {
+    Base = LoadOp->getBasePtr();
+    Index = DAG.getConstant(0, DL, MVT::i32);
+  } else if (VT == MVT::orisc_fatpointer){
+    LLVM_DEBUG(dbgs() << "\nStarting FatPointer Recursion\n");
+    auto FatPtr = recursivelyLowerFatPtrs(LoadOp->getBasePtr(), DAG);
+    Base = FatPtr.Base;
+    Index = FatPtr.Index;
   } else {
-    if (LoadOp->isIndexed()) {
-      Index = LoadOp->getOffset();
-    } else {
-      Index = DAG.getConstant(0, DL, MVT::i32);
-    }
-    AddedPointer = DAG.getNode(ORISCISD::PTR_ADD, DL, MVT::orisc_fatpointer, LoadOp->getBasePtr(), Index);
+    llvm_unreachable("Bases should ALWAYS be pointer types!");
+  }
+  if (LoadOp->isIndexed()){
+    Index = DAG.getNode(ISD::ADD, DL, Index.getValueType(),
+                          Index, LoadOp->getOffset());
+  }
+  uint64_t Shamt = Log2_64(LoadOp->getMemoryVT().getSizeInBits() / 8);
+  if (Shamt > 0) {
+    SDValue ShamtNode = DAG.getConstant(Shamt, DL, MVT::i32);
+    Index = DAG.getNode(ISD::SRA, DL, Index.getValueType(),
+                          Index, ShamtNode);
   }
 
+  LLVM_DEBUG(LoadOp->getMemOperand()->getValue()->dump());
+  SDValue AddedPointer = DAG.getNode(ORISCISD::PTR_ADD, DL, MVT::orisc_fatpointer,
+                                        Base, Index);
   ISD::LoadExtType Ext = LoadOp->getExtensionType() == ISD::SEXTLOAD ?
                           ISD::SEXTLOAD : ISD::ZEXTLOAD;
   return DAG.getExtLoad(Ext, DL, LoadOp->getValueType(0), Chain, 
                         AddedPointer, LoadOp->getMemoryVT(), LoadOp->getMemOperand());
 }
 
-SDValue ORISCTargetLowering::
-lowerAddSub(SDValue Op, SelectionDAG &DAG, bool IsAdd) const {
-  SDLoc DL(Op);
-  EVT N1Ty = Op.getOperand(0).getValueType();
-  EVT N2Ty = Op.getOperand(1).getValueType();
-  EVT VT =   Op->getValueType(0);
-  //Conventional Integer Adds/Subs are legal!
-  if (!(N1Ty == MVT::orisc_pointer || N1Ty == MVT::orisc_fatpointer
-        || N2Ty == MVT::orisc_pointer || N2Ty == MVT::orisc_fatpointer
-        || VT == MVT::orisc_pointer || VT == MVT::orisc_fatpointer))
-    return Op;
+//Traverse Tree upwards until we reach a Node where the Pointer
+//is clean Base Pointer. Eiter N1 or N2 can be (Fat-)Ptr, but
+//never both. 
+ORISCTargetLowering::FatPointer ORISCTargetLowering::
+recursivelyLowerFatPtrs(SDValue OldOp, SelectionDAG &DAG) const {
+  SDLoc DL(OldOp);
 
-  SDValue N1 = Op.getOperand(0);
-  SDValue N2 = Op.getOperand(1);
-  //Sometimes Constants dont get leaglized correctly to Int-Tys (why)
+  if (OldOp->getOpcode() == ISD::CopyFromReg){
+    SDValue Index = DAG.getConstant(0, DL, MVT::i32);
+    return {OldOp, Index};
+  }
+  if (OldOp->getOperand(0).getValueType() == MVT::orisc_pointer) {
+    //We reached a clean instruction with separate base and index
+    LLVM_DEBUG(dbgs() << "FOUND BASE:  "; OldOp->getOperand(0).dump());
+    SDValue Index = OldOp->getOperand(1);
+    if (ConstantSDNode *CIndex = dyn_cast<ConstantSDNode>(Index))
+      Index = DAG.getConstant(*CIndex->getConstantIntValue(), DL, MVT::i32);
+    return {OldOp->getOperand(0), Index};
+  }
+
+  ORISCTargetLowering::
+    FatPointer CurFatPtr = recursivelyLowerFatPtrs(OldOp->getOperand(0), DAG);
+  
+  LLVM_DEBUG(dbgs() << "Looking at:  "; OldOp->dump());
+  SDValue N1 = CurFatPtr.Index;
+  SDValue N2 = OldOp->getOperand(0).getValueType() == MVT::orisc_fatpointer ?
+                OldOp->getOperand(1) : OldOp->getOperand(0);
+  //Sometimes Constants dont get leaglized correctly to Int-Tys (why?)
   //so we ensure it here
-  if (ConstantSDNode *CN2 = dyn_cast<ConstantSDNode>(N2)) {
+  if (ConstantSDNode *CN2 = dyn_cast<ConstantSDNode>(N2))
     N2 = DAG.getConstant(*CN2->getConstantIntValue(), DL, MVT::i32);
-    N2Ty = MVT::i32;
-  }
 
-  assert((N1->getValueType(0) == MVT::orisc_pointer 
-        || N1->getValueType(0) == MVT::orisc_fatpointer)
-          && "Operand 0 of PTR_ADD/SUB must be Baser-Pointer");
-  assert(N2->getValueType(0).isInteger()
-          && "Operand 1 of PTR_ADD/SUB must be Integer-Typed");
-
-  //Transform Chained Fat-Pointer Adds/Subs to
-  //single Pointer Add/Sub and chained Int-Add/Subs
-  unsigned IndxOpc;
-  SDValue N3;
-  while (N1->getValueType(0) == MVT::orisc_fatpointer) {
-    IndxOpc = N1.getNode()->getOpcode() == ORISCISD::PTR_SUB ? 
-              ISD::SUB : ISD::ADD;
-    N3 = N1.getNode()->getOperand(1);
-    if (ConstantSDNode *CN3 = dyn_cast<ConstantSDNode>(N3))
-      N3 = DAG.getConstant(*CN3->getConstantIntValue(), DL, N2Ty);
-    N2 = DAG.getNode(IndxOpc, DL, N2Ty, N2, N3);
-    N1 = N1.getNode()->getOperand(0);
-  }
-
-  unsigned Opc = IsAdd ? ORISCISD::PTR_ADD : ORISCISD::PTR_SUB;
-  return DAG.getNode(Opc, DL, MVT::orisc_fatpointer, N1, N2);
+  SDValue NewIndex = DAG.getNode(OldOp->getOpcode(), DL, N1.getValueType(),
+                                          N1, N2);
+                                          
+  LLVM_DEBUG(dbgs() << "Transforming to "; NewIndex->dump());
+  return {CurFatPtr.Base, NewIndex};
 }
-
-/*
-SDValue ORISCTargetLowering::
-lowerSelect(SDValue Op, SelectionDAG &DAG) const {
-  SDLoc DL(Op);
-  EVT Ty = Op.getOperand(0).getValueType();
-  SDValue COND = Op.getOperand(0);
-  SDValue TrueValue = Op.getOperand(1);
-  SDValue FalseValue = Op.getOperand(2);
-
-  SDValue Bitmap = DAG.getNode(ORISCISD::NEG, DL, Ty, COND);
-  TrueValue = DAG.getNode(ISD::AND, DL, Ty, TrueValue, Bitmap);
-  Bitmap = DAG.getNode(ORISCISD::NOT, DL, Ty, Bitmap);
-  FalseValue = DAG.getNode(ISD::AND, DL, Ty, FalseValue, Bitmap);
-  return DAG.getNode(ISD::OR, DL, Ty, TrueValue,FalseValue);
-}*/
 
 static inline bool includesEqualitySetCC(ISD::CondCode Code) {
   return Code == ISD::SETGE || Code == ISD::SETUGE || Code == ISD::SETLE || Code == ISD::SETULE;

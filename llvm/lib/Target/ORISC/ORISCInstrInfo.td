@@ -438,19 +438,26 @@ def SDT_ORISC_IStore : SDTypeProfile<0, 3, [       // indexed store
 def SDT_ORISC_PTRADD : SDTypeProfile<1, 2, []>;
 
 def orisc_ptradd  : SDNode<"ORISCISD::PTR_ADD", SDT_ORISC_PTRADD, []>;
+def loadpointer  : PatFrag<(ops node:$ptr), (unindexedload node:$ptr)> {
+  let IsLoad = true;
+  let MemoryVT = orisc_pointer;
+}
 
 def : Pat<(zextloadi8 (orisc_ptradd PR:$px, uimm12:$ix12)), (LBU_I PR:$px, uimm12:$ix12)>;
 def : Pat<(zextloadi8 (orisc_ptradd PR:$px, DR:$dz)),       (LBU   PR:$px, DR:$dz, 1, 0)>;
 def : Pat<(sextloadi8 (orisc_ptradd PR:$px, uimm12:$ix12)), (LBS_I PR:$px, uimm12:$ix12)>;
 def : Pat<(sextloadi8 (orisc_ptradd PR:$px, DR:$dz)),       (LBS   PR:$px, DR:$dz, 1, 0)>;
 
-def : Pat<(zextloadi16 (orisc_ptradd PR:$px, uimm13:$ix13)), (LHU_I PR:$px, (GetHalfsIndex uimm13:$ix13))>;
-def : Pat<(zextloadi16 (orisc_ptradd PR:$px, DR:$dz)),       (LHU   PR:$px, (SRA DR:$dz, 1), 1, 0)>;
-def : Pat<(sextloadi16 (orisc_ptradd PR:$px, uimm13:$ix13)), (LHS_I PR:$px, (GetHalfsIndex uimm13:$ix13))>;
-def : Pat<(sextloadi16 (orisc_ptradd PR:$px, DR:$dz)),       (LHS   PR:$px, (SRA DR:$dz, 1), 1, 0)>;
+def : Pat<(zextloadi16 (orisc_ptradd PR:$px, uimm12:$ix12)), (LHU_I PR:$px, uimm12:$ix12)>;
+def : Pat<(zextloadi16 (orisc_ptradd PR:$px, DR:$dz)),       (LHU   PR:$px, DR:$dz, 1, 0)>;
+def : Pat<(sextloadi16 (orisc_ptradd PR:$px, uimm12:$ix12)), (LHS_I PR:$px, uimm12:$ix12)>;
+def : Pat<(sextloadi16 (orisc_ptradd PR:$px, DR:$dz)),       (LHS   PR:$px, DR:$dz, 1, 0)>;
 
-def : Pat<(unindexedload (orisc_ptradd PR:$px, uimm14:$ix14)), (LW_I PR:$px, (GetWordsIndex uimm14:$ix14))>;
-def : Pat<(unindexedload (orisc_ptradd PR:$px, DR:$dz)),       (LW   PR:$px, (SRA DR:$dz, 2), 1, 0)>;
+def : Pat<(unindexedload (orisc_ptradd PR:$px, uimm12:$ix12)), (LW_I PR:$px, uimm12:$ix12)>;
+def : Pat<(unindexedload (orisc_ptradd PR:$px, DR:$dz)),       (LW   PR:$px, DR:$dz, 1, 0)>;
+
+def : Pat<(loadpointer (orisc_ptradd PR:$px, uimm12:$ix12)), (LP_I PR:$px, uimm12:$ix12)>;
+def : Pat<(loadpointer (orisc_ptradd PR:$px, DR:$dz)),       (LP   PR:$px, DR:$dz, 1, 0)>;
 
 
 def orisc_ist  : SDNode<"ISD::STORE"      , SDT_ORISC_IStore,

@@ -15,6 +15,8 @@
 #ifndef LLVM_LIB_TARGET_ORISC_ORISC_H
 #define LLVM_LIB_TARGET_ORISC_ORISC_H
 
+#include "llvm/Target/TargetMachine.h"
+
 namespace llvm {
 
 class FunctionPass;
@@ -51,6 +53,8 @@ void initializeORISCDAGToDAGISelLegacyPass(PassRegistry &);
 //void initializeORISCGlobalBaseRegPass(PassRegistry &);
 //void initializeORISCCollapseMOVEMPass(PassRegistry &);
 
+FunctionPass *createORISCGEPTransformPass();
+void initializeORISCGEPTransformPass(PassRegistry &);
 } // namespace llvm
 
 #endif // LLVM_LIB_TARGET_ORISC_ORISC_H

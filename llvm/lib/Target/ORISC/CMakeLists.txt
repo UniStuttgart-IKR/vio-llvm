@@ -14,6 +14,7 @@ add_public_tablegen_target(ORISCCommonTableGen)
 add_llvm_target(ORISCCodeGen
   ORISCAsmPrinter.cpp
   ORISCFrameLowering.cpp
+  ORISCGEPTransform.cpp
   ORISCISelDAGToDAG.cpp
   ORISCISelLowering.cpp
   ORISCInstrInfo.cpp

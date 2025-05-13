@@ -27,11 +27,12 @@ using namespace llvm;
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeORISCTarget() {
   RegisterTargetMachine<ORISCTargetMachine> X(getTheORISCTarget());
   auto *PR = PassRegistry::getPassRegistry();
+  initializeORISCGEPTransformPass(*PR);
   initializeORISCDAGToDAGISelLegacyPass(*PR);
 }
 
 static std::string getDataLayout() {
-	return "E-p:32:32-i32:32:32-n32";
+	return "E-p:32:32-i32:32:32-i16:16:16-i8:8:8-n32";
 }
 
 static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
@@ -72,8 +73,8 @@ public:
     return *getORISCTargetMachine().getSubtargetImpl();
   }
   bool addInstSelector() override;
-  /*
   void addIRPasses() override;
+  /*
   bool addIRTranslator() override;
   bool addLegalizeMachineIR() override;
   bool addRegBankSelect() override;
@@ -86,12 +87,12 @@ public:
 TargetPassConfig *ORISCTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new ORISCPassConfig(*this, PM);
 }
-/*
+
 void ORISCPassConfig::addIRPasses() {
-  //addPass(createAtomicExpandLegacyPass());
+  addPass(createORISCGEPTransformPass());
   TargetPassConfig::addIRPasses();
 }
-*/
+
 bool ORISCPassConfig::addInstSelector() {
   // Install an instruction selector.
   addPass(createORISCISelDag(getORISCTargetMachine()));

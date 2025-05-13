@@ -17,6 +17,7 @@
 #include "MCTargetDesc/ORISCMCTargetDesc.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/SelectionDAG.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
@@ -52,6 +53,10 @@ public:
 
   MVT getPointerMemTy(const DataLayout &DL, uint32_t AS = 0) const override {
     return MVT::orisc_pointer;
+  }
+
+  bool isCtlzFast() const override {
+    return true;
   }
 
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
@@ -110,12 +115,20 @@ public:
 private:
   const ORISCSubtarget &Subtarget;
 
+  struct FatPointer {
+    SDValue Base;
+    SDValue Index;
+  };
+
   SDValue performAddSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue lowerLoad(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerAddSub(SDValue Op, SelectionDAG &DAG, bool IsAdd) const;
   SDValue lowerShiftLikes(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSelect(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSetCC(SDValue Op, SelectionDAG &DAG) const;
+  
+  SDValue lowerFatPtrs(SDValue Op, SelectionDAG &DAG) const;
+  FatPointer recursivelyLowerFatPtrs(SDValue Op, SelectionDAG &DAG) const;
 
   MachineBasicBlock *emitShiftLikeLoop(MachineInstr &MI, MachineBasicBlock *MBB) const;
 };

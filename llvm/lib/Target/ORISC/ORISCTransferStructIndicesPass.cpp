@@ -7,6 +7,7 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
@@ -27,8 +28,10 @@ PreservedAnalyses TransformStructIndicesPass::run(Module &M, ModuleAnalysisManag
     for (Function &F : M)
         for (BasicBlock &BB : F)
             for (Instruction &I : BB)
-                if (auto *GEP = dyn_cast<GetElementPtrInst>(&I))
-                    Changed |= visitGetElementPtrInst(GEP);
+                if (auto *L = dyn_cast<LoadInst>(&I))
+                    Changed |= visitLoadInst(L);
+                else if (auto *S = dyn_cast<StoreInst>(&I))
+                    Changed |= visitStoreInst(S);
     return Changed ? PreservedAnalyses::all() : PreservedAnalyses::none();
 }
 
@@ -111,10 +114,43 @@ std::pair<ArrayType *, ArrayType *> TransformStructIndicesPass::splitArray(Modul
     return {PointersArray, PrimitivesArray};
 }
 
-bool TransformStructIndicesPass::visitGetElementPtrInst(GetElementPtrInst *GEP){
-    if (!GEP->getSourceElementType()->isStructTy())
+GetElementPtrInst *TransformStructIndicesPass::visitGetElementPtrInst(GetElementPtrInst *GEP, bool NeedPointers){
+    Value *Pointer = GEP->getPointerOperand();
+    if (auto *G = dyn_cast<GetElementPtrInst>(GEP->getPointerOperand()))
+        Pointer = visitGetElementPtrInst(G, NeedPointers);
+
+    if (!SplitStructs.contains(GEP->getSourceElementType()))
+        return GEP;
+
+    auto NewTypes = SplitStructs[GEP->getSourceElementType()];
+    Type *ResTy = NeedPointers ? NewTypes.first : NewTypes.second;
+    SmallVector<Value *> NewIndexList;
+    IRBuilder<> Builder(GEP);
+    return cast<GetElementPtrInst>(Builder.CreateGEP(ResTy, Pointer, NewIndexList));
+}
+
+bool TransformStructIndicesPass::visitLoadInst(LoadInst *LI){
+    GetElementPtrInst *OldGEP = dyn_cast<GetElementPtrInst>(LI->getPointerOperand());
+    if (!OldGEP)
         return false;
 
-    bool Changed = false;
-    return Changed;
+    GetElementPtrInst *NewGEP = visitGetElementPtrInst(OldGEP, LI->getPointerOperandType()->isPointerTy());
+    if (NewGEP == OldGEP)
+        return false;
+
+    LI->setOperand(0, NewGEP);
+    return true;
+}
+
+bool TransformStructIndicesPass::visitStoreInst(StoreInst *SI){
+    GetElementPtrInst *OldGEP = dyn_cast<GetElementPtrInst>(SI->getPointerOperand());
+    if (!OldGEP)
+        return false;
+
+    GetElementPtrInst *NewGEP = visitGetElementPtrInst(OldGEP, SI->getPointerOperandType()->isPointerTy());
+    if (NewGEP == OldGEP)
+        return false;
+
+    SI->setOperand(1, NewGEP);
+    return true;
 }

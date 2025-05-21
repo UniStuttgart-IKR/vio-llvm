@@ -6,6 +6,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
@@ -20,14 +21,16 @@ public:
     static bool isRequired() { return true; }
 
 private:
-    MapVector<StructType *, std::pair<StructType *, StructType *>> SplitStructs;
+    MapVector<Type *, std::pair<StructType *, StructType *>> SplitStructs;
     SmallVector<StructType *> PointerStructs;
     SmallVector<StructType *> PrimStructs;
     std::pair<StructType *, StructType *> splitStruct(Module &M, StructType *ST);
     std::pair<ArrayType *, ArrayType *> splitArray(Module &M, ArrayType *AT);
     bool hasPointerElements(ArrayType *AT);
 
-    bool visitGetElementPtrInst(GetElementPtrInst *GEP);
+    bool visitLoadInst(LoadInst *LI);
+    bool visitStoreInst(StoreInst *SI);
+    GetElementPtrInst *visitGetElementPtrInst(GetElementPtrInst *GEP, bool NeedPointers);
     friend PassInfoMixin<TransformStructIndicesPass>;
 };
 

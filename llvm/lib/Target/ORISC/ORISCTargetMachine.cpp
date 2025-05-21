@@ -11,6 +11,7 @@
 
 #include "ORISC.h"
 #include "ORISCTargetMachine.h"
+#include "ORISCTransferStructIndicesPass.h"
 #include "ORISCSubtarget.h"
 #include "TargetInfo/ORISCTargetInfo.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
@@ -20,14 +21,20 @@
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/PassManager.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Transforms/IPO/GlobalOpt.h"
+#include "llvm/Transforms/IPO/Inliner.h"
 #include <optional>
 using namespace llvm;
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeORISCTarget() {
   RegisterTargetMachine<ORISCTargetMachine> X(getTheORISCTarget());
   auto *PR = PassRegistry::getPassRegistry();
-  initializeORISCGEPTransformPass(*PR);
+  //initializeORISCGEPTransformPass(*PR);
   initializeORISCDAGToDAGISelLegacyPass(*PR);
 }
 
@@ -84,12 +91,27 @@ public:
 };
 } // namespace
 
+void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
+
+  #define GET_PASS_REGISTRY "ORISCPassRegistry.def"
+  #include "llvm/Passes/TargetPassRegistry.inc"
+
+  PB.registerPipelineStartEPCallback(
+    [](ModulePassManager &PM, OptimizationLevel Level){
+      PM.addPass(TransformStructIndicesPass());
+    });
+  PB.registerOptimizerLastEPCallback(
+    [](ModulePassManager &PM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
+        //PM.addPass(LoadStorePass());
+    });
+}
+
 TargetPassConfig *ORISCTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new ORISCPassConfig(*this, PM);
 }
 
 void ORISCPassConfig::addIRPasses() {
-  addPass(createORISCGEPTransformPass());
+  //addPass(createORISCGEPTransformPass());
   TargetPassConfig::addIRPasses();
 }
 

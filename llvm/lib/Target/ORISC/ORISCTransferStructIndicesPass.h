@@ -21,19 +21,101 @@ public:
     static bool isRequired() { return true; }
 
 private:
-    MapVector<Type *, std::pair<StructType *, StructType *>> SplitStructs;
+    struct SplitInfo {
+        StructType * Ptrs;
+        ArrayRef<int> PtrTrans;
+        StructType * Prims;
+        ArrayRef<int> PrimTrans;
+    };
+
+    const static inline SplitInfo getAsPrim(StructType *T){
+        return {nullptr, {}, T, {}};
+    }
+    const static inline SplitInfo getAsPtr(StructType *T){
+        return {T, {}, nullptr, {}};
+    }
+
+    MapVector<Type *, SplitInfo> SplitStructs;
     SmallVector<StructType *> PointerStructs;
     SmallVector<StructType *> PrimStructs;
-    std::pair<StructType *, StructType *> splitStruct(Module &M, StructType *ST);
+    SplitInfo splitStruct(Module &M, StructType *ST);
     std::pair<ArrayType *, ArrayType *> splitArray(Module &M, ArrayType *AT);
     bool hasPointerElements(ArrayType *AT);
 
     bool visitLoadInst(LoadInst *LI);
     bool visitStoreInst(StoreInst *SI);
-    GetElementPtrInst *visitGetElementPtrInst(GetElementPtrInst *GEP, bool NeedPointers);
+    bool visitGetElementPtrInst(GetElementPtrInst *GEP);
     friend PassInfoMixin<TransformStructIndicesPass>;
+
+    StringRef getPointerName(StringRef OldName){
+        std::string *NewString = new std::string("struct_ptr");
+        NewString->append(OldName.drop_front(strlen("struct")));
+        llvm::StringRef Ref(*NewString);
+        return Ref;
+    }
+    StringRef getPrimName(StringRef OldName){
+        std::string *NewString = new std::string("struct_pri");
+        NewString->append(OldName.drop_front(strlen("struct")));
+        llvm::StringRef Ref(*NewString);
+        return Ref;
+    }
+};
+
+class TransStructType {
+private:
+    static TransStructType *create(StructType *Orig, StructType *Ptr, StructType *Prim) {
+        return new TransStructType(Orig, Ptr, Prim, Mixed);
+    }
+    static TransStructType *createPointerOnly(StructType *OS) {
+        return new TransStructType(OS, PointersOnly);
+    };
+    static TransStructType *createPrimitiveOnly(StructType *OS) {
+        return new TransStructType(OS, PrimitivesOnly);
+    };
+
+    StructType *OriginalStruct;
+    StructType *PointerStruct;
+    StructType *PrimitivesStruct;
+    
+    ArrayRef<int> PointersIndexMap;
+    ArrayRef<int> PrimitivesIndexMap;
+    enum Variant { PointersOnly, PrimitivesOnly, Mixed };
+    Variant Var;
+
+    TransStructType(StructType *Orig, StructType *Ptr, StructType *Prim, Variant V){
+        OriginalStruct = Orig;
+        PointerStruct = Ptr;
+        PrimitivesStruct = Prim;
+        Var = V;
+    }
+
+    TransStructType(StructType *Orig, Variant V){
+        OriginalStruct = Orig;
+        Var = V;
+    }
+
+    void setPointersIndexMap(ArrayRef<int> Map) { PointersIndexMap = Map; }
+    void setPrimitivesIndexMap(ArrayRef<int> Map) { PrimitivesIndexMap = Map; }
+public:
+    static TransStructType *transform(StructType *OS);
+
+    bool isMixed() { return Var == Mixed; }
+    bool isPointersOnly() { return Var == PointersOnly; }
+    bool isPrimitivesOnly() { return Var == PrimitivesOnly; }
+    StructType *getPointerStructType() { return Var == Mixed ? PointerStruct : OriginalStruct; }
+    StructType *getPrimitiveStructType() { return Var == Mixed ? PrimitivesStruct : OriginalStruct; }
+
+    int getPointerIndex(unsigned Index) { return PointersIndexMap[Index]; }
+    int getPrimitiveIndex(unsigned Index) { return PrimitivesIndexMap[Index]; }
+
+private:
+    static Variant examineArray(ArrayType *ATy);
+    static ArrayType *createArray(ArrayType *OrigATy, bool PointerVariant);
+    static ArrayType *createPointerArray(ArrayType *OrigATy);
+    static ArrayType *createPrimitiveArray(ArrayType *OrigATy);
 };
 
 } // namespace llvm
 
-#endif // LLVM_TRANSFORMS_HELLONEW_HELLOWORLD_H
+
+#endif // LLVM_LIB_TARGET_ORISC_ORISCTRANSFORMSTRUCTINDICESPASS_H

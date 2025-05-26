@@ -38,9 +38,10 @@ const static inline ArrayRef<Value *> NewIndexList(ArrayRef<Value *> OldIndexLis
         return OldIndexList;
     if (!Ty->isArrayTy() && !Ty->isStructTy())
         return OldIndexList;
+    if (OldIndexList.empty())
+        return OldIndexList;
 
     SmallVector<Value *> *Res = new SmallVector<Value *>();
-    ArrayRef<Value *> Tmp = OldIndexList.drop_front();
     Type *ElTy;
     Value *NewIndex;
     if (Ty->isArrayTy()) {
@@ -67,11 +68,17 @@ const static inline ArrayRef<Value *> NewIndexList(ArrayRef<Value *> OldIndexLis
     }
 
     Res->push_back(NewIndex);
+    if (OldIndexList.size() == 1) 
+        return *Res;
+
+    ArrayRef<Value *> Tmp = OldIndexList.drop_front();
     Tmp = NewIndexList(Tmp, ElTy);
     for (Value *V : Tmp)
         Res->push_back(V);
     return *Res;
 } 
+
+static MapVector<StructType *, TransStructType *> TransformMap;
 
 bool TransformStructIndicesPass::visitGetElementPtrInst(GetElementPtrInst *GEP){
     if (!GEP->getSourceElementType()->isStructTy())
@@ -87,12 +94,14 @@ bool TransformStructIndicesPass::visitGetElementPtrInst(GetElementPtrInst *GEP){
 
     Type *CurrTy = GEP->getSourceElementType();
     unsigned Index = 1;
-    while (!CurrTy->isArrayTy() && !CurrTy->isStructTy()) {
+    while (CurrTy->isArrayTy() || CurrTy->isStructTy()) {
         ++Index;
         if (CurrTy->isArrayTy()) {
             CurrTy = CurrTy->getArrayElementType();
             continue;
         }
+        if (Index >= GEP->getNumOperands())
+            break;
         ConstantInt *CI = dyn_cast<ConstantInt>(GEP->getOperand(Index));
         if (!CI) llvm_unreachable("StructElement Indices must be Constant!");
         CurrTy = CurrTy->getStructElementType(CI->getZExtValue());
@@ -102,14 +111,43 @@ bool TransformStructIndicesPass::visitGetElementPtrInst(GetElementPtrInst *GEP){
     else
         GEP->setSourceElementType(TTy->getPrimitiveStructType());
 
-    ArrayRef<Value *> NewIndices = NewIndexList(OldIndeces, GEP->getPointerOperandType());
+    ArrayRef<Value *> NewIndices = NewIndexList(OldIndeces, TTy->getOriginalStructType());
     for (unsigned i = 2; i < GEP->getNumOperands(); ++i)
         GEP->setOperand(i, NewIndices[i-2]);
+    GEP->setResultElementType(GetElementPtrInst::getIndexedType(GEP->getSourceElementType(), NewIndices));
 
+    //check if parent is array-reference of this
+    GetElementPtrInst *ThisGep = GEP;
+    GetElementPtrInst *ParentGEP;
+    while ((ParentGEP = dyn_cast<GetElementPtrInst>(ThisGep->getOperand(0)))) {
+        if (ParentGEP->getSourceElementType()->isArrayTy()) {
+            ArrayType *CurrATy = cast<ArrayType>(ParentGEP->getSourceElementType());
+            TransStructType::examineArray(CurrATy);
+            if (CurrTy->isPointerTy())
+                ParentGEP->setSourceElementType(TransStructType::createPointerArray(CurrATy));
+            else
+                ParentGEP->setSourceElementType(TransStructType::createPrimitiveArray(CurrATy));
+            ThisGep = ParentGEP;
+            continue;
+        }
+        StructType *STy;
+        if (ParentGEP->getNumOperands() == 2 
+                && (STy = dyn_cast<StructType>(ParentGEP->getSourceElementType()))
+                && TransformMap.contains(STy)){
+            if (CurrTy->isPointerTy())
+                ParentGEP->setSourceElementType(TransformMap[STy]->getPointerStructType());
+            else
+                ParentGEP->setSourceElementType(TransformMap[STy]->getPrimitiveStructType());
+        }
+        
+        ParentGEP->setResultElementType(
+            GetElementPtrInst::getIndexedType(
+                ParentGEP->getSourceElementType(), 
+                SmallVector<Value *, 16>(ParentGEP->indices())));
+        ThisGep = ParentGEP;
+    }
     return true;
 }
-
-static MapVector<StructType *, TransStructType *> TransformMap;
 
 TransStructType *TransStructType::transform(StructType *OS){
     if (TransformMap.contains(OS))
@@ -117,46 +155,50 @@ TransStructType *TransStructType::transform(StructType *OS){
 
     SmallVector<Type *> PtrsT;
     SmallVector<Type *> PrimT;
-    SmallVector<int> PtrsI;
-    SmallVector<int> PrimI;
+    int *PtrsI = new int[OS->getNumElements()];
+    int *PrimI = new int[OS->getNumElements()];
 
-    for (Type *Ty : OS->elements()){
-        PtrsI.push_back(-1);
-        PrimI.push_back(-1);
+    Type *Ty;
+    int PtrCounter = 0;
+    int PrmCounter = 0;
+    for (unsigned i = 0; i < OS->getNumElements(); ++i){
+        Ty = OS->getElementType(i);
+        PtrsI[i] = -1;
+        PrimI[i] = -1;
         if (Ty->isArrayTy()) {
             ArrayType *ATy = dyn_cast<ArrayType>(Ty);
             Variant V = examineArray(ATy);
             switch (V) {
                 case Mixed:
-                    PtrsI[PtrsI.size()-1] = PtrsT.size();
-                    PrimI[PrimI.size()-1] = PrimT.size();
+                    PtrsI[i] = PtrCounter++;
+                    PrimI[i] = PrmCounter++;
                     PtrsT.push_back(createPointerArray(ATy));
                     PrimT.push_back(createPrimitiveArray(ATy));
                     break;
                 case PointersOnly:
-                    PtrsI[PtrsI.size()-1] = PtrsT.size();
+                    PtrsI[i] = PtrCounter++;
                     PtrsT.push_back(ATy);
                     break;
                 case PrimitivesOnly:
-                    PrimI[PrimI.size()-1] = PrimT.size();
+                    PrimI[i] = PrmCounter++;
                     PrimT.push_back(ATy);
                     break;
             }
         } else if (Ty->isPointerTy()) {
-            PtrsI[PtrsI.size()-1] = PtrsT.size();
+            PtrsI[i] = PtrCounter++;
             PtrsT.push_back(Ty);
         } else if (Ty->isStructTy()){
             TransStructType *TTy = TransStructType::transform(cast<StructType>(Ty));
             if (TTy->isPointersOnly() || TTy->isMixed()) {
-                PtrsI[PtrsI.size()-1] = PtrsT.size();
+                PtrsI[i] = PtrCounter++;
                 PtrsT.push_back(TTy->getPointerStructType());
             }
             if (TTy->isPrimitivesOnly() || TTy->isMixed()) {
-                PrimI[PrimI.size()-1] = PrimT.size();
+                PrimI[i] = PrmCounter++;
                 PrimT.push_back(TTy->getPrimitiveStructType());
             }
         } else { //Primitive Types
-            PrimI[PrimI.size()-1] = PrimT.size();
+            PrimI[i] = PrmCounter++;
             PrimT.push_back(Ty);
         }
     }
@@ -174,9 +216,7 @@ TransStructType *TransStructType::transform(StructType *OS){
         NewPtrStr->append(OS->getStructName().drop_front(6));
         NewPrmStr->append(OS->getStructName().drop_front(6));
         StructType *NewPtrs = StructType::create(PtrsT, *NewPtrStr);
-        bool test = NewPtrs->isSized();
         StructType *NewPrms = StructType::create(PrimT, *NewPrmStr);
-        test = NewPrms->isSized();
         Result = new TransStructType(OS, NewPtrs, NewPrms, Mixed);
         Result->setPointersIndexMap(PtrsI);
         Result->setPrimitivesIndexMap(PrimI);

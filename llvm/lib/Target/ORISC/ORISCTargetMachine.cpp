@@ -100,10 +100,6 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
     [](ModulePassManager &PM, OptimizationLevel Level){
       PM.addPass(TransformStructIndicesPass());
     });
-  PB.registerOptimizerLastEPCallback(
-    [](ModulePassManager &PM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
-        //PM.addPass(LoadStorePass());
-    });
 }
 
 TargetPassConfig *ORISCTargetMachine::createPassConfig(PassManagerBase &PM) {
@@ -111,7 +107,6 @@ TargetPassConfig *ORISCTargetMachine::createPassConfig(PassManagerBase &PM) {
 }
 
 void ORISCPassConfig::addIRPasses() {
-  //addPass(createORISCGEPTransformPass());
   TargetPassConfig::addIRPasses();
 }
 

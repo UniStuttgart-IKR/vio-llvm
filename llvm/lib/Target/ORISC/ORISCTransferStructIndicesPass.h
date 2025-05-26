@@ -77,8 +77,8 @@ private:
     StructType *PointerStruct;
     StructType *PrimitivesStruct;
     
-    ArrayRef<int> PointersIndexMap;
-    ArrayRef<int> PrimitivesIndexMap;
+    int *PointersIndexMap;
+    int *PrimitivesIndexMap;
     enum Variant { PointersOnly, PrimitivesOnly, Mixed };
     Variant Var;
 
@@ -94,8 +94,8 @@ private:
         Var = V;
     }
 
-    void setPointersIndexMap(ArrayRef<int> Map) { PointersIndexMap = Map; }
-    void setPrimitivesIndexMap(ArrayRef<int> Map) { PrimitivesIndexMap = Map; }
+    void setPointersIndexMap(int *Map) { PointersIndexMap = Map; }
+    void setPrimitivesIndexMap(int *Map) { PrimitivesIndexMap = Map; }
 public:
     static TransStructType *transform(StructType *OS);
 
@@ -104,15 +104,17 @@ public:
     bool isPrimitivesOnly() { return Var == PrimitivesOnly; }
     StructType *getPointerStructType() { return Var == Mixed ? PointerStruct : OriginalStruct; }
     StructType *getPrimitiveStructType() { return Var == Mixed ? PrimitivesStruct : OriginalStruct; }
+    StructType *getOriginalStructType() { return OriginalStruct; }
 
     int getPointerIndex(unsigned Index) { return PointersIndexMap[Index]; }
     int getPrimitiveIndex(unsigned Index) { return PrimitivesIndexMap[Index]; }
-
-private:
+    
     static Variant examineArray(ArrayType *ATy);
-    static ArrayType *createArray(ArrayType *OrigATy, bool PointerVariant);
     static ArrayType *createPointerArray(ArrayType *OrigATy);
     static ArrayType *createPrimitiveArray(ArrayType *OrigATy);
+
+private:
+    static ArrayType *createArray(ArrayType *OrigATy, bool PointerVariant);
 };
 
 } // namespace llvm

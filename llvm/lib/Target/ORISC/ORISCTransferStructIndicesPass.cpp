@@ -25,15 +25,16 @@ PreservedAnalyses TransformStructIndicesPass::run(Module &M, ModuleAnalysisManag
     for (Function &F : M)
         for (BasicBlock &BB : F)
             for (Instruction &I : BB)
-                if (auto *GEP = dyn_cast<GetElementPtrInst>(&I)) {
+                if (auto *GEP = dyn_cast<GetElementPtrInst>(&I)) 
                     Changed |= visitGetElementPtrInst(GEP);
-                    assert(GEP->getSourceElementType() && "SourceElementType null");
-                }
+                else if (isa<LoadInst>(I) || isa<StoreInst>(I))
+                    Changed |= visitLoadStoreInst(&I);
+                
     return Changed ? PreservedAnalyses::all() : PreservedAnalyses::none();
 }
 
-const static inline ArrayRef<Value *> NewIndexList(ArrayRef<Value *> OldIndexList, Type *Ty) {
-    //Pointers and Primitives are leave nodes
+const static inline ArrayRef<Value *> newIndexList(ArrayRef<Value *> OldIndexList, Type *Ty) {
+    //Pointers and Primitives are leaf nodes
     if (Ty->isPointerTy())
         return OldIndexList;
     if (!Ty->isArrayTy() && !Ty->isStructTy())
@@ -63,7 +64,7 @@ const static inline ArrayRef<Value *> NewIndexList(ArrayRef<Value *> OldIndexLis
             ElTy = Ty->getStructElementType(TTy->getPrimitiveIndex(Index));
             NewIndex = ConstantInt::get(CI->getType(), TTy->getPrimitiveIndex(Index));
         } else {
-            llvm_unreachable("Struct is Mixed but Index is neither valid for PointerStruct not PrimStruct");
+            llvm_unreachable("Struct is Mixed but Index is neither valid for PointerStruct nor PrimStruct");
         }
     }
 
@@ -72,7 +73,7 @@ const static inline ArrayRef<Value *> NewIndexList(ArrayRef<Value *> OldIndexLis
         return *Res;
 
     ArrayRef<Value *> Tmp = OldIndexList.drop_front();
-    Tmp = NewIndexList(Tmp, ElTy);
+    Tmp = newIndexList(Tmp, ElTy);
     for (Value *V : Tmp)
         Res->push_back(V);
     return *Res;
@@ -111,33 +112,54 @@ bool TransformStructIndicesPass::visitGetElementPtrInst(GetElementPtrInst *GEP){
     else
         GEP->setSourceElementType(TTy->getPrimitiveStructType());
 
-    ArrayRef<Value *> NewIndices = NewIndexList(OldIndeces, TTy->getOriginalStructType());
+    ArrayRef<Value *> NewIndices = newIndexList(OldIndeces, TTy->getOriginalStructType());
     for (unsigned i = 2; i < GEP->getNumOperands(); ++i)
         GEP->setOperand(i, NewIndices[i-2]);
     GEP->setResultElementType(GetElementPtrInst::getIndexedType(GEP->getSourceElementType(), NewIndices));
 
     //check if parent is array-reference of this
-    GetElementPtrInst *ThisGep = GEP;
+    checkParentForSimpleGEP(GEP, CurrTy->isPointerTy());
+    return true;
+}
+
+bool TransformStructIndicesPass::visitLoadStoreInst(Instruction *I){
+    if (LoadInst *LI = dyn_cast<LoadInst>(I))
+        return checkParentForSimpleGEP(LI->getPointerOperand(), 
+                        LI->getType()->isPointerTy());
+    if (StoreInst *SI = dyn_cast<StoreInst>(I))
+        return checkParentForSimpleGEP(SI->getPointerOperand(), 
+                        SI->getValueOperand()->getType()->isPointerTy());
+    return false;
+}
+
+bool TransformStructIndicesPass::checkParentForSimpleGEP(Value *V, bool NeedPointerStruct){
+    GetElementPtrInst *ThisGep = dyn_cast<GetElementPtrInst>(V);
+    if (!ThisGep)
+        return false;
+
+    bool Changed = false;
     GetElementPtrInst *ParentGEP;
     while ((ParentGEP = dyn_cast<GetElementPtrInst>(ThisGep->getOperand(0)))) {
         if (ParentGEP->getSourceElementType()->isArrayTy()) {
             ArrayType *CurrATy = cast<ArrayType>(ParentGEP->getSourceElementType());
             TransStructType::examineArray(CurrATy);
-            if (CurrTy->isPointerTy())
+            if (NeedPointerStruct)
                 ParentGEP->setSourceElementType(TransStructType::createPointerArray(CurrATy));
             else
                 ParentGEP->setSourceElementType(TransStructType::createPrimitiveArray(CurrATy));
-            ThisGep = ParentGEP;
-            continue;
-        }
-        StructType *STy;
-        if (ParentGEP->getNumOperands() == 2 
-                && (STy = dyn_cast<StructType>(ParentGEP->getSourceElementType()))
-                && TransformMap.contains(STy)){
-            if (CurrTy->isPointerTy())
-                ParentGEP->setSourceElementType(TransformMap[STy]->getPointerStructType());
-            else
-                ParentGEP->setSourceElementType(TransformMap[STy]->getPrimitiveStructType());
+            Changed = true;
+        } else {
+            StructType *STy;
+            if (ParentGEP->getNumOperands() == 2 
+                    && (STy = dyn_cast<StructType>(ParentGEP->getSourceElementType()))
+                    && TransformMap.contains(STy)){
+                if (NeedPointerStruct)
+                    ParentGEP->setSourceElementType(TransformMap[STy]->getPointerStructType());
+                else
+                    ParentGEP->setSourceElementType(TransformMap[STy]->getPrimitiveStructType());
+
+                Changed = true;
+            }
         }
         
         ParentGEP->setResultElementType(
@@ -146,7 +168,7 @@ bool TransformStructIndicesPass::visitGetElementPtrInst(GetElementPtrInst *GEP){
                 SmallVector<Value *, 16>(ParentGEP->indices())));
         ThisGep = ParentGEP;
     }
-    return true;
+    return Changed;
 }
 
 TransStructType *TransStructType::transform(StructType *OS){

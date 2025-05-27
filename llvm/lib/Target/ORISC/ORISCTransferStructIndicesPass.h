@@ -21,44 +21,11 @@ public:
     static bool isRequired() { return true; }
 
 private:
-    struct SplitInfo {
-        StructType * Ptrs;
-        ArrayRef<int> PtrTrans;
-        StructType * Prims;
-        ArrayRef<int> PrimTrans;
-    };
 
-    const static inline SplitInfo getAsPrim(StructType *T){
-        return {nullptr, {}, T, {}};
-    }
-    const static inline SplitInfo getAsPtr(StructType *T){
-        return {T, {}, nullptr, {}};
-    }
-
-    MapVector<Type *, SplitInfo> SplitStructs;
-    SmallVector<StructType *> PointerStructs;
-    SmallVector<StructType *> PrimStructs;
-    SplitInfo splitStruct(Module &M, StructType *ST);
-    std::pair<ArrayType *, ArrayType *> splitArray(Module &M, ArrayType *AT);
-    bool hasPointerElements(ArrayType *AT);
-
-    bool visitLoadInst(LoadInst *LI);
-    bool visitStoreInst(StoreInst *SI);
     bool visitGetElementPtrInst(GetElementPtrInst *GEP);
+    bool visitLoadStoreInst(Instruction *I);
+    bool checkParentForSimpleGEP(Value *V, bool NeedPointerStruct);
     friend PassInfoMixin<TransformStructIndicesPass>;
-
-    StringRef getPointerName(StringRef OldName){
-        std::string *NewString = new std::string("struct_ptr");
-        NewString->append(OldName.drop_front(strlen("struct")));
-        llvm::StringRef Ref(*NewString);
-        return Ref;
-    }
-    StringRef getPrimName(StringRef OldName){
-        std::string *NewString = new std::string("struct_pri");
-        NewString->append(OldName.drop_front(strlen("struct")));
-        llvm::StringRef Ref(*NewString);
-        return Ref;
-    }
 };
 
 class TransStructType {

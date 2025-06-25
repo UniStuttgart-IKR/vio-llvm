@@ -11,8 +11,9 @@
 
 #include "ORISC.h"
 #include "ORISCTargetMachine.h"
-#include "ORISCTransferStructIndicesPass.h"
+#include "Passes/ORISCTransferStructIndicesPass.h"
 #include "ORISCSubtarget.h"
+#include "Passes/ORISCTransformLoadStorePointerPass.h"
 #include "TargetInfo/ORISCTargetInfo.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
@@ -93,12 +94,16 @@ public:
 
 void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
 
-  #define GET_PASS_REGISTRY "ORISCPassRegistry.def"
+  #define GET_PASS_REGISTRY "Passes/ORISCPassRegistry.def"
   #include "llvm/Passes/TargetPassRegistry.inc"
 
   PB.registerPipelineStartEPCallback(
     [](ModulePassManager &PM, OptimizationLevel Level){
       PM.addPass(TransformStructIndicesPass());
+      PM.addPass(TransformLoadStorePointerPass());
+    });
+  PB.registerOptimizerLastEPCallback(
+    [](ModulePassManager &PM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
     });
 }
 

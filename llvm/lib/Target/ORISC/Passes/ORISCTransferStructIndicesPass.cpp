@@ -8,15 +8,13 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Support/Debug.h"
-#include <utility>
+#include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
 
@@ -25,10 +23,9 @@ PreservedAnalyses TransformStructIndicesPass::run(Module &M, ModuleAnalysisManag
     for (Function &F : M)
         for (BasicBlock &BB : F)
             for (Instruction &I : BB)
-                if (auto *GEP = dyn_cast<GetElementPtrInst>(&I)) 
+                if (auto *GEP = dyn_cast<GetElementPtrInst>(&I)) {
                     Changed |= visitGetElementPtrInst(GEP);
-                else if (isa<LoadInst>(I) || isa<StoreInst>(I))
-                    Changed |= visitLoadStoreInst(&I);
+                }
                 
     return Changed ? PreservedAnalyses::all() : PreservedAnalyses::none();
 }
@@ -120,16 +117,6 @@ bool TransformStructIndicesPass::visitGetElementPtrInst(GetElementPtrInst *GEP){
     //check if parent is array-reference of this
     checkParentForSimpleGEP(GEP, CurrTy->isPointerTy());
     return true;
-}
-
-bool TransformStructIndicesPass::visitLoadStoreInst(Instruction *I){
-    if (LoadInst *LI = dyn_cast<LoadInst>(I))
-        return checkParentForSimpleGEP(LI->getPointerOperand(), 
-                        LI->getType()->isPointerTy());
-    if (StoreInst *SI = dyn_cast<StoreInst>(I))
-        return checkParentForSimpleGEP(SI->getPointerOperand(), 
-                        SI->getValueOperand()->getType()->isPointerTy());
-    return false;
 }
 
 bool TransformStructIndicesPass::checkParentForSimpleGEP(Value *V, bool NeedPointerStruct){

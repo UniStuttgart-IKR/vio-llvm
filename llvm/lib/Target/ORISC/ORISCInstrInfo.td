@@ -431,8 +431,8 @@ def SGT	:	InstAlias<"sgt\t$dx = $dy",			(SLTS DR:$dx,  D0, DR:$dy)>;
 
 //TODO: ADD ORISCISD::LOAD and ORISCISD:STORE
 
-def SDT_ORISC_IStore : SDTypeProfile<0, 3, [       // indexed store
-  SDTCisInt<0>, SDTCisVT<1, orisc_pointer>, SDTCisInt<2>
+def SDT_ORISC_Store : SDTypeProfile<0, 2, [       // indexed store
+  SDTCisVT<1, orisc_pointer>
 ]>;
 
 def SDT_ORISC_PTRADD : SDTypeProfile<1, 2, []>;
@@ -443,37 +443,21 @@ def loadpointer  : PatFrag<(ops node:$ptr), (unindexedload node:$ptr)> {
   let MemoryVT = orisc_pointer;
 }
 
-def : Pat<(zextloadi8 (orisc_ptradd PR:$px, uimm12:$ix12)), (LBU_I PR:$px, uimm12:$ix12)>;
-def : Pat<(zextloadi8 (orisc_ptradd PR:$px, DR:$dz)),       (LBU   PR:$px, DR:$dz, 1, 0)>;
-def : Pat<(sextloadi8 (orisc_ptradd PR:$px, uimm12:$ix12)), (LBS_I PR:$px, uimm12:$ix12)>;
-def : Pat<(sextloadi8 (orisc_ptradd PR:$px, DR:$dz)),       (LBS   PR:$px, DR:$dz, 1, 0)>;
-
-def : Pat<(zextloadi16 (orisc_ptradd PR:$px, uimm12:$ix12)), (LHU_I PR:$px, uimm12:$ix12)>;
-def : Pat<(zextloadi16 (orisc_ptradd PR:$px, DR:$dz)),       (LHU   PR:$px, DR:$dz, 1, 0)>;
-def : Pat<(sextloadi16 (orisc_ptradd PR:$px, uimm12:$ix12)), (LHS_I PR:$px, uimm12:$ix12)>;
-def : Pat<(sextloadi16 (orisc_ptradd PR:$px, DR:$dz)),       (LHS   PR:$px, DR:$dz, 1, 0)>;
-
-def : Pat<(unindexedload (orisc_ptradd PR:$px, uimm12:$ix12)), (LW_I PR:$px, uimm12:$ix12)>;
-def : Pat<(unindexedload (orisc_ptradd PR:$px, DR:$dz)),       (LW   PR:$px, DR:$dz, 1, 0)>;
-
-def : Pat<(loadpointer (orisc_ptradd PR:$px, uimm12:$ix12)), (LP_I PR:$px, uimm12:$ix12)>;
-def : Pat<(loadpointer (orisc_ptradd PR:$px, DR:$dz)),       (LP   PR:$px, DR:$dz, 1, 0)>;
-
-
-def orisc_ist  : SDNode<"ISD::STORE"      , SDT_ORISC_IStore,
+def orisc_st  : SDNode<"ISD::STORE"      , SDT_ORISC_Store,
                         [SDNPHasChain, SDNPMayStore, SDNPMemOperand]>;
-class orisc_pre_truncstore<ValueType MemVT> : PatFrag<(ops     node:$val, node:$base, node:$offset),
-                                  					(orisc_ist node:$val, node:$base, node:$offset), [{
-  ISD::MemIndexedMode AM = cast<StoreSDNode>(N)->getAddressingMode();
-  return AM == ISD::PRE_INC || AM == ISD::PRE_DEC;
-}]> {
+def orisc_store : PatFrag<(ops node:$val, node:$ptr),
+                    	  (orisc_st node:$val, node:$ptr)> {
+  let IsStore = true;
+  let IsTruncStore = false;
+}
+class orisc_truncstore<ValueType MemVT> : PatFrag<(ops node:$val, node:$ptr),
+                         						  (orisc_st node:$val, node:$ptr)> {
 	let IsStore = true;
 	let IsTruncStore = true;
 	let MemoryVT = MemVT;
 }
-def orisc_storei8  : orisc_pre_truncstore<i8>;
-def orisc_storei16 : orisc_pre_truncstore<i16>;
-def orisc_storei32 : orisc_pre_truncstore<i32>;
+def orisc_storei8  : orisc_truncstore<i8>;
+def orisc_storei16 : orisc_truncstore<i16>;
 
 def orisc_ret  : SDNode<"ORISCISD::RET", SDTNone,
                           [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
@@ -529,26 +513,36 @@ def : Pat<(sext_inreg (i32 DR:$dy), i16), (EXTHS (i32 DR:$dy))>;
 def : PatD<ctlz, CLZ>;
 
 
-class PatStoreD<SDPatternOperator OpNode, ORISCInstr Inst>
-		: Pat<(OpNode DR:$dy, PR:$px, DR:$dz), (Inst PR:$px, DR:$dz, 1, 0, DR:$dy)>;
-class PatStoreI<SDPatternOperator OpNode, ORISCInstr Inst>
-		: Pat<(OpNode DR:$dy, PR:$px, uimm12:$ix12), (Inst PR:$px, uimm12:$ix12, DR:$dy)>;
-class PatLoadDS<SDPatternOperator OpNode, ORISCInstr Inst>
-		: Pat<(OpNode PR:$px, DR:$dz), (Inst PR:$px, DR:$dz, 1, 0)>;
-class PatLoadIS<SDPatternOperator OpNode, ORISCInstr Inst>
-		: Pat<(OpNode PR:$px, uimm12:$ix12), (Inst PR:$px, uimm12:$ix12)>;
-class PatLoadDU<SDPatternOperator OpNode, ORISCInstr Inst>
-		: Pat<(OpNode PR:$px, DR:$dz), (Inst PR:$px, DR:$dz, 1, 0)>;
-class PatLoadIU<SDPatternOperator OpNode, ORISCInstr Inst>
-		: Pat<(OpNode PR:$px, uimm12:$ix12), (Inst PR:$px, uimm12:$ix12)>;
+def : Pat<(zextloadi8 (orisc_ptradd PR:$px, uimm12:$ix12)), (LBU_I PR:$px, uimm12:$ix12)>;
+def : Pat<(zextloadi8 (orisc_ptradd PR:$px, DR:$dz)),       (LBU   PR:$px, DR:$dz, 1, 0)>;
+def : Pat<(sextloadi8 (orisc_ptradd PR:$px, uimm12:$ix12)), (LBS_I PR:$px, uimm12:$ix12)>;
+def : Pat<(sextloadi8 (orisc_ptradd PR:$px, DR:$dz)),       (LBS   PR:$px, DR:$dz, 1, 0)>;
 
-def : PatStoreD<orisc_storei8,  SB>;
-def : PatStoreD<orisc_storei16, SH>;
-def : PatStoreD<orisc_storei32, SW>;
-def : PatStoreI<orisc_storei8,  SB_I>;
-def : PatStoreI<orisc_storei16, SH_I>;
-def : PatStoreI<orisc_storei32, SW_I>;
+def : Pat<(zextloadi16 (orisc_ptradd PR:$px, uimm12:$ix12)), (LHU_I PR:$px, uimm12:$ix12)>;
+def : Pat<(zextloadi16 (orisc_ptradd PR:$px, DR:$dz)),       (LHU   PR:$px, DR:$dz, 1, 0)>;
+def : Pat<(sextloadi16 (orisc_ptradd PR:$px, uimm12:$ix12)), (LHS_I PR:$px, uimm12:$ix12)>;
+def : Pat<(sextloadi16 (orisc_ptradd PR:$px, DR:$dz)),       (LHS   PR:$px, DR:$dz, 1, 0)>;
 
+def : Pat<(unindexedload (orisc_ptradd PR:$px, uimm12:$ix12)), (LW_I PR:$px, uimm12:$ix12)>;
+def : Pat<(unindexedload (orisc_ptradd PR:$px, DR:$dz)),       (LW   PR:$px, DR:$dz, 1, 0)>;
+
+def : Pat<(loadpointer (orisc_ptradd PR:$px, uimm12:$ix12)), (LP_I PR:$px, uimm12:$ix12)>;
+def : Pat<(loadpointer (orisc_ptradd PR:$px, DR:$dz)),       (LP   PR:$px, DR:$dz, 1, 0)>;
+
+
+def : Pat<(truncstorei8 DR:$dy, (orisc_ptradd PR:$px, DR:$dz)), (SB PR:$px, DR:$dz, 1, 0, DR:$dy)>;
+def : Pat<(truncstorei8 DR:$dy, (orisc_ptradd PR:$px, uimm12:$ix12)), (SB_I PR:$px, uimm12:$ix12, DR:$dy)>;
+def : Pat<(orisc_storei8 DR:$dy, PR:$px), (SB_I PR:$px, 0, DR:$dy)>;
+def : Pat<(truncstorei16 DR:$dy, (orisc_ptradd PR:$px, DR:$dz)), (SH PR:$px, DR:$dz, 1, 0, DR:$dy)>;
+def : Pat<(truncstorei16 DR:$dy, (orisc_ptradd PR:$px, uimm12:$ix12)), (SH_I PR:$px, uimm12:$ix12, DR:$dy)>;
+def : Pat<(orisc_storei16 DR:$dy, PR:$px), (SH_I PR:$px, 0, DR:$dy)>;
+def : Pat<(unindexedstore DR:$dy, (orisc_ptradd PR:$px, DR:$dz)), (SW PR:$px, DR:$dz, 1, 0, DR:$dy)>;
+def : Pat<(unindexedstore DR:$dy, (orisc_ptradd PR:$px, uimm12:$ix12)), (SW_I PR:$px, uimm12:$ix12, DR:$dy)>;
+def : Pat<(orisc_store DR:$dy, PR:$px), (SW_I PR:$px, 0, DR:$dy)>;
+
+def : Pat<(unindexedstore PR:$py, (orisc_ptradd PR:$px, DR:$dz)), (SP PR:$px, DR:$dz, 1, 0, PR:$py)>;
+def : Pat<(unindexedstore PR:$py, (orisc_ptradd PR:$px, uimm12:$ix12)), (SP_I PR:$px, uimm12:$ix12, PR:$py)>;
+def : Pat<(orisc_store PR:$py, PR:$px), (SP_I PR:$px, 0, PR:$py)>;
 
 class PatBranch<CondCode Cond, ORISCInstr Inst>
 		: Pat<(brcc Cond, DR:$dy, DR:$dz, bb:$sd12), (Inst DR:$dy, DR:$dz, brtarget:$sd12)>;

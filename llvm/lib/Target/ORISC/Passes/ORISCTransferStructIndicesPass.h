@@ -21,10 +21,15 @@ public:
     static bool isRequired() { return true; }
 
 private:
+    FunctionCallee LoadPtrFn;
+    FunctionCallee StorePtrFn;
+
+    SmallVector<Instruction *> RemoveFromParentList = SmallVector<Instruction *>();
 
     bool visitGetElementPtrInst(GetElementPtrInst *GEP);
     bool visitLoadStoreInst(Instruction *I);
     bool checkParentForSimpleGEP(Value *V, bool NeedPointerStruct);
+    bool insertAliasProtector(GetElementPtrInst *GEP);
     friend PassInfoMixin<TransformStructIndicesPass>;
 };
 

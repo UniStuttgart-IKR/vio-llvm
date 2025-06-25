@@ -25,8 +25,8 @@ namespace llvm {
 namespace ORISCISD {
 enum NodeType : unsigned  {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
-  INDEXED_LOAD,
-  INDEXED_STORE,
+  LOAD_POINTER,
+  STORE_POINTER,
   PTR_ADD,
   PTR_SUB,
   RET,
@@ -112,6 +112,9 @@ public:
   EmitInstrWithCustomInserter(MachineInstr &MI,
                               MachineBasicBlock *BB) const override;
 
+  bool getTgtMemIntrinsic(IntrinsicInfo &Info, const CallInst &I,
+                          MachineFunction &MF, unsigned Intrinsic) const override;
+
 private:
   const ORISCSubtarget &Subtarget;
 
@@ -122,10 +125,14 @@ private:
 
   SDValue performAddSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue lowerLoad(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerStore(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerAddSub(SDValue Op, SelectionDAG &DAG, bool IsAdd) const;
   SDValue lowerShiftLikes(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSelect(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSetCC(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerIntrinsicWChain(SDValue Op, SelectionDAG &DAG) const;
+  SDValue separateBaseAndIndex(SDValue OldBase, SDValue OldIndex, EVT MemVT, SelectionDAG &DAG) const;
+  SDValue lowerLoadStorePointer(uint64_t Type, SDValue Intrinsic, SelectionDAG &DAG) const;
   
   SDValue lowerFatPtrs(SDValue Op, SelectionDAG &DAG) const;
   FatPointer recursivelyLowerFatPtrs(SDValue Op, SelectionDAG &DAG) const;

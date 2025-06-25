@@ -19,18 +19,23 @@
 #include "ORISCTargetMachine.h"
 #include "MCTargetDesc/ORISCMCTargetDesc.h"
 #include "llvm-c/Types.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
+#include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGenTypes/MachineValueType.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/IntrinsicsORISC.h"
 #include "llvm/MC/MCRegister.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
@@ -62,7 +67,7 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
 
   setMinFunctionAlignment(Align(4));
 
-  //setTargetDAGCombine({ISD::ADD, ISD::SUB});
+  setTargetDAGCombine({ISD::LOAD, ISD::STORE});
 
   setOperationAction(ISD::Constant, MVT::i32, Legal);
   setOperationAction(ISD::Constant, MVT::i64, Expand);
@@ -88,19 +93,20 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FP_TO_SINT, MVT::i32, Expand);
 
   // No sign extend instructions for i1 and sign extend load i8
+  unsigned LoadList[] = {ISD::NON_EXTLOAD, ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD};
   for (MVT VT : MVT::integer_valuetypes()) {
     for (MVT OtherVT : MVT::integer_valuetypes()) {
-      setTruncStoreAction(VT, OtherVT, Custom);
-      setLoadExtAction({ISD::NON_EXTLOAD, ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD}, VT,
-                      OtherVT, Custom);
+      LegalizeAction Action = OtherVT == MVT::i1 ? Promote : Custom;
+      setTruncStoreAction(VT, OtherVT, Action);
+      setLoadExtAction(LoadList, VT, OtherVT, Action);
     }
-    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1, Promote);
-    setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::i1, Promote);
-    setLoadExtAction(ISD::EXTLOAD, VT, MVT::i1, Promote);
   }
   setOperationAction(ISD::LOAD, MVT::i32, Custom);
   setOperationAction(ISD::LOAD, MVT::orisc_pointer, Custom);
   setOperationAction(ISD::LOAD, MVT::orisc_fatpointer, Custom);
+  setOperationAction(ISD::STORE, MVT::i32, Custom);
+  setOperationAction(ISD::STORE, MVT::orisc_pointer, Custom);
+  setOperationAction(ISD::STORE, MVT::orisc_fatpointer, Custom);
 
   setOperationAction(ISD::ConstantPool, PtrVT, Expand);
   setOperationAction(ISD::GlobalAddress, PtrVT, Expand);
@@ -156,6 +162,12 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::VACOPY, MVT::Other, Expand);
   setOperationAction(ISD::VAEND, MVT::Other, Expand);
 
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i32, Custom);
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i64, Custom);
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::orisc_pointer, Custom);
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::orisc_fatpointer, Custom);
+
   // Compute derived properties from the register classes
   computeRegisterProperties(STI.getRegisterInfo());
 }
@@ -174,12 +186,8 @@ SDValue ORISCTargetLowering::performAddSubCombine(SDNode *N,
 
 SDValue ORISCTargetLowering::PerformDAGCombine(SDNode *N,
                                                  DAGCombinerInfo &DCI) const {
-                                                  return SDValue(N, 0);
   SDLoc DL(N);
   switch (N->getOpcode()) {
-    case ISD::ADD:
-    case ISD::SUB:
-      return performAddSubCombine(N, DCI);
 
     default:
       return SDValue();
@@ -196,10 +204,10 @@ const char *ORISCTargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch ((ORISCISD::NodeType) Opcode) {
     case ORISCISD::RET:
       return "ORISCISD::RET";
-    case ORISCISD::INDEXED_LOAD:
-      return "ORISCISD::INDEXED_LOAD";
-    case ORISCISD::INDEXED_STORE:
-      return "ORISCISD::INDEXED_STORE";
+    case ORISCISD::LOAD_POINTER:
+      return "ORISCISD::LOAD_POINTER";
+    case ORISCISD::STORE_POINTER:
+      return "ORISCISD::STORE_POINTER";
     case ORISCISD::PTR_ADD:
       return "ORISCISD::PTR_ADD";
     case ORISCISD::PTR_SUB:
@@ -285,9 +293,38 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     //  return lowerSelect(Op, DAG);
     case ISD::LOAD:
       return lowerLoad(Op, DAG);
+    case ISD::STORE:
+      return lowerStore(Op, DAG);
+    case ISD::INTRINSIC_W_CHAIN:
+      return lowerIntrinsicWChain(Op, DAG);
 
     default: llvm_unreachable("Should not custom lower this!");
   }
+}
+
+//We only support unindexed Loads with a PTR_ADD/SUB as BaserPtr
+SDValue ORISCTargetLowering::
+lowerStore(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  StoreSDNode *StoreOp = cast<StoreSDNode>(Op.getNode());
+
+  StoreOp->dump();
+  if (StoreOp->getBasePtr()->getOpcode() == ORISCISD::PTR_ADD)
+    return Op;
+
+  SDValue OldIndex;
+  if (StoreOp->isIndexed()){
+    OldIndex = StoreOp->getOffset();
+  } else {
+    OldIndex = DAG.getConstant(0, DL, MVT::i32);
+  }
+
+  SDValue Chain = StoreOp->getChain();
+  SDValue SeparatedPointer = separateBaseAndIndex(StoreOp->getBasePtr(), OldIndex, 
+                                                    StoreOp->getMemoryVT(), DAG);
+
+  return DAG.getTruncStore(Chain, DL, StoreOp->getValue(), SeparatedPointer, 
+                                      StoreOp->getMemoryVT(), StoreOp->getMemOperand());
 }
 
 //We only support unindexed Loads with a PTR_ADD/SUB as BaserPtr
@@ -299,38 +336,47 @@ lowerLoad(SDValue Op, SelectionDAG &DAG) const {
   if (LoadOp->getBasePtr()->getOpcode() == ORISCISD::PTR_ADD)
     return Op;
 
-  SDValue Chain = LoadOp->getChain();
-  EVT VT = LoadOp->getBasePtr().getValueType();
-  SDValue Base, Index;
-  if (VT == MVT::orisc_pointer) {
-    Base = LoadOp->getBasePtr();
-    Index = DAG.getConstant(0, DL, MVT::i32);
-  } else if (VT == MVT::orisc_fatpointer){
-    LLVM_DEBUG(dbgs() << "\nStarting FatPointer Recursion\n");
-    auto FatPtr = recursivelyLowerFatPtrs(LoadOp->getBasePtr(), DAG);
-    Base = FatPtr.Base;
-    Index = FatPtr.Index;
-  } else {
-    llvm_unreachable("Bases should ALWAYS be pointer types!");
-  }
+  SDValue OldIndex;
   if (LoadOp->isIndexed()){
-    Index = DAG.getNode(ISD::ADD, DL, Index.getValueType(),
-                          Index, LoadOp->getOffset());
+    OldIndex = LoadOp->getOffset();
+  } else {
+    OldIndex = DAG.getConstant(0, DL, MVT::i32);
   }
-  uint64_t Shamt = Log2_64(LoadOp->getMemoryVT().getSizeInBits() / 8);
-  if (Shamt > 0) {
-    SDValue ShamtNode = DAG.getConstant(Shamt, DL, MVT::i32);
-    Index = DAG.getNode(ISD::SRA, DL, Index.getValueType(),
-                          Index, ShamtNode);
-  }
+  SDValue Chain = LoadOp->getChain();
+  SDValue SeparatedPointer = separateBaseAndIndex(LoadOp->getBasePtr(), OldIndex,
+                                                    LoadOp->getMemoryVT(), DAG);
 
-  LLVM_DEBUG(LoadOp->getMemOperand()->getValue()->dump());
-  SDValue AddedPointer = DAG.getNode(ORISCISD::PTR_ADD, DL, MVT::orisc_fatpointer,
-                                        Base, Index);
   ISD::LoadExtType Ext = LoadOp->getExtensionType() == ISD::SEXTLOAD ?
                           ISD::SEXTLOAD : ISD::ZEXTLOAD;
   return DAG.getExtLoad(Ext, DL, LoadOp->getValueType(0), Chain, 
-                        AddedPointer, LoadOp->getMemoryVT(), LoadOp->getMemOperand());
+                        SeparatedPointer, LoadOp->getMemoryVT(), LoadOp->getMemOperand());
+}
+
+SDValue ORISCTargetLowering::separateBaseAndIndex(SDValue OldBase, SDValue OldIndex, EVT MemVT, SelectionDAG &DAG) const{
+  SDLoc DL(OldBase);
+  EVT VT = OldBase.getValueType();
+  SDValue NewBase, NewIndex;
+  if (VT == MVT::orisc_pointer || VT == MVT::Other) {
+    NewBase = OldBase;
+    NewIndex = DAG.getConstant(0, DL, MVT::i32);
+  } else if (VT == MVT::orisc_fatpointer){
+    LLVM_DEBUG(dbgs() << "\nStarting FatPointer Recursion\n");
+    auto FatPtr = recursivelyLowerFatPtrs(OldBase, DAG);
+    NewBase = FatPtr.Base;
+    NewIndex = FatPtr.Index;
+  } else {
+    llvm_unreachable("Bases MUST be pointer types!");
+  }
+
+  NewIndex = DAG.getNode(ISD::ADD, DL, NewIndex.getValueType(), NewIndex, OldIndex);
+  uint64_t Shamt = Log2_64(MemVT.getSizeInBits() / 8);
+  if (Shamt > 0) {
+    SDValue ShamtNode = DAG.getConstant(Shamt, DL, MVT::i32);
+    NewIndex = DAG.getNode(ISD::SRA, DL, NewIndex.getValueType(),
+                          NewIndex, ShamtNode);
+  }
+
+  return DAG.getNode(ORISCISD::PTR_ADD, DL, MVT::orisc_fatpointer, NewBase, NewIndex);
 }
 
 //Traverse Tree upwards until we reach a Node where the Pointer
@@ -370,6 +416,67 @@ recursivelyLowerFatPtrs(SDValue OldOp, SelectionDAG &DAG) const {
                                           
   LLVM_DEBUG(dbgs() << "Transforming to "; NewIndex->dump());
   return {CurFatPtr.Base, NewIndex};
+}
+
+SDValue ORISCTargetLowering::
+  lowerLoadStorePointer(uint64_t Type, SDValue Intrinsic, SelectionDAG &DAG) const {
+  SDLoc DL(Intrinsic);
+  MemIntrinsicSDNode *MemIntrinsic = cast<MemIntrinsicSDNode>(Intrinsic.getNode());
+  MemIntrinsic->dump();
+  SDValue ZeroIndex = DAG.getConstant(0, DL, MVT::i32);
+  SDValue Chain = MemIntrinsic->getChain();
+  SDValue Pointer = MemIntrinsic->readMem() ? MemIntrinsic->getOperand(2) : MemIntrinsic->getOperand(3);
+  SDValue SeparatedPointer = separateBaseAndIndex(Pointer, ZeroIndex,
+                                                    MemIntrinsic->getMemoryVT(), DAG);
+
+  if (MemIntrinsic->readMem()) {
+    return DAG.getLoad(MVT::orisc_pointer, DL, Chain, SeparatedPointer, MemIntrinsic->getMemOperand());
+  }
+
+  return DAG.getStore(Chain, DL, MemIntrinsic->getOperand(2), SeparatedPointer, MemIntrinsic->getMemOperand());
+}
+
+
+SDValue ORISCTargetLowering::
+  lowerIntrinsicWChain(SDValue Op,
+                        SelectionDAG &DAG) const {
+  uint64_t IntrinsicID = Op.getConstantOperandVal(1);
+  switch (IntrinsicID) {
+  default:
+    return Op;
+  case Intrinsic::orisc_storepointer:
+  case Intrinsic::orisc_loadpointer:
+    return lowerLoadStorePointer(IntrinsicID, Op, DAG);
+
+  }
+}
+
+
+bool ORISCTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
+                                              const CallInst &I,
+                                              MachineFunction &MF,
+                                              unsigned Intrinsic) const {
+
+  switch(Intrinsic) {
+    default:
+      return false;
+    case Intrinsic::orisc_loadpointer:
+      Info.opc = ISD::INTRINSIC_W_CHAIN;
+      Info.ptrVal = I.getArgOperand(0);
+      Info.offset = 0;
+      Info.align = Align(1);
+      Info.flags |= MachineMemOperand::MOLoad;
+      Info.memVT = MVT::orisc_pointer;
+      return true;
+    case Intrinsic::orisc_storepointer:
+      Info.opc = ISD::INTRINSIC_W_CHAIN;
+      Info.ptrVal = I.getArgOperand(1);
+      Info.offset = 0;
+      Info.align = Align(1);
+      Info.flags |= MachineMemOperand::MOStore;
+      Info.memVT = MVT::orisc_pointer;
+      return true;
+  }
 }
 
 static inline bool includesEqualitySetCC(ISD::CondCode Code) {

@@ -65,14 +65,50 @@ ORISCRegisterInfo::getPointerRegClass(const MachineFunction &MF, unsigned Kind) 
 static void replaceFI(MachineFunction &MF, MachineBasicBlock::iterator II,
 											MachineInstr &MI, const DebugLoc &dl,
 											unsigned FIOperandNum, int Offset, unsigned FramePtr) {
-	// TODO
+	if (Offset <= 4095) {
+		// If the offset is small enough to fit in the immediate field, directly
+		// encode it.
+		MI.dump();
+		MI.getOperand(FIOperandNum).ChangeToImmediate(Offset);
+		return;
+	}
+
+  	const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+  	MachineRegisterInfo &MRI = MF.getRegInfo();
+  	Register FrameIndex = MRI.createVirtualRegister(&ORISC::DRRegClass);
+	unsigned HI20 = (Offset >> 12) & 0xFFFFF;
+	BuildMI(*MI.getParent(), II, dl, TII.get(ORISC::LUI), FrameIndex)
+		.addImm(HI20);
+	unsigned LO12 = Offset & 0xFFF;
+	BuildMI(*MI.getParent(), II, dl, TII.get(ORISC::ORI), FrameIndex)
+		.addReg(FrameIndex)
+		.addImm(LO12);
+	
+	MI.getOperand(FIOperandNum).ChangeToRegister(FramePtr, false);
+	MI.getOperand(FIOperandNum + 1).ChangeToRegister(FrameIndex, false);
 }
 
 bool
 ORISCRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
-																			 int SPAdj, unsigned FIOperandNum,
-																			 RegScavenger *RS) const {
-	// TODO
+										int SPAdj, unsigned FIOperandNum,
+										RegScavenger *RS) const {
+	assert(SPAdj == 0 && "Unexpected");
+
+	MachineInstr &MI = *II;
+	DebugLoc dl = MI.getDebugLoc();
+	int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
+	MachineFunction &MF = *MI.getParent()->getParent();
+	const ORISCFrameLowering *TFI = getFrameLowering(MF);
+
+	Register FrameReg;
+	int Offset;
+	Offset = TFI->getFrameIndexReference(MF, FrameIndex, FrameReg).getFixed();
+	//Offset += MI.getOperand(FIOperandNum + 1).getImm();  
+
+	replaceFI(MF, II, MI, dl, FIOperandNum, Offset, FrameReg);
+
+	// replaceFI never removes II
+	return false;
 }
 
 Register ORISCRegisterInfo::getFrameRegister(const MachineFunction &MF) const {

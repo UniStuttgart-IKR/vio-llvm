@@ -12,7 +12,9 @@
 
 #include "ORISCInstrInfo.h"
 #include "ORISCRegisterInfo.h"
+#include "ORISCTargetMachine.h"
 #include "MCTargetDesc/ORISCMCTargetDesc.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/StackMaps.h"
@@ -29,7 +31,11 @@ using namespace llvm;
 ORISCInstrInfo::ORISCInstrInfo(ORISCSubtarget &STI)
     : ORISCGenInstrInfo() {}
 
-
+MCInst ORISCInstrInfo::getNop() const {
+    return MCInstBuilder(ORISC::CLZ)
+        .addReg(ORISC::D0)
+        .addReg(ORISC::D0);
+}
 
 void ORISCInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                     MachineBasicBlock::iterator MBBI,
@@ -46,6 +52,136 @@ void ORISCInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     else
         report_fatal_error("Impossible reg-to-reg copy");
 }
+
+Register ORISCInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
+                                            int &FrameIndex) const {
+    TypeSize DummyBytes = TypeSize::getZero();
+    return isLoadFromStackSlot(MI, FrameIndex, DummyBytes);
+}
+
+Register ORISCInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
+                                            int &FrameIndex,
+                                            TypeSize &MemBytes) const {
+    switch (MI.getOpcode()) {
+    default:
+        return 0;
+    case ORISC::LBS:
+    case ORISC::LBU:
+    case ORISC::LBS_I:
+    case ORISC::LBU_I:
+        MemBytes = TypeSize::getFixed(1);
+        break;
+    case ORISC::LHS:
+    case ORISC::LHU:
+    case ORISC::LHS_I:
+    case ORISC::LHU_I:
+        MemBytes = TypeSize::getFixed(2);
+        break;
+    //case ORISC::LWS:
+    case ORISC::LW:
+    //case ORISC::LWS_I
+    case ORISC::LW_I:
+    case ORISC::RSTRPC:
+        MemBytes = TypeSize::getFixed(4);
+        break;
+    //case ORISC::LD:
+    //    MemBytes = TypeSize::getFixed(8);
+    //    break;
+    }
+
+    if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
+        MI.getOperand(2).getImm() == 0) {
+        FrameIndex = MI.getOperand(1).getIndex();
+        return MI.getOperand(0).getReg();
+    }
+
+    return 0;
+}
+void ORISCInstrInfo::loadRegFromStackSlot(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator I, Register DstReg,
+    int FI, const TargetRegisterClass *RC, const TargetRegisterInfo *TRI,
+    Register VReg, MachineInstr::MIFlag Flags) const {
+    MachineFunction *MF = MBB.getParent();
+    MachineFrameInfo &MFI = MF->getFrameInfo();
+    DebugLoc DL =
+        Flags & MachineInstr::FrameDestroy ? MBB.findDebugLoc(I) : DebugLoc();
+
+    MachineMemOperand *MMO = MF->getMachineMemOperand(
+        MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
+        MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+
+    unsigned int Opcode = DstReg == ORISC::P31 ? ORISC::RSTRPC : ORISC::LW_I;
+
+    BuildMI(MBB, I, DL, get(Opcode), DstReg)
+        .addFrameIndex(FI)
+        .addImm(0)
+        .addMemOperand(MMO)
+        .setMIFlag(Flags);
+}
+
+Register ORISCInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
+                                            int &FrameIndex) const {
+    TypeSize DummyBytes = TypeSize::getZero();
+    return isStoreToStackSlot(MI, FrameIndex, DummyBytes);
+}
+
+Register ORISCInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
+                                            int &FrameIndex,
+                                            TypeSize &MemBytes) const {
+    switch (MI.getOpcode()) {
+    default:
+        return 0;
+    case ORISC::SB:
+    case ORISC::SB_I:
+        MemBytes = TypeSize::getFixed(1);
+        break;
+    case ORISC::SH:
+    case ORISC::SH_I:
+        MemBytes = TypeSize::getFixed(2);
+        break;
+    case ORISC::SW:
+    case ORISC::SW_I:
+    case ORISC::SVRPC:
+        MemBytes = TypeSize::getFixed(4);
+        break;
+    //case ORISC::SD:
+    //    MemBytes = TypeSize::getFixed(8);
+    //    break;
+    }
+
+    if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
+        MI.getOperand(2).getImm() == 0) {
+        FrameIndex = MI.getOperand(1).getIndex();
+        return MI.getOperand(0).getReg();
+    }
+
+    return 0;
+}
+
+void ORISCInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
+                                         MachineBasicBlock::iterator I,
+                                         Register SrcReg, bool IsKill, int FI,
+                                         const TargetRegisterClass *RC,
+                                         const TargetRegisterInfo *TRI,
+                                         Register VReg,
+                                         MachineInstr::MIFlag Flags) const {
+    MachineFunction *MF = MBB.getParent();
+    MachineFrameInfo &MFI = MF->getFrameInfo();
+    MachineMemOperand *MMO = MF->getMachineMemOperand(
+        MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
+        MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+
+    unsigned int Opcode = SrcReg == ORISC::P31 ? ORISC::SVRPC : ORISC::SW_I;
+
+    BuildMI(MBB, I, DebugLoc(), get(Opcode))
+        .addReg(SrcReg, getKillRegState(IsKill))
+        .addFrameIndex(FI)
+        .addImm(0)
+        .addMemOperand(MMO)
+        .setMIFlag(Flags);
+}
+
+
 
 /// Analyze the branching code at the end of MBB, returning
 /// true if it cannot be understood (e.g. it's a switch dispatch or isn't

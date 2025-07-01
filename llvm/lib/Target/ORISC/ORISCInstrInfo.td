@@ -115,6 +115,8 @@ def FormatBPUD : InstrFormat;
 def FormatBPUE : InstrFormat;
 def FormatBPUF : InstrFormat;
 
+def FormatPseudo : InstrFormat;
+
 class ORISCInstr<string opcodestr, dag outs, dag ins, string argstr, InstrFormat fmt>
 		: Instruction {
 	let Namespace = "ORISC";
@@ -430,6 +432,9 @@ def SGT	:	InstAlias<"sgt\t$dx = $dy",			(SLTS DR:$dx,  D0, DR:$dy)>;
 //===----------------------------------------------------------------------===//
 
 //TODO: ADD ORISCISD::LOAD and ORISCISD:STORE
+def SDTOPtrLeaf: SDTypeProfile<1, 0, [SDTCisVT<0, orisc_pointer>]>;
+def oframeindex : SDNode<"ISD::FrameIndex",           SDTOPtrLeaf, [],
+                         "FrameIndexSDNode">;
 
 def SDT_ORISC_Store : SDTypeProfile<0, 2, [       // indexed store
   SDTCisVT<1, orisc_pointer>
@@ -513,6 +518,10 @@ def : Pat<(sext_inreg (i32 DR:$dy), i16), (EXTHS (i32 DR:$dy))>;
 def : PatD<ctlz, CLZ>;
 
 
+def to_tframeindex : SDNodeXForm<frameindex, [{
+  return CurDAG->getTargetFrameIndex(N->getIndex(), N->getValueType(0));
+}]>;
+
 def : Pat<(zextloadi8 (orisc_ptradd PR:$px, uimm12:$ix12)), (LBU_I PR:$px, uimm12:$ix12)>;
 def : Pat<(zextloadi8 (orisc_ptradd PR:$px, DR:$dz)),       (LBU   PR:$px, DR:$dz, 1, 0)>;
 def : Pat<(sextloadi8 (orisc_ptradd PR:$px, uimm12:$ix12)), (LBS_I PR:$px, uimm12:$ix12)>;
@@ -529,6 +538,13 @@ def : Pat<(unindexedload (orisc_ptradd PR:$px, DR:$dz)),       (LW   PR:$px, DR:
 def : Pat<(loadpointer (orisc_ptradd PR:$px, uimm12:$ix12)), (LP_I PR:$px, uimm12:$ix12)>;
 def : Pat<(loadpointer (orisc_ptradd PR:$px, DR:$dz)),       (LP   PR:$px, DR:$dz, 1, 0)>;
 
+def : Pat<(zextloadi8    (orisc_ptradd oframeindex:$ptr, 0)), (LBU_I P30, (i32 (to_tframeindex $ptr)))>;
+def : Pat<(sextloadi8    (orisc_ptradd oframeindex:$ptr, 0)), (LBS_I P30, (i32 (to_tframeindex $ptr)))>;
+def : Pat<(zextloadi16   (orisc_ptradd oframeindex:$ptr, 0)), (LHU_I P30, (i32 (to_tframeindex $ptr)))>;
+def : Pat<(sextloadi16   (orisc_ptradd oframeindex:$ptr, 0)), (LHS_I P30, (i32 (to_tframeindex $ptr)))>;
+def : Pat<(unindexedload (orisc_ptradd oframeindex:$ptr, 0)), (LW_I  P30, (i32 (to_tframeindex $ptr)))>;
+def : Pat<(loadpointer   (orisc_ptradd oframeindex:$ptr, 0)), (LP_I  P30, (i32 (to_tframeindex $ptr)))>;
+
 
 def : Pat<(truncstorei8 DR:$dy, (orisc_ptradd PR:$px, DR:$dz)), (SB PR:$px, DR:$dz, 1, 0, DR:$dy)>;
 def : Pat<(truncstorei8 DR:$dy, (orisc_ptradd PR:$px, uimm12:$ix12)), (SB_I PR:$px, uimm12:$ix12, DR:$dy)>;
@@ -543,6 +559,11 @@ def : Pat<(orisc_store DR:$dy, PR:$px), (SW_I PR:$px, 0, DR:$dy)>;
 def : Pat<(unindexedstore PR:$py, (orisc_ptradd PR:$px, DR:$dz)), (SP PR:$px, DR:$dz, 1, 0, PR:$py)>;
 def : Pat<(unindexedstore PR:$py, (orisc_ptradd PR:$px, uimm12:$ix12)), (SP_I PR:$px, uimm12:$ix12, PR:$py)>;
 def : Pat<(orisc_store PR:$py, PR:$px), (SP_I PR:$px, 0, PR:$py)>;
+
+def : Pat<(truncstorei8 DR:$dy,   (orisc_ptradd oframeindex:$ptr, 0)), (SB_I P30, (i32 (to_tframeindex $ptr)), DR:$dy)>;
+def : Pat<(truncstorei16 DR:$dy,  (orisc_ptradd oframeindex:$ptr, 0)), (SH_I P30, (i32 (to_tframeindex $ptr)), DR:$dy)>;
+def : Pat<(unindexedstore DR:$dy, (orisc_ptradd oframeindex:$ptr, 0)), (SW_I P30, (i32 (to_tframeindex $ptr)), DR:$dy)>;
+def : Pat<(unindexedstore PR:$py, (orisc_ptradd oframeindex:$ptr, 0)), (SP_I P30, (i32 (to_tframeindex $ptr)), PR:$py)>;
 
 class PatBranch<CondCode Cond, ORISCInstr Inst>
 		: Pat<(brcc Cond, DR:$dy, DR:$dz, bb:$sd12), (Inst DR:$dy, DR:$dz, brtarget:$sd12)>;
@@ -566,7 +587,7 @@ def : Pat<(br bb:$sd25), (BRA brtarget:$sd25)>;
 
 
 def : Pat<(orisc_ret), (RET)>;
-def : Pat<(uimm12:$ui12), (ADDI D0, uimm12:$ui12)>;
+def : Pat<(uimm12:$ui12), (ORI D0, uimm12:$ui12)>;
 // TODO: Shifts, Immediate Versions, ANDN, different Multiplications
 // TODO: Load, Store, alc
 // TODO: Branch, Jump, etc.

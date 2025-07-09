@@ -11,6 +11,7 @@
 
 #include "ORISC.h"
 #include "ORISCTargetMachine.h"
+#include "Passes/ORISCEliminatePointerRedundanciesPass.h"
 #include "Passes/ORISCTransferStructIndicesPass.h"
 #include "ORISCSubtarget.h"
 #include "Passes/ORISCTransformLoadStorePointerPass.h"
@@ -101,6 +102,10 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
     [](ModulePassManager &PM, OptimizationLevel Level){
       PM.addPass(TransformStructIndicesPass());
       PM.addPass(TransformLoadStorePointerPass());
+    });
+  PB.registerPeepholeEPCallback(
+    [](FunctionPassManager &FM, OptimizationLevel Level){
+      FM.addPass(EliminatePointerRedundanciesPass());
     });
   PB.registerOptimizerLastEPCallback(
     [](ModulePassManager &PM, OptimizationLevel Level, ThinOrFullLTOPhase T) {

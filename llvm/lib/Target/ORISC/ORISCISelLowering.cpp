@@ -308,7 +308,7 @@ lowerStore(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   StoreSDNode *StoreOp = cast<StoreSDNode>(Op.getNode());
 
-  StoreOp->dump();
+  LLVM_DEBUG(StoreOp->dump());
   if (StoreOp->getBasePtr()->getOpcode() == ORISCISD::PTR_ADD)
     return Op;
 
@@ -422,18 +422,24 @@ SDValue ORISCTargetLowering::
   lowerLoadStorePointer(uint64_t Type, SDValue Intrinsic, SelectionDAG &DAG) const {
   SDLoc DL(Intrinsic);
   MemIntrinsicSDNode *MemIntrinsic = cast<MemIntrinsicSDNode>(Intrinsic.getNode());
-  MemIntrinsic->dump();
+  LLVM_DEBUG(MemIntrinsic->dump());
   SDValue ZeroIndex = DAG.getConstant(0, DL, MVT::i32);
   SDValue Chain = MemIntrinsic->getChain();
   SDValue Pointer = MemIntrinsic->readMem() ? MemIntrinsic->getOperand(2) : MemIntrinsic->getOperand(3);
   SDValue SeparatedPointer = separateBaseAndIndex(Pointer, ZeroIndex,
                                                     MemIntrinsic->getMemoryVT(), DAG);
 
+  auto *MMO = MemIntrinsic->getMemOperand();
+  auto Flags = MMO->getFlags() | MachineMemOperand::MOVolatile;
+  MMO->setFlags(Flags);
+  
   if (MemIntrinsic->readMem()) {
-    return DAG.getLoad(MVT::orisc_pointer, DL, Chain, SeparatedPointer, MemIntrinsic->getMemOperand());
+    //return DAG.getNode(ORISCISD::LOAD_POINTER, DL, MVT::orisc_pointer, Chain, SeparatedPointer);
+    return DAG.getLoad(MVT::orisc_pointer, DL, Chain, SeparatedPointer, MMO);
   }
 
-  return DAG.getStore(Chain, DL, MemIntrinsic->getOperand(2), SeparatedPointer, MemIntrinsic->getMemOperand());
+  //return DAG.getNode(ORISCISD::STORE_POINTER, DL, MVT::Other, Chain, SeparatedPointer);
+  return DAG.getStore(Chain, DL, MemIntrinsic->getOperand(2), SeparatedPointer, MMO);
 }
 
 

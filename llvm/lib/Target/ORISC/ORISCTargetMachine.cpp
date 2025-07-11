@@ -12,24 +12,18 @@
 #include "ORISC.h"
 #include "ORISCTargetMachine.h"
 #include "Passes/ORISCEliminatePointerRedundanciesPass.h"
+#include "Passes/ORISCRejectUnsupportedIRPass.h"
+#include "Passes/ORISCTransformLoadStorePointerPass.h"
 #include "Passes/ORISCTransferStructIndicesPass.h"
 #include "ORISCSubtarget.h"
-#include "Passes/ORISCTransformLoadStorePointerPass.h"
 #include "TargetInfo/ORISCTargetInfo.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
-#include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
-#include "llvm/CodeGen/GlobalISel/Legalizer.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
-#include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
-#include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Transforms/IPO/GlobalOpt.h"
-#include "llvm/Transforms/IPO/Inliner.h"
 #include <optional>
 using namespace llvm;
 
@@ -81,15 +75,8 @@ public:
   const ORISCSubtarget &getORISCSubtarget() const {
     return *getORISCTargetMachine().getSubtargetImpl();
   }
+  bool addPreISel() override;
   bool addInstSelector() override;
-  void addIRPasses() override;
-  /*
-  bool addIRTranslator() override;
-  bool addLegalizeMachineIR() override;
-  bool addRegBankSelect() override;
-  bool addGlobalInstructionSelect() override;
-  void addPreSched2() override;
-  void addPreEmitPass() override;*/
 };
 } // namespace
 
@@ -99,16 +86,18 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
   #include "llvm/Passes/TargetPassRegistry.inc"
 
   PB.registerPipelineStartEPCallback(
-    [](ModulePassManager &PM, OptimizationLevel Level){
-      PM.addPass(TransformStructIndicesPass());
-      PM.addPass(TransformLoadStorePointerPass());
+    [](ModulePassManager &MPM, OptimizationLevel Level){
+      MPM.addPass(TransformStructIndicesPass());
+      MPM.addPass(TransformLoadStorePointerPass());
     });
   PB.registerPeepholeEPCallback(
-    [](FunctionPassManager &FM, OptimizationLevel Level){
-      FM.addPass(EliminatePointerRedundanciesPass());
+    [](FunctionPassManager &FPM, OptimizationLevel Level){
+      FPM.addPass(EliminatePointerRedundanciesPass());
     });
   PB.registerOptimizerLastEPCallback(
-    [](ModulePassManager &PM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
+    [](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
+      //Should be called preISel, but called here for now
+      MPM.addPass(createModuleToFunctionPassAdaptor(RejectUnsupportedIRPass()));
     });
 }
 
@@ -116,41 +105,12 @@ TargetPassConfig *ORISCTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new ORISCPassConfig(*this, PM);
 }
 
-void ORISCPassConfig::addIRPasses() {
-  TargetPassConfig::addIRPasses();
+bool ORISCPassConfig::addPreISel() {
+  //addPass(new RejectUnsupportedIRPass());
+  return false;
 }
 
 bool ORISCPassConfig::addInstSelector() {
-  // Install an instruction selector.
   addPass(createORISCISelDag(getORISCTargetMachine()));
-  //addPass(createORISCGlobalBaseRegPass());
   return false;
 }
-/*
-bool ORISCPassConfig::addIRTranslator() {
-  //addPass(new IRTranslator());
-  return false;
-}
-
-bool ORISCPassConfig::addLegalizeMachineIR() {
-  //addPass(new Legalizer());
-  return false;
-}
-
-bool ORISCPassConfig::addRegBankSelect() {
-  //addPass(new RegBankSelect());
-  return false;
-}
-
-bool ORISCPassConfig::addGlobalInstructionSelect() {
-  //addPass(new InstructionSelect());
-  return false;
-}
-
-void ORISCPassConfig::addPreSched2() { 
-  //addPass(createORISCExpandPseudoPass());
-}
-
-void ORISCPassConfig::addPreEmitPass() {
-  //addPass(createORISCCollapseMOVEMPass());
-}*/

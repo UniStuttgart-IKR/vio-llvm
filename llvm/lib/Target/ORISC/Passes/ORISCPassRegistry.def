@@ -25,4 +25,5 @@ MODULE_PASS("orisc-transform-load-store-pointer", TransformLoadStorePointerPass(
 #define FUNCTION_PASS(NAME, CREATE_PASS)
 #endif
 FUNCTION_PASS("orisc-eliminate-pointer-redundancies", EliminatePointerRedundanciesPass())
+FUNCTION_PASS("orisc-reject-unsupported-ir", RejectUnsupportedIRPass())
 #undef FUNCTION_PASS

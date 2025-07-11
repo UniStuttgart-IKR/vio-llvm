@@ -2,6 +2,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/IR/Analysis.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -116,6 +117,11 @@ bool TransformStructIndicesPass::visitGetElementPtrInst(GetElementPtrInst *GEP){
 
     //check if parent is array-reference of this
     checkParentForSimpleGEP(GEP, CurrTy->isPointerTy());
+
+    if (Value *Folded = simplifyInstruction(GEP, {GEP->getDataLayout()})) {
+        GEP->replaceAllUsesWith(Folded);
+        RemoveFromParentList.push_back(GEP);
+    }
     return true;
 }
 

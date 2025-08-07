@@ -113,7 +113,8 @@ bool TransformStructIndicesPass::visitGetElementPtrInst(GetElementPtrInst *GEP){
     ArrayRef<Value *> NewIndices = newIndexList(OldIndeces, TTy->getOriginalStructType());
     for (unsigned i = 2; i < GEP->getNumOperands(); ++i)
         GEP->setOperand(i, NewIndices[i-2]);
-    GEP->setResultElementType(GetElementPtrInst::getIndexedType(GEP->getSourceElementType(), NewIndices));
+    Type *ResTy = GetElementPtrInst::getIndexedType(GEP->getSourceElementType(), SmallVector<Value *, 16>(GEP->indices()));
+    GEP->setResultElementType(ResTy);
 
     //check if parent is array-reference of this
     checkParentForSimpleGEP(GEP, CurrTy->isPointerTy());
@@ -154,11 +155,9 @@ bool TransformStructIndicesPass::checkParentForSimpleGEP(Value *V, bool NeedPoin
                 Changed = true;
             }
         }
-        
-        ParentGEP->setResultElementType(
-            GetElementPtrInst::getIndexedType(
-                ParentGEP->getSourceElementType(), 
-                SmallVector<Value *, 16>(ParentGEP->indices())));
+        Type *ResElTy =
+            GetElementPtrInst::getIndexedType(ParentGEP->getSourceElementType(), SmallVector<Value *, 16>(ParentGEP->indices()));
+        ParentGEP->setResultElementType(ResElTy);
         ThisGep = ParentGEP;
     }
     return Changed;
@@ -245,8 +244,8 @@ TransStructType::Variant TransStructType::examineArray(ArrayType *ATy){
     if (ATy->getElementType()->isPointerTy())
         return PointersOnly;
     if (ATy->getElementType()->isStructTy()) {
-        transform(cast<StructType>(ATy->getElementType()));
-        return Mixed;
+        TransStructType *Res = transform(cast<StructType>(ATy->getElementType()));
+        return Res->Var;
     }
     if (ATy->getElementType()->isArrayTy())
         return examineArray(cast<ArrayType>(ATy->getElementType()));

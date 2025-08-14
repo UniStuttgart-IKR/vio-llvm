@@ -12,6 +12,7 @@
 #include "ORISC.h"
 #include "ORISCTargetMachine.h"
 #include "Passes/ORISCEliminatePointerRedundanciesPass.h"
+#include "Passes/ORISCMoveAllocaOnHeapPass.h"
 #include "Passes/ORISCRejectUnsupportedIRPass.h"
 #include "Passes/ORISCTransformLoadStorePointerPass.h"
 #include "Passes/ORISCTransferStructIndicesPass.h"
@@ -98,6 +99,7 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
     [](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
       //Should be called preISel, but called here for now
       MPM.addPass(createModuleToFunctionPassAdaptor(RejectUnsupportedIRPass()));
+      MPM.addPass(MoveAllocaOnHeapPass());
     });
 }
 

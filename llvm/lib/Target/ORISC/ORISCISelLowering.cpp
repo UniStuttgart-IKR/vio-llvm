@@ -58,7 +58,7 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   // Set up the register classes.
   
   addRegisterClass(MVT::i32, &ORISC::DRRegClass);
-  addRegisterClass(MVT::orisc_pointer, &ORISC::PRRegClass);
+  addRegisterClass(MVT::i32, &ORISC::PRRegClass);
 
   // Set up special registers.
   setStackPointerRegisterToSaveRestore(ORISC::P30);
@@ -71,11 +71,7 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::Constant, MVT::i32, Legal);
   setOperationAction(ISD::Constant, MVT::i64, Expand);
-  AddPromotedToType(ISD::Constant, MVT::orisc_pointer, MVT::i32);
-  setOperationAction(ISD::Constant, MVT::orisc_pointer, Promote);
-  AddPromotedToType(ISD::Constant, MVT::orisc_fatpointer, MVT::i32);
-  setOperationAction(ISD::Constant, MVT::orisc_fatpointer, Promote);
-
+  
   //setOperationAction(ISD::ADD, {MVT::orisc_pointer, MVT::orisc_fatpointer}, Custom);
   //setOperationAction(ISD::SUB, {MVT::orisc_pointer, MVT::orisc_fatpointer}, Custom);
 
@@ -96,17 +92,15 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   unsigned LoadList[] = {ISD::NON_EXTLOAD, ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD};
   for (MVT VT : MVT::integer_valuetypes()) {
     for (MVT OtherVT : MVT::integer_valuetypes()) {
-      LegalizeAction Action = OtherVT == MVT::i1 ? Promote : Custom;
+      LegalizeAction Action = OtherVT == MVT::i1 ? Promote : Legal;
       setTruncStoreAction(VT, OtherVT, Action);
       setLoadExtAction(LoadList, VT, OtherVT, Action);
     }
   }
-  setOperationAction(ISD::LOAD, MVT::i32, Custom);
-  setOperationAction(ISD::LOAD, MVT::orisc_pointer, Custom);
-  setOperationAction(ISD::LOAD, MVT::orisc_fatpointer, Custom);
-  setOperationAction(ISD::STORE, MVT::i32, Custom);
-  setOperationAction(ISD::STORE, MVT::orisc_pointer, Custom);
-  setOperationAction(ISD::STORE, MVT::orisc_fatpointer, Custom);
+  setOperationAction(ISD::LOAD, MVT::i32, Legal);
+  setOperationAction(ISD::LOAD, MVT::iPTR, Legal);
+  setOperationAction(ISD::STORE, MVT::i32, Legal);
+  setOperationAction(ISD::STORE, MVT::iPTR, Legal);
 
   setOperationAction(ISD::ConstantPool, PtrVT, Expand);
   setOperationAction(ISD::GlobalAddress, PtrVT, Expand);
@@ -165,8 +159,7 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i32, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i64, Custom);
-  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::orisc_pointer, Custom);
-  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::orisc_fatpointer, Custom);
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::iPTR, Custom);
 
   // Compute derived properties from the register classes
   computeRegisterProperties(STI.getRegisterInfo());
@@ -174,13 +167,6 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
 
 SDValue ORISCTargetLowering::performAddSubCombine(SDNode *N,
                                                   DAGCombinerInfo &DCI) const {
-  SDLoc DL(N);
-  if (N->getValueType(0) == MVT::orisc_fatpointer) {
-    if (N->getOpcode() == ISD::ADD)
-      return DCI.DAG.getNode(ORISCISD::PTR_ADD, DL, MVT::orisc_fatpointer, N->getOperand(0), N->getOperand(1));
-    
-    return DCI.DAG.getNode(ORISCISD::PTR_SUB, DL, MVT::orisc_fatpointer, N->getOperand(0), N->getOperand(1));
-  }
   return SDValue();
 }
 
@@ -216,6 +202,15 @@ const char *ORISCTargetLowering::getTargetNodeName(unsigned Opcode) const {
       return "Unnamed Node";
   }
   return nullptr;
+}
+
+unsigned ORISCTargetLowering::getNumRegisters(LLVMContext &Context, EVT VT,
+                  std::optional<MVT> RegisterVT) const {
+  if (VT == MVT::iPTR)
+    return 1;
+  if (VT == MVT::exnref)
+    return 1;
+  return TargetLoweringBase::getNumRegisters(Context, VT, RegisterVT);
 }
 
 //===----------------------------------------------------------------------===//
@@ -353,7 +348,7 @@ lowerLoad(SDValue Op, SelectionDAG &DAG) const {
 }
 
 SDValue ORISCTargetLowering::separateBaseAndIndex(SDValue OldBase, SDValue OldIndex, EVT MemVT, SelectionDAG &DAG) const{
-  SDLoc DL(OldBase);
+  /*SDLoc DL(OldBase);
   EVT VT = OldBase.getValueType();
   SDValue NewBase, NewIndex;
   if (VT == MVT::orisc_pointer || VT == MVT::Other) {
@@ -376,7 +371,7 @@ SDValue ORISCTargetLowering::separateBaseAndIndex(SDValue OldBase, SDValue OldIn
                           NewIndex, ShamtNode);
   }
 
-  return DAG.getNode(ORISCISD::PTR_ADD, DL, MVT::orisc_fatpointer, NewBase, NewIndex);
+  return DAG.getNode(ORISCISD::PTR_ADD, DL, MVT::orisc_fatpointer, NewBase, NewIndex);*/
 }
 
 //Traverse Tree upwards until we reach a Node where the Pointer
@@ -384,7 +379,7 @@ SDValue ORISCTargetLowering::separateBaseAndIndex(SDValue OldBase, SDValue OldIn
 //never both. 
 ORISCTargetLowering::FatPointer ORISCTargetLowering::
 recursivelyLowerFatPtrs(SDValue OldOp, SelectionDAG &DAG) const {
-  SDLoc DL(OldOp);
+  /*SDLoc DL(OldOp);
 
   if (OldOp->getOpcode() == ISD::CopyFromReg){
     SDValue Index = DAG.getConstant(0, DL, MVT::i32);
@@ -415,7 +410,7 @@ recursivelyLowerFatPtrs(SDValue OldOp, SelectionDAG &DAG) const {
                                           N1, N2);
                                           
   LLVM_DEBUG(dbgs() << "Transforming to "; NewIndex->dump());
-  return {CurFatPtr.Base, NewIndex};
+  return {CurFatPtr.Base, NewIndex};*/
 }
 
 SDValue ORISCTargetLowering::
@@ -426,8 +421,8 @@ SDValue ORISCTargetLowering::
   SDValue ZeroIndex = DAG.getConstant(0, DL, MVT::i32);
   SDValue Chain = MemIntrinsic->getChain();
   SDValue Pointer = MemIntrinsic->readMem() ? MemIntrinsic->getOperand(2) : MemIntrinsic->getOperand(3);
-  SDValue SeparatedPointer = separateBaseAndIndex(Pointer, ZeroIndex,
-                                                    MemIntrinsic->getMemoryVT(), DAG);
+  //SDValue SeparatedPointer = separateBaseAndIndex(Pointer, ZeroIndex,
+  //                                                  MemIntrinsic->getMemoryVT(), DAG);
 
   auto *MMO = MemIntrinsic->getMemOperand();
   auto Flags = MMO->getFlags() | MachineMemOperand::MOVolatile;
@@ -435,17 +430,18 @@ SDValue ORISCTargetLowering::
   
   if (MemIntrinsic->readMem()) {
     //return DAG.getNode(ORISCISD::LOAD_POINTER, DL, MVT::orisc_pointer, Chain, SeparatedPointer);
-    return DAG.getLoad(MVT::orisc_pointer, DL, Chain, SeparatedPointer, MMO);
+    return DAG.getLoad(MVT::iPTR, DL, Chain, Pointer, MMO);
   }
 
   //return DAG.getNode(ORISCISD::STORE_POINTER, DL, MVT::Other, Chain, SeparatedPointer);
-  return DAG.getStore(Chain, DL, MemIntrinsic->getOperand(2), SeparatedPointer, MMO);
+  return DAG.getStore(Chain, DL, MemIntrinsic->getOperand(2), Pointer, MMO);
 }
 
 
 SDValue ORISCTargetLowering::
   lowerIntrinsicWChain(SDValue Op,
                         SelectionDAG &DAG) const {
+  SDLoc DL(Op);
   uint64_t IntrinsicID = Op.getConstantOperandVal(1);
   switch (IntrinsicID) {
   default:
@@ -453,6 +449,8 @@ SDValue ORISCTargetLowering::
   case Intrinsic::orisc_storepointer:
   case Intrinsic::orisc_loadpointer:
     return lowerLoadStorePointer(IntrinsicID, Op, DAG);
+  //case Intrinsic::orisc_allocate:
+  //  return DAG.getNode(ORISCISD::ALLOCATE, DL, MVT::orisc_pointer, Op->getOperand(0), Op->getOperand(2), Op->getOperand(3));
 
   }
 }
@@ -472,7 +470,7 @@ bool ORISCTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
       Info.offset = 0;
       Info.align = Align(1);
       Info.flags |= MachineMemOperand::MOLoad;
-      Info.memVT = MVT::orisc_pointer;
+      Info.memVT = MVT::iPTR;
       return true;
     case Intrinsic::orisc_storepointer:
       Info.opc = ISD::INTRINSIC_W_CHAIN;
@@ -480,7 +478,7 @@ bool ORISCTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
       Info.offset = 0;
       Info.align = Align(1);
       Info.flags |= MachineMemOperand::MOStore;
-      Info.memVT = MVT::orisc_pointer;
+      Info.memVT = MVT::iPTR;
       return true;
   }
 }
@@ -514,7 +512,7 @@ SDValue ORISCTargetLowering::LowerFormalArguments(
     if (VA.isRegLoc()) {
       EVT RegVT = VA.getLocVT();
       Register Reg;
-      if (RegVT == MVT::orisc_pointer)
+      if (RegVT == MVT::iPTR)
         Reg = MF.addLiveIn(VA.getLocReg(), &ORISC::PRRegClass);
       else
         Reg = MF.addLiveIn(VA.getLocReg(), &ORISC::DRRegClass);

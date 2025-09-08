@@ -13,17 +13,16 @@
 
 // Return Values
 def RetCC_ORISC : CallingConv<[
-  CCIfPtr<CCAssignToReg<[P10]>>,	// b0
+  CCIfPtr<CCAssignToReg<[P10, P11, P12, P3]>>,	// b0
   CCIfType<[i1, i8, i16], CCPromoteToType<i32>>,
   CCIfType<[i32], CCAssignToReg<[D10, D11, D12, D3]>>,	// a0, a1, a2, a3
-  CCIfType<[orisc_pointer], CCAssignToReg<[P10, P11, P12, P3]>>,
 ]>;
 
 // Parameters
 def CC_ORISC : CallingConv<[
   CCIfType<[i1, i8, i16], CCPromoteToType<i32>>,
   CCIfType<[i32], CCAssignToReg<[D10, D11, D12, D3, D4, D5, D6, D7]>>,
-  CCIfType<[orisc_pointer], CCAssignToReg<[P10, P11, P12, P3, P4, P5, P6, P7]>>,
+  CCIfPtr<CCAssignToReg<[P10, P11, P12, P3, P4, P5, P6, P7]>>,	// b0
   CCAssignToStack<4, 4>
 ]>;
 

@@ -5285,7 +5285,8 @@ void SelectionDAGBuilder::visitTargetIntrinsic(const CallInst &I,
   if (!IsTgtIntrinsic || Info.opc == ISD::INTRINSIC_VOID ||
       Info.opc == ISD::INTRINSIC_W_CHAIN)
     Ops.push_back(DAG.getTargetConstant(Intrinsic, getCurSDLoc(),
-                                        TLI.getPointerTy(DAG.getDataLayout())));
+                                              MVT::i32));
+//                                        TLI.getPointerTy(DAG.getDataLayout())));
 
   // Add all operands of the call to the operand list.
   for (unsigned i = 0, e = I.arg_size(); i != e; ++i) {

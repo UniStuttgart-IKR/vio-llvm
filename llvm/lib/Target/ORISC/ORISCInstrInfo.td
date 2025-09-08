@@ -284,6 +284,8 @@ let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 	def	CPP:	ORISCInstr<"cpp", (outs PR:$py), (ins PR:$px), "$py = $px", FormatReg0>;
 	def	GCP:	ORISCInstr<"gcp", (outs PR:$px), (ins), "$px", FormatReg0>;
+}
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
 	def	ALC:	ORISCInstr<"alc", (outs PR:$px), (ins DR:$dy, DR:$dz), "$px = $dy, $dz", FormatReg0>;
 	def	ALC_D:	ORISCInstr<"alc", (outs PR:$px), (ins DR:$dy, uimm15:$delta15), "$px = $dy, $delta15", FormatPGU4>;
 	def	ALC_P:	ORISCInstr<"alc", (outs PR:$px), (ins uimm11:$pi11, DR:$dz), "$px = $pi11, $dz", FormatPGU5>;
@@ -432,12 +434,12 @@ def SGT	:	InstAlias<"sgt\t$dx = $dy",			(SLTS DR:$dx,  D0, DR:$dy)>;
 //===----------------------------------------------------------------------===//
 
 //TODO: ADD ORISCISD::LOAD and ORISCISD:STORE
-def SDTOPtrLeaf: SDTypeProfile<1, 0, [SDTCisVT<0, orisc_pointer>]>;
+def SDTOPtrLeaf: SDTypeProfile<1, 0, [SDTCisVT<0, iPTR>]>;
 def oframeindex : SDNode<"ISD::FrameIndex",           SDTOPtrLeaf, [],
                          "FrameIndexSDNode">;
 
 def SDT_ORISC_Store : SDTypeProfile<0, 2, [       // indexed store
-  SDTCisVT<1, orisc_pointer>
+  SDTCisVT<1, iPTR>
 ]>;
 
 def SDT_ORISC_PTRADD : SDTypeProfile<1, 2, []>;
@@ -445,7 +447,7 @@ def SDT_ORISC_PTRADD : SDTypeProfile<1, 2, []>;
 def orisc_ptradd  : SDNode<"ORISCISD::PTR_ADD", SDT_ORISC_PTRADD, []>;
 def loadpointer  : PatFrag<(ops node:$ptr), (unindexedload node:$ptr)> {
   let IsLoad = true;
-  let MemoryVT = orisc_pointer;
+  let MemoryVT = iPTR;
 }
 
 def orisc_st  : SDNode<"ISD::STORE"      , SDT_ORISC_Store,
@@ -466,6 +468,9 @@ def orisc_storei16 : orisc_truncstore<i16>;
 
 def orisc_ret  : SDNode<"ORISCISD::RET", SDTNone,
                           [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
+						  
+def SDT_ORISC_ALLOCATE : SDTypeProfile<1, 2, []>;
+def orisc_allocate  : SDNode<"ORISCISD::ALLOCATE", SDT_ORISC_ALLOCATE, [SDNPHasChain]>;
 
 //===----------------------------------------------------------------------===//
 // Instruction Selection Patterns
@@ -591,3 +596,6 @@ def : Pat<(uimm12:$ui12), (ORI D0, uimm12:$ui12)>;
 // TODO: Shifts, Immediate Versions, ANDN, different Multiplications
 // TODO: Load, Store, alc
 // TODO: Branch, Jump, etc.
+
+def : Pat<(int_orisc_allocate DR:$px, DR:$py), (ALC DR:$px, DR:$py)>;
+// def : Pat<(int_orisc_allocate uimm11:$pi11, uimm15:$delta15), (ALC_PD uimm11:$pi11, uimm15:$delta15)>;

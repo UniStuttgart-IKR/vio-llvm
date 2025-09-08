@@ -1,21 +1,21 @@
-#include "Passes/ORISCTransformLoadStorePointerPass.h"
-#include "llvm/IR/Constants.h"
+#include "Passes/ORISCTransformGEPsPass.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/IR/Type.h"
 
 using namespace llvm;
 
-PreservedAnalyses TransformLoadStorePointerPass::run(Module &M, ModuleAnalysisManager &AM){
+PreservedAnalyses TransformGEPsPass::run(Module &M, ModuleAnalysisManager &AM){
     LLVMContext &Ctx = M.getContext();
     Type *PtrTy = PointerType::get(Ctx, 0);
     Type *IntTy = Type::getInt32Ty(Ctx);
     Type *VoidTy = Type::getVoidTy(Ctx);
-    FunctionType *LoadPtrFnTy = FunctionType::get(PtrTy, {PtrTy, IntTy}, false);
-    FunctionType *StorePtrFnTy = FunctionType::get(VoidTy, {PtrTy, IntTy, PtrTy}, false);
-    LoadPtrFn = M.getOrInsertFunction("llvm.orisc.loadpointer", LoadPtrFnTy);
-    StorePtrFn = M.getOrInsertFunction("llvm.orisc.storepointer", StorePtrFnTy);
+    FunctionType *LoadPrimFnTy = FunctionType::get(IntTy, {PtrTy}, false);
+    FunctionType *StorePrimFnTy = FunctionType::get(VoidTy, {PtrTy, IntTy}, false);
+    LoadPtrFn = M.getOrInsertFunction("llvm.orisc.loadprim", LoadPrimFnTy);
+    StorePtrFn = M.getOrInsertFunction("llvm.orisc.storeprim", StorePrimFnTy);
 
     bool Changed = false;
     for (Function &F : M)
@@ -31,7 +31,7 @@ PreservedAnalyses TransformLoadStorePointerPass::run(Module &M, ModuleAnalysisMa
     return Changed ? PreservedAnalyses::all() : PreservedAnalyses::none();
 }
 
-bool TransformLoadStorePointerPass::visitLoadStoreInst(Instruction *I){
+bool TransformGEPsPass::visitLoadStoreInst(Instruction *I){
     bool ValueIsPointerTy;
     Value *PointerOperand;
     if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
@@ -47,17 +47,13 @@ bool TransformLoadStorePointerPass::visitLoadStoreInst(Instruction *I){
     if (!ValueIsPointerTy)
         return false;
     
-    Value *ZeroVal = ConstantInt::get(
-                Type::getInt32Ty(I->getContext()),
-                0);
-                
     IRBuilder<> Builder(I);
     Value *LSPtr;
     if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
-        LSPtr = Builder.CreateCall(StorePtrFn, { SI->getValueOperand(), PointerOperand, ZeroVal });
+        LSPtr = Builder.CreateCall(StorePtrFn, { SI->getValueOperand(), PointerOperand });
         RemoveFromParentList.push_back(I);
     } else {
-        LSPtr = Builder.CreateCall(LoadPtrFn, { PointerOperand, ZeroVal });
+        LSPtr = Builder.CreateCall(LoadPtrFn, { PointerOperand });
         I->replaceAllUsesWith(LSPtr);
     }
     return true;

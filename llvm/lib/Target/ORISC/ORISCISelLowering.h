@@ -19,12 +19,14 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGenTypes/MachineValueType.h"
 
 namespace llvm {
 
 namespace ORISCISD {
 enum NodeType : unsigned  {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
+  ALLOCATE,
   LOAD_POINTER,
   STORE_POINTER,
   PTR_ADD,
@@ -48,11 +50,11 @@ public:
   }
   
   MVT getPointerTy(const DataLayout &DL, uint32_t AS = 0) const override {
-    return MVT::orisc_pointer;
+    return MVT::iPTR;
   }
 
   MVT getPointerMemTy(const DataLayout &DL, uint32_t AS = 0) const override {
-    return MVT::orisc_pointer;
+    return MVT::iPTR;
   }
 
   bool isCtlzFast() const override {
@@ -63,9 +65,19 @@ public:
 
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
-  
-
   const char *getTargetNodeName(unsigned Opcode) const override;
+
+  unsigned getNumRegisters(LLVMContext &Context, EVT VT,
+                  std::optional<MVT> RegisterVT = std::nullopt) const override;
+
+  MVT getRegisterTypeForCallingConv(LLVMContext &Context,
+                                            CallingConv::ID CC, EVT VT) const override {
+    if (VT == MVT::iPTR)
+      return MVT::iPTR;
+    if (VT == MVT::exnref)
+      return MVT::exnref;
+    return TargetLowering::getRegisterTypeForCallingConv(Context, CC, VT);
+  }
 
   std::pair<unsigned, const TargetRegisterClass *>
   getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,

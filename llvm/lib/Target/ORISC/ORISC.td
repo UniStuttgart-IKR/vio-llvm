@@ -9,7 +9,10 @@
 include "llvm/Target/Target.td"
 
 let Namespace = "ORISC" in {
+  // def orisc_pointer : PtrValueType <i32, 0>;
 }
+
+def orisc_pointer : PtrValueType <i32, 0>;
 
 include "ORISCRegisterInfo.td"
 include "ORISCCallingConv.td"

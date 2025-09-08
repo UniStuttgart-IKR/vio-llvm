@@ -1,5 +1,6 @@
 #include "Passes/ORISCMoveAllocaOnHeapPass.h"
 #include "llvm/IR/Argument.h"
+#include "llvm/IR/Constant.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/IRBuilder.h"
@@ -87,6 +88,8 @@ bool MoveAllocaOnHeapPass::checkArgument(Value *Arg){
     if (isa<Argument>(Arg))
         return false;
     if (isa<IntToPtrInst>(Arg))
+        return false;
+    if (isa<Constant>(Arg))
         return false;
 
     AllocaInst *AI = dyn_cast<AllocaInst>(Arg);

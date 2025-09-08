@@ -1667,7 +1667,7 @@ SDValue SelectionDAG::getConstant(const APInt &Val, const SDLoc &DL, EVT VT,
 
 SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
                                   EVT VT, bool isT, bool isO) {
-  assert(!VT.isFloatingPoint() && "Cannot create FP integer constant!");
+  assert(VT.isInteger() && "Cannot create FP integer constant!");
 
   EVT EltVT = VT.getScalarType();
   const ConstantInt *Elt = &Val;
@@ -7210,30 +7210,10 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
     if (N2CV && N2CV->isAllOnes()) // X & -1 -> X
       return N1;
     break;
-  case ISD::ADD:
-  case ISD::SUB:
-    if (VT == MVT::orisc_pointer || VT == MVT::orisc_fatpointer) {
-      if (N2->isUndef())
-        return N1;
-      if (N2C && N2C->isZero())
-        return N1;
-
-      EVT N1VT = N1->getValueType(0);
-      EVT N2VT = N2->getValueType(0);
-      if (N2C && N2VT != N1VT){
-        N2VT = MVT::getIntegerVT(N1VT.getFixedSizeInBits());
-        N2 = getConstant(N2C->getZExtValue(), DL, N2VT);
-      }
-
-      if (N1VT == MVT::orisc_pointer || N1VT == MVT::orisc_fatpointer) {
-        VT = MVT::orisc_fatpointer;
-        break;
-      }
-    }
-
-    [[fallthrough]];
   case ISD::OR:
   case ISD::XOR:
+  case ISD::ADD:
+  case ISD::SUB:
     assert(VT.isInteger() && "This operator does not apply to FP types!");
     assert(N1.getValueType() == N2.getValueType() &&
            N1.getValueType() == VT && "Binary operator types must match!");
@@ -8010,12 +7990,11 @@ static SDValue getMemsetStringVal(EVT VT, const SDLoc &dl, SelectionDAG &DAG,
 SDValue SelectionDAG::getMemBasePlusOffset(SDValue Base, TypeSize Offset,
                                            const SDLoc &DL,
                                            const SDNodeFlags Flags) {
-  EVT VT = Base.getValueType().isInteger() ? Base.getValueType() : 
-        EVT::getIntegerVT(*getContext(), Base.getValueType().getFixedSizeInBits());
+  EVT VT = Base.getValueType();
   SDValue Index;
 
   if (Offset.isScalable())
-    Index = getVScale(DL, VT,
+    Index = getVScale(DL, Base.getValueType(),
                       APInt(Base.getValueSizeInBits().getFixedValue(),
                             Offset.getKnownMinValue()));
   else

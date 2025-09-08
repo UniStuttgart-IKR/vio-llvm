@@ -1,4 +1,4 @@
-//===- ORISCPassRegistry.def - Registry of AMDGPU passes -------*- C++ -*-===//
+//===- ORISCPassRegistry.def - Registry of ORISC passes ---------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 //
 // This file is used as the registry of passes that are part of the
-// AMDGPU backend.
+// ORISC backend.
 //
 //===----------------------------------------------------------------------===//
 
@@ -18,6 +18,8 @@
 #endif
 MODULE_PASS("orisc-transform-indices", TransformStructIndicesPass())
 MODULE_PASS("orisc-transform-load-store-pointer", TransformLoadStorePointerPass())
+MODULE_PASS("orisc-transform-load-store-prim", TransformLoadStorePrimPass())
+MODULE_PASS("orisc-transform-geps", TransformGEPsPass())
 MODULE_PASS("orisc-move-alloca-on-heap", MoveAllocaOnHeapPass())
 #undef MODULE_PASS
 

@@ -177,6 +177,7 @@ std::string EVT::getEVTString() const {
     if (isFloatingPoint())
       return "f" + utostr(getSizeInBits());
     llvm_unreachable("Invalid EVT!");
+  case MVT::iPTR:      return "iPTR";
   case MVT::bf16:      return "bf16";
   case MVT::ppcf128:   return "ppcf128";
   case MVT::isVoid:    return "isVoid";
@@ -198,8 +199,6 @@ std::string EVT::getEVTString() const {
     return "amdgpuBufferFatPointer";
   case MVT::amdgpuBufferStridedPointer:
     return "amdgpuBufferStridedPointer";
-  case MVT::orisc_pointer: return "oriscptr";
-  case MVT::orisc_fatpointer: return "oriscfatptr";
   }
 }
 
@@ -230,7 +229,6 @@ Type *EVT::getTypeForEVT(LLVMContext &Context) const {
   case MVT::externref: return Type::getWasm_ExternrefTy(Context);
   case MVT::funcref: return Type::getWasm_FuncrefTy(Context);
   case MVT::Metadata: return Type::getMetadataTy(Context);
-  case MVT::orisc_pointer: return PointerType::get(Context, 69);
 #define GET_VT_EVT(Ty, EVT) case MVT::Ty: return EVT;
 #include "llvm/CodeGen/GenVT.inc"
 #undef GET_VT_EVT

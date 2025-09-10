@@ -543,6 +543,20 @@ def : Pat<(unindexedload (orisc_ptradd PR:$px, DR:$dz)),       (LW   PR:$px, DR:
 def : Pat<(loadpointer (orisc_ptradd PR:$px, uimm12:$ix12)), (LP_I PR:$px, uimm12:$ix12)>;
 def : Pat<(loadpointer (orisc_ptradd PR:$px, DR:$dz)),       (LP   PR:$px, DR:$dz, 1, 0)>;
 
+/*def : Pat<(int_orisc_loadprim_i8 PR:$px, uimm12:$ix12), (LBU_I PR:$px, uimm12:$ix12)>;
+def : Pat<(int_orisc_loadprim_i8 PR:$px, DR:$dz),       (LBU   PR:$px, DR:$dz, 1, 0)>;
+def : Pat<(int_orisc_loadprim_i8 PR:$px, uimm12:$ix12), (LBS_I PR:$px, uimm12:$ix12)>;
+def : Pat<(int_orisc_loadprim_i8 PR:$px, DR:$dz),       (LBS   PR:$px, DR:$dz, 1, 0)>;
+
+def : Pat<(int_orisc_loadprim_i16 PR:$px, uimm12:$ix12), (LHU_I PR:$px, uimm12:$ix12)>;
+def : Pat<(int_orisc_loadprim_i16 PR:$px, DR:$dz),       (LHU   PR:$px, DR:$dz, 1, 0)>;
+def : Pat<(int_orisc_loadprim_i16 PR:$px, uimm12:$ix12), (LHS_I PR:$px, uimm12:$ix12)>;
+def : Pat<(int_orisc_loadprim_i16 PR:$px, DR:$dz),       (LHS   PR:$px, DR:$dz, 1, 0)>;
+
+def : Pat<(int_orisc_loadprim_i32 PR:$px, uimm12:$ix12), (LW_I PR:$px, uimm12:$ix12)>;
+def : Pat<(int_orisc_loadprim_i32 PR:$px, DR:$dz),       (LW   PR:$px, DR:$dz, 1, 0)>;*/
+
+/*
 def : Pat<(zextloadi8    (orisc_ptradd oframeindex:$ptr, 0)), (LBU_I P30, (i32 (to_tframeindex $ptr)))>;
 def : Pat<(sextloadi8    (orisc_ptradd oframeindex:$ptr, 0)), (LBS_I P30, (i32 (to_tframeindex $ptr)))>;
 def : Pat<(zextloadi16   (orisc_ptradd oframeindex:$ptr, 0)), (LHU_I P30, (i32 (to_tframeindex $ptr)))>;
@@ -568,7 +582,7 @@ def : Pat<(orisc_store PR:$py, PR:$px), (SP_I PR:$px, 0, PR:$py)>;
 def : Pat<(truncstorei8 DR:$dy,   (orisc_ptradd oframeindex:$ptr, 0)), (SB_I P30, (i32 (to_tframeindex $ptr)), DR:$dy)>;
 def : Pat<(truncstorei16 DR:$dy,  (orisc_ptradd oframeindex:$ptr, 0)), (SH_I P30, (i32 (to_tframeindex $ptr)), DR:$dy)>;
 def : Pat<(unindexedstore DR:$dy, (orisc_ptradd oframeindex:$ptr, 0)), (SW_I P30, (i32 (to_tframeindex $ptr)), DR:$dy)>;
-def : Pat<(unindexedstore PR:$py, (orisc_ptradd oframeindex:$ptr, 0)), (SP_I P30, (i32 (to_tframeindex $ptr)), PR:$py)>;
+def : Pat<(unindexedstore PR:$py, (orisc_ptradd oframeindex:$ptr, 0)), (SP_I P30, (i32 (to_tframeindex $ptr)), PR:$py)>;*/
 
 class PatBranch<CondCode Cond, ORISCInstr Inst>
 		: Pat<(brcc Cond, DR:$dy, DR:$dz, bb:$sd12), (Inst DR:$dy, DR:$dz, brtarget:$sd12)>;
@@ -597,5 +611,20 @@ def : Pat<(uimm12:$ui12), (ORI D0, uimm12:$ui12)>;
 // TODO: Load, Store, alc
 // TODO: Branch, Jump, etc.
 
-def : Pat<(int_orisc_allocate DR:$px, DR:$py), (ALC DR:$px, DR:$py)>;
-// def : Pat<(int_orisc_allocate uimm11:$pi11, uimm15:$delta15), (ALC_PD uimm11:$pi11, uimm15:$delta15)>;
+
+
+//                                             ------ STORES ------
+//
+//									base   index   value				 base   index   s  p  value
+def : Pat<(int_orisc_storeprim_i32 PR:$px, DR:$dy, DR:$dz),       (SW   PR:$px, DR:$dy, 1, 0, DR:$dz)>;
+//									base       index   	 value			 base       index     value
+def : Pat<(int_orisc_storeprim_i32 PR:$px, uimm12:$ix12, DR:$dy), (SW_I PR:$px, uimm12:$ix12, DR:$dy)>;
+
+
+//                                             ------ LOADS ------
+//
+//								   base   index				 	base   index   s  p
+def : Pat<(int_orisc_loadprim_i32 PR:$px, DR:$dz),       (LW   PR:$px, DR:$dz, 1, 0)>;
+
+def : Pat<(int_orisc_allocate DR:$dx, DR:$dy), (ALC DR:$dx, DR:$dy)>;
+def : Pat<(int_orisc_allocate uimm11:$pi11, uimm15:$delta15), (ALC_PD uimm11:$pi11, uimm15:$delta15)>;

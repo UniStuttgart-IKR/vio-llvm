@@ -58,7 +58,7 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   // Set up the register classes.
   
   addRegisterClass(MVT::i32, &ORISC::DRRegClass);
-  addRegisterClass(MVT::i32, &ORISC::PRRegClass);
+  addRegisterClass(MVT::pointer, &ORISC::PRRegClass);
 
   // Set up special registers.
   setStackPointerRegisterToSaveRestore(ORISC::P30);

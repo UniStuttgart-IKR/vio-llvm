@@ -512,6 +512,7 @@ def llvm_double_ty     : LLVMType<f64>;
 def llvm_f80_ty        : LLVMType<f80>;
 def llvm_f128_ty       : LLVMType<f128>;
 def llvm_ppcf128_ty    : LLVMType<ppcf128>;
+def llvm_pointer_ty    : LLVMType<pointer>;
 def llvm_ptr_ty        : LLVMQualPointerType<0>; // ptr
 def llvm_anyptr_ty     : LLVMAnyPointerType;     // ptr addrspace(N)
 def llvm_empty_ty      : LLVMType<OtherVT>;      // { }

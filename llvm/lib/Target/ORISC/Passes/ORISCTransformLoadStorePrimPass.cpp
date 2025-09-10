@@ -1,4 +1,4 @@
-#include "Passes/ORISCTransformLoadStorePointerPass.h"
+#include "Passes/ORISCTransformLoadStorePrimPass.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
@@ -7,7 +7,7 @@
 
 using namespace llvm;
 
-PreservedAnalyses TransformLoadStorePointerPass::run(Module &M, ModuleAnalysisManager &AM){
+PreservedAnalyses TransformLoadStorePrimPass::run(Module &M, ModuleAnalysisManager &AM){
     LLVMContext &Ctx = M.getContext();
     Type *PtrTy = PointerType::get(Ctx, 0);
     Type *IntTy = Type::getInt32Ty(Ctx);
@@ -31,7 +31,7 @@ PreservedAnalyses TransformLoadStorePointerPass::run(Module &M, ModuleAnalysisMa
     return Changed ? PreservedAnalyses::all() : PreservedAnalyses::none();
 }
 
-bool TransformLoadStorePointerPass::visitLoadStoreInst(Instruction *I){
+bool TransformLoadStorePrimPass::visitLoadStoreInst(Instruction *I){
     bool ValueIsPointerTy;
     Value *PointerOperand;
     if (LoadInst *LI = dyn_cast<LoadInst>(I)) {

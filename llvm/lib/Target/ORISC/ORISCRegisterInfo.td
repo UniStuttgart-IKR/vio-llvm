@@ -93,4 +93,4 @@ let RegAltNameIndices = [ABIRegAltName] in {
 }
 
 def DR : RegisterClass<"ORISC", [i32], 32, (add (sequence "D%u", 0, 31))>;
-def PR : RegisterClass<"ORISC", [i32], 32, (add (sequence "P%u", 0, 31))>;
+def PR : RegisterClass<"ORISC", [iPTR], 32, (add (sequence "P%u", 0, 31))>;

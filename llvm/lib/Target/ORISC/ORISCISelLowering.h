@@ -50,11 +50,11 @@ public:
   }
   
   MVT getPointerTy(const DataLayout &DL, uint32_t AS = 0) const override {
-    return MVT::iPTR;
+    return MVT::pointer;
   }
 
   MVT getPointerMemTy(const DataLayout &DL, uint32_t AS = 0) const override {
-    return MVT::iPTR;
+    return MVT::pointer;
   }
 
   bool isCtlzFast() const override {

@@ -54,11 +54,12 @@ bool TransformLoadStorePointerPass::visitLoadStoreInst(Instruction *I){
     IRBuilder<> Builder(I);
     Value *LSPtr;
     if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
-        LSPtr = Builder.CreateCall(StorePtrFn, { SI->getValueOperand(), PointerOperand, ZeroVal });
+        LSPtr = Builder.CreateCall(StorePtrFn, { PointerOperand, ZeroVal, SI->getValueOperand() });
         RemoveFromParentList.push_back(I);
     } else {
         LSPtr = Builder.CreateCall(LoadPtrFn, { PointerOperand, ZeroVal });
         I->replaceAllUsesWith(LSPtr);
+        RemoveFromParentList.push_back(I);
     }
     return true;
 }

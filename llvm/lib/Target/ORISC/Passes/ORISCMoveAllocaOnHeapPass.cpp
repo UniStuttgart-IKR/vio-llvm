@@ -79,7 +79,11 @@ bool MoveAllocaOnHeapPass::visitReturnInst(ReturnInst *I){
     return checkArgument(RetVal);
 }
 
+//Follow Argument Parents until we meet a Alloca
 bool MoveAllocaOnHeapPass::checkArgument(Value *Arg){
+    //Only Pointer Arguments can lead us to a Alloca
+    if (!Arg->getType()->isPointerTy())
+        return false;
     if (auto *GEP = dyn_cast<GetElementPtrInst>(Arg))
         return checkArgument(GEP->getPointerOperand());
 

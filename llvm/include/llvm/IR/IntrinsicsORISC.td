@@ -14,4 +14,8 @@ def int_orisc_storeprim_i32 : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty, llvm_anyi
 def int_orisc_storeprim_i16 : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty, llvm_anyint_ty], [IntrWriteMem, IntrSpeculatable]>;
 def int_orisc_storeprim_i8  : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty, llvm_anyint_ty], [IntrWriteMem, IntrSpeculatable]>;
 
+def int_orisc_store  : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty, llvm_any_ty], [IntrWriteMem, IntrSpeculatable]>;
+
+def int_orisc_gep  : Intrinsic<[llvm_ptr_ty], [llvm_ptr_ty, llvm_i32_ty], [IntrNoMem, IntrSpeculatable]>;
+
 }

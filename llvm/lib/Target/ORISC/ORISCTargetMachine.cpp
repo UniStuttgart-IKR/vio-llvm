@@ -27,6 +27,7 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Passes/PassBuilder.h"
+#include "llvm/Support/ErrorHandling.h"
 #include <optional>
 using namespace llvm;
 
@@ -78,8 +79,9 @@ public:
   const ORISCSubtarget &getORISCSubtarget() const {
     return *getORISCTargetMachine().getSubtargetImpl();
   }
-  bool addPreISel() override;
+  //void addISelPrepare() override;
   bool addInstSelector() override;
+  void addPreLegalizeMachineIR() override;
 };
 } // namespace
 
@@ -97,6 +99,11 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
     [](FunctionPassManager &FPM, OptimizationLevel Level){
       FPM.addPass(EliminatePointerRedundanciesPass());
     });
+  PB.registerScalarOptimizerLateEPCallback(
+    [](FunctionPassManager &FPM, OptimizationLevel Level){
+      //FPM.addPass(TransformLoadStorePrimPass());
+      //FPM.addPass(TransformGEPsPass());
+    });
   PB.registerOptimizerLastEPCallback(
     [](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
       //Should be called preISel, but called here for now
@@ -109,12 +116,17 @@ TargetPassConfig *ORISCTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new ORISCPassConfig(*this, PM);
 }
 
-bool ORISCPassConfig::addPreISel() {
-  //addPass(new RejectUnsupportedIRPass());
-  return false;
-}
+/*
+void ORISCPassConfig::addISelPrepare() {
+  addPass(createORISCTransformLoadStorePrim());
+  addPass(createORISCTransformGEPs());
+}*/
 
 bool ORISCPassConfig::addInstSelector() {
   addPass(createORISCISelDag(getORISCTargetMachine()));
   return false;
+}
+
+void ORISCPassConfig::addPreLegalizeMachineIR() {
+  llvm_unreachable("PreLegalize");
 }

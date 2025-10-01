@@ -67,7 +67,7 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
 
   setMinFunctionAlignment(Align(4));
 
-  setTargetDAGCombine({ISD::LOAD, ISD::STORE});
+  setTargetDAGCombine({ISD::LOAD, ISD::STORE, ISD::INTRINSIC_W_CHAIN});
 
   setOperationAction(ISD::Constant, MVT::i32, Legal);
   setOperationAction(ISD::Constant, MVT::i64, Expand);
@@ -78,6 +78,9 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setBooleanContents(ZeroOrOneBooleanContent);
 
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1, Expand);
+  setOperationAction(ISD::TRUNCATE, MVT::i1, Legal);
+  setOperationAction(ISD::TRUNCATE, MVT::i8, Legal);
+  setOperationAction(ISD::TRUNCATE, MVT::i16, Legal);
   //setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8, Expand); legal
   //setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand); legal
 
@@ -157,9 +160,12 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::VAEND, MVT::Other, Expand);
 
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i8, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i32, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i64, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::iPTR, Custom);
+  setOperationPromotedToType(ISD::TRUNCATE, MVT::i8, MVT::i32);
+  //setOperationAction(ISD::TRUNCATE, MVT::i32, Custom);
 
   // Compute derived properties from the register classes
   computeRegisterProperties(STI.getRegisterInfo());
@@ -175,9 +181,21 @@ SDValue ORISCTargetLowering::PerformDAGCombine(SDNode *N,
   SDLoc DL(N);
   switch (N->getOpcode()) {
 
+    case ISD::INTRINSIC_W_CHAIN:
+      if (N->getConstantOperandVal(1) == Intrinsic::orisc_gep)
+        llvm_unreachable("Combine");
+      else
+        return SDValue();
     default:
       return SDValue();
   }
+}
+
+void ORISCTargetLowering::ReplaceNodeResults(SDNode *N,
+                                  SmallVectorImpl<SDValue> &Results,
+                                  SelectionDAG &DAG) const {
+  N->dump();
+  llvm_unreachable("ReplaceNodeResults");
 }
 
 bool ORISCTargetLowering::isOffsetFoldingLegal(
@@ -449,6 +467,8 @@ SDValue ORISCTargetLowering::
   case Intrinsic::orisc_storepointer:
   case Intrinsic::orisc_loadpointer:
     return lowerLoadStorePointer(IntrinsicID, Op, DAG);
+  case Intrinsic::orisc_store:
+    llvm_unreachable("Test");
   //case Intrinsic::orisc_allocate:
   //  return DAG.getNode(ORISCISD::ALLOCATE, DL, MVT::orisc_pointer, Op->getOperand(0), Op->getOperand(2), Op->getOperand(3));
 

@@ -7997,6 +7997,8 @@ SDValue SelectionDAG::getMemBasePlusOffset(SDValue Base, TypeSize Offset,
     Index = getVScale(DL, Base.getValueType(),
                       APInt(Base.getValueSizeInBits().getFixedValue(),
                             Offset.getKnownMinValue()));
+  else if (Offset.getFixedValue() == 0) 
+    return Base;
   else
     Index = getConstant(Offset.getFixedValue(), DL, VT);
 

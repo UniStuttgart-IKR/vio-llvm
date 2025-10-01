@@ -7,22 +7,21 @@
 
 using namespace llvm;
 
-PreservedAnalyses TransformGEPsPass::run(Module &M, ModuleAnalysisManager &AM){
-    LLVMContext &Ctx = M.getContext();
+PreservedAnalyses TransformGEPsPass::run(Function &F, FunctionAnalysisManager &AM){
+    LLVMContext &Ctx = F.getContext();
     Type *PtrTy = PointerType::get(Ctx, 0);
     Type *IntTy = Type::getInt32Ty(Ctx);
     Type *VoidTy = Type::getVoidTy(Ctx);
     FunctionType *LoadPrimFnTy = FunctionType::get(IntTy, {PtrTy}, false);
     FunctionType *StorePrimFnTy = FunctionType::get(VoidTy, {PtrTy, IntTy}, false);
-    LoadPtrFn = M.getOrInsertFunction("llvm.orisc.loadprim", LoadPrimFnTy);
-    StorePtrFn = M.getOrInsertFunction("llvm.orisc.storeprim", StorePrimFnTy);
+    LoadPtrFn = F.getParent()->getOrInsertFunction("llvm.orisc.loadprim", LoadPrimFnTy);
+    StorePtrFn = F.getParent()->getOrInsertFunction("llvm.orisc.storeprim", StorePrimFnTy);
 
     bool Changed = false;
-    for (Function &F : M)
-        for (BasicBlock &BB : F)
-            for (Instruction &I : BB)
-                if (isa<LoadInst>(I) || isa<StoreInst>(I))
-                    Changed |= visitLoadStoreInst(&I);
+    for (BasicBlock &BB : F)
+        for (Instruction &I : BB)
+            if (isa<LoadInst>(I) || isa<StoreInst>(I))
+                Changed |= visitLoadStoreInst(&I);
                 
     for (Instruction *I : RemoveFromParentList) {
         I->eraseFromParent();

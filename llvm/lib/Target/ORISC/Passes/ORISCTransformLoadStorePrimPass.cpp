@@ -7,22 +7,22 @@
 
 using namespace llvm;
 
-PreservedAnalyses TransformLoadStorePrimPass::run(Module &M, ModuleAnalysisManager &AM){
-    LLVMContext &Ctx = M.getContext();
+PreservedAnalyses TransformLoadStorePrimPass::run(Function &F, FunctionAnalysisManager &AM){
+    LLVMContext &Ctx = F.getContext();
     Type *PtrTy = PointerType::get(Ctx, 0);
     Type *IntTy = Type::getInt32Ty(Ctx);
     Type *VoidTy = Type::getVoidTy(Ctx);
     FunctionType *LoadPtrFnTy = FunctionType::get(PtrTy, {PtrTy, IntTy}, false);
     FunctionType *StorePtrFnTy = FunctionType::get(VoidTy, {PtrTy, IntTy, PtrTy}, false);
-    LoadPtrFn = M.getOrInsertFunction("llvm.orisc.loadpointer", LoadPtrFnTy);
-    StorePtrFn = M.getOrInsertFunction("llvm.orisc.storepointer", StorePtrFnTy);
+    LoadPrmFn = F.getParent()->getOrInsertFunction("llvm.orisc.loadpointer", LoadPtrFnTy);
+    StorePrmFn = F.getParent()->getOrInsertFunction("llvm.orisc.storepointer", StorePtrFnTy);
+    
 
     bool Changed = false;
-    for (Function &F : M)
-        for (BasicBlock &BB : F)
-            for (Instruction &I : BB)
-                if (isa<LoadInst>(I) || isa<StoreInst>(I))
-                    Changed |= visitLoadStoreInst(&I);
+    for (BasicBlock &BB : F)
+        for (Instruction &I : BB)
+            if (isa<LoadInst>(I) || isa<StoreInst>(I))
+                Changed |= visitLoadStoreInst(&I);
                 
     for (Instruction *I : RemoveFromParentList) {
         I->eraseFromParent();
@@ -54,10 +54,10 @@ bool TransformLoadStorePrimPass::visitLoadStoreInst(Instruction *I){
     IRBuilder<> Builder(I);
     Value *LSPtr;
     if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
-        LSPtr = Builder.CreateCall(StorePtrFn, { SI->getValueOperand(), PointerOperand, ZeroVal });
+        LSPtr = Builder.CreateCall(StorePrmFn, { SI->getValueOperand(), PointerOperand, ZeroVal });
         RemoveFromParentList.push_back(I);
     } else {
-        LSPtr = Builder.CreateCall(LoadPtrFn, { PointerOperand, ZeroVal });
+        LSPtr = Builder.CreateCall(LoadPrmFn, { PointerOperand, ZeroVal });
         I->replaceAllUsesWith(LSPtr);
     }
     return true;

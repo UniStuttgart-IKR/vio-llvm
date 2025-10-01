@@ -9,12 +9,12 @@ namespace llvm {
 
 class TransformLoadStorePrimPass : public PassInfoMixin<TransformLoadStorePrimPass>  {
 public:
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
     static bool isRequired() { return true; }
     
 private:
-    FunctionCallee LoadPtrFn;
-    FunctionCallee StorePtrFn;
+    FunctionCallee LoadPrmFn;
+    FunctionCallee StorePrmFn;
 
     SmallVector<Instruction *> RemoveFromParentList = SmallVector<Instruction *>();
 

@@ -63,6 +63,8 @@ public:
 
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 
+  void ReplaceNodeResults(SDNode *, SmallVectorImpl<SDValue> &, SelectionDAG &) const override;
+
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
   const char *getTargetNodeName(unsigned Opcode) const override;

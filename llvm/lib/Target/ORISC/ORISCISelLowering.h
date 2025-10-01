@@ -61,10 +61,6 @@ public:
     return true;
   }
 
-  SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
-
-  void ReplaceNodeResults(SDNode *, SmallVectorImpl<SDValue> &, SelectionDAG &) const override;
-
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
   const char *getTargetNodeName(unsigned Opcode) const override;
@@ -137,21 +133,7 @@ private:
     SDValue Index;
   };
 
-  SDValue performAddSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
-  SDValue lowerLoad(SDValue Op, SelectionDAG &DAG) const;
-  SDValue lowerStore(SDValue Op, SelectionDAG &DAG) const;
-  SDValue lowerAddSub(SDValue Op, SelectionDAG &DAG, bool IsAdd) const;
-  SDValue lowerShiftLikes(SDValue Op, SelectionDAG &DAG) const;
-  SDValue lowerSelect(SDValue Op, SelectionDAG &DAG) const;
-  SDValue lowerSetCC(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerIntrinsicWChain(SDValue Op, SelectionDAG &DAG) const;
-  SDValue separateBaseAndIndex(SDValue OldBase, SDValue OldIndex, EVT MemVT, SelectionDAG &DAG) const;
-  SDValue lowerLoadStorePointer(uint64_t Type, SDValue Intrinsic, SelectionDAG &DAG) const;
-  
-  SDValue lowerFatPtrs(SDValue Op, SelectionDAG &DAG) const;
-  FatPointer recursivelyLowerFatPtrs(SDValue Op, SelectionDAG &DAG) const;
-
-  MachineBasicBlock *emitShiftLikeLoop(MachineInstr &MI, MachineBasicBlock *MBB) const;
 };
 
 } // end namespace llvm

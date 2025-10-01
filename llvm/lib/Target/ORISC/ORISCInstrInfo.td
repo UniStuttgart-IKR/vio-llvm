@@ -114,23 +114,24 @@ def : Pat<(br bb:$sd25), (BRA brtarget:$sd25)>;
 //				------ STORES ------
 
 //Stores with constant Offset
-class StoreIPat<PatFrag StoreOp, ORISCInstr Inst>
-		: Pat<(StoreOp DR:$dy, (int_orisc_gep PR:$px, uimm12:$ix12)), (Inst PR:$px, uimm12:$ix12, DR:$dy)>;
+class StoreIPat<PatFrag StoreOp, ORISCInstr Inst, RegisterClass XR = DR>
+		: Pat<(StoreOp XR:$dy, (int_orisc_gep PR:$px, uimm12:$ix12)), (Inst PR:$px, uimm12:$ix12, XR:$dy)>;
 //					   value       			  base   	 offset				 base      offset     value
 
 //Stores with variable Index
-class StorePat<PatFrag StoreOp, ORISCInstr Inst>
-    : Pat<(StoreOp DR:$dy, (int_orisc_gep PR:$px, DR:$dz)), (Inst PR:$px, DR:$dz, 1, 0, DR:$dy)>;
+class StorePat<PatFrag StoreOp, ORISCInstr Inst, RegisterClass XR = DR>
+    : Pat<(StoreOp XR:$dy, (int_orisc_gep PR:$px, DR:$dz)), (Inst PR:$px, DR:$dz, 1, 0, XR:$dy)>;
 //				   value		 	  	   base	  index   		   base	  index   s  p  value
 
+def : StoreIPat<store,         SP_I, PR>;
 def : StoreIPat<store,         SW_I>;
 def : StoreIPat<truncstorei16, SH_I>;
 def : StoreIPat<truncstorei8,  SB_I>;
 
+def : StorePat<store,         SP, PR>;
 def : StorePat<store,         SW>;
 def : StorePat<truncstorei16, SH>;
 def : StorePat<truncstorei8,  SB>;
-
 
 
 //				------ LOADS ------
@@ -151,7 +152,8 @@ def : LoadIPat<extloadi8,   LBU_I>;
 def : LoadIPat<sextloadi16, LHS_I>;
 def : LoadIPat<zextloadi16, LHU_I>;
 def : LoadIPat<extloadi16,  LHU_I>;
-def : LoadIPat<load,        LW_I, i32>;
+def : LoadIPat<load,        LW_I>;
+def : LoadIPat<load,        LP_I, iPTR>;
 
 def : LoadPat<sextloadi8,  LBS>;
 def : LoadPat<zextloadi8,  LBU>;
@@ -159,7 +161,8 @@ def : LoadPat<extloadi8,   LBU>;
 def : LoadPat<sextloadi16, LHS>;
 def : LoadPat<zextloadi16, LHU>;
 def : LoadPat<extloadi16,  LHU>;
-def : LoadPat<load,        LW, i32>;
+def : LoadPat<load,        LW>;
+def : LoadPat<load,        LP, iPTR>;
 
 
 //				------ ALLOCATES ------

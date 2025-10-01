@@ -229,6 +229,7 @@ Type *EVT::getTypeForEVT(LLVMContext &Context) const {
   case MVT::externref: return Type::getWasm_ExternrefTy(Context);
   case MVT::funcref: return Type::getWasm_FuncrefTy(Context);
   case MVT::Metadata: return Type::getMetadataTy(Context);
+  case MVT::pointer: return PointerType::get(Context, 0);
 #define GET_VT_EVT(Ty, EVT) case MVT::Ty: return EVT;
 #include "llvm/CodeGen/GenVT.inc"
 #undef GET_VT_EVT

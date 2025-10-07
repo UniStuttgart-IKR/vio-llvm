@@ -1,4 +1,5 @@
 #include "Passes/ORISCMoveAllocaOnHeapPass.h"
+#include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -12,10 +13,13 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/Debug.h"
 #include <cassert>
 #include <cstdint>
 
 using namespace llvm;
+
+#define DEBUG_TYPE "ORISC-Alloca-Escape"
 
 /*
 This first implementation is a bit over conservative:
@@ -90,6 +94,8 @@ bool MoveAllocaOnHeapPass::checkArgument(Value *Arg){
     if (isa<LoadInst>(Arg))
         return false;
     if (isa<Argument>(Arg))
+        return false;
+    if (isa<CallInst>(Arg))
         return false;
     if (isa<IntToPtrInst>(Arg))
         return false;

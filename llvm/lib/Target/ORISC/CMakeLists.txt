@@ -14,6 +14,7 @@ add_public_tablegen_target(ORISCCommonTableGen)
 add_llvm_target(ORISCCodeGen
   ORISCAsmPrinter.cpp
   ORISCFrameLowering.cpp
+  Passes/ORISCPromoteInnerStructsPass.cpp
   Passes/ORISCTransferStructIndicesPass.cpp
   Passes/ORISCTransformLoadStorePointerPass.cpp
   Passes/ORISCTransformLoadStorePrimPass.cpp

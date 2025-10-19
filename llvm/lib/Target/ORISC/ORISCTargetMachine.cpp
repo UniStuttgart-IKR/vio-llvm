@@ -18,6 +18,7 @@
 #include "Passes/ORISCTransformLoadStorePrimPass.h"
 #include "Passes/ORISCTransferStructIndicesPass.h"
 #include "Passes/ORISCTransformGEPsPass.h"
+#include "Passes/ORISCPromoteInnerStructsPass.h"
 #include "ORISCSubtarget.h"
 #include "TargetInfo/ORISCTargetInfo.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
@@ -92,12 +93,13 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
 
   PB.registerPipelineStartEPCallback(
     [](ModulePassManager &MPM, OptimizationLevel Level){
-      MPM.addPass(TransformStructIndicesPass());
-      MPM.addPass(TransformLoadStorePointerPass());
+      //MPM.addPass(TransformStructIndicesPass());
+      //MPM.addPass(TransformLoadStorePointerPass());
+      MPM.addPass(PromoteInnerStructsPass());
     });
   PB.registerPeepholeEPCallback(
     [](FunctionPassManager &FPM, OptimizationLevel Level){
-      FPM.addPass(EliminatePointerRedundanciesPass());
+      //FPM.addPass(EliminatePointerRedundanciesPass());
     });
   PB.registerScalarOptimizerLateEPCallback(
     [](FunctionPassManager &FPM, OptimizationLevel Level){
@@ -108,7 +110,7 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
     [](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
       //Should be called preISel, but called here for now
       MPM.addPass(createModuleToFunctionPassAdaptor(RejectUnsupportedIRPass()));
-      MPM.addPass(MoveAllocaOnHeapPass());
+      //MPM.addPass(MoveAllocaOnHeapPass());
     });
 }
 

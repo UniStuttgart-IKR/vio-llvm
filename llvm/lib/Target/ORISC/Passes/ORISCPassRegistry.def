@@ -18,6 +18,7 @@
 #endif
 MODULE_PASS("orisc-transform-indices", TransformStructIndicesPass())
 MODULE_PASS("orisc-transform-load-store-pointer", TransformLoadStorePointerPass())
+MODULE_PASS("orisc-promote-inner-structs", PromoteInnerStructsPass())
 MODULE_PASS("orisc-move-alloca-on-heap", MoveAllocaOnHeapPass())
 #undef MODULE_PASS
 

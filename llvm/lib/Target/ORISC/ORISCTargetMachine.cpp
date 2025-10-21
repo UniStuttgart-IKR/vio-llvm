@@ -18,6 +18,7 @@
 #include "Passes/ORISCTransformLoadStorePrimPass.h"
 #include "Passes/ORISCTransferStructIndicesPass.h"
 #include "Passes/ORISCTransformGEPsPass.h"
+#include "Passes/ORISCSplitMixedStructsPass.h"
 #include "Passes/ORISCPromoteInnerStructsPass.h"
 #include "ORISCSubtarget.h"
 #include "TargetInfo/ORISCTargetInfo.h"
@@ -40,7 +41,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeORISCTarget() {
 }
 
 static std::string getDataLayout() {
-	return "E-p:32:32-i32:32:32-i16:16:16-i8:8:8-n32";
+	return "E-p:8:8-i32:32:32-i16:16:16-i8:8:8-n32";
 }
 
 static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
@@ -97,6 +98,7 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
       //MPM.addPass(TransformLoadStorePointerPass());
       MPM.addPass(PromoteInnerStructsPass());
       MPM.addPass(MoveAllocaOnHeapPass());
+      MPM.addPass(SplitMixedStructsPass()); 
     });
   PB.registerPeepholeEPCallback(
     [](FunctionPassManager &FPM, OptimizationLevel Level){

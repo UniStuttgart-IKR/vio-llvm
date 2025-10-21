@@ -158,7 +158,9 @@ bool PromoteInnerStructsPass::visitGEPInst(GetElementPtrInst *GEP) {
         return false;
 
     Type *NewType; 
-    if (ATy)
+    if (ATy && STy->isStructTy())
+        NewType = ArrayType::get(PtrTy, ATy->getNumElements());
+    else if (ATy)
         NewType = ArrayType::get(ReplaceBuffer[STy], ATy->getNumElements());
     else
         NewType = ReplaceBuffer[STy];

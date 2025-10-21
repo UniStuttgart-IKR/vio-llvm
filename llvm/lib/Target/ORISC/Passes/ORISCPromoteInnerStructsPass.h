@@ -22,8 +22,9 @@ private:
     typedef SmallMapVector<StructType*, StructType*, 32> BufferType;
     BufferType ReplaceBuffer;
 
+    Type *PtrTy;
 
-    bool createAllocaInst(AllocaInst *AI);
+    bool splitAllocaInst(AllocaInst *AI);
     bool splitGEPInst(GetElementPtrInst *GEP);
     bool visitAllocaInst(AllocaInst *I);
     bool visitGEPInst(GetElementPtrInst *GEP);

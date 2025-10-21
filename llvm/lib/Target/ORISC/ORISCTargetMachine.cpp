@@ -96,6 +96,7 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
       //MPM.addPass(TransformStructIndicesPass());
       //MPM.addPass(TransformLoadStorePointerPass());
       MPM.addPass(PromoteInnerStructsPass());
+      MPM.addPass(MoveAllocaOnHeapPass());
     });
   PB.registerPeepholeEPCallback(
     [](FunctionPassManager &FPM, OptimizationLevel Level){
@@ -109,8 +110,7 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
   PB.registerOptimizerLastEPCallback(
     [](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
       //Should be called preISel, but called here for now
-      MPM.addPass(createModuleToFunctionPassAdaptor(RejectUnsupportedIRPass()));
-      //MPM.addPass(MoveAllocaOnHeapPass());
+      //MPM.addPass(createModuleToFunctionPassAdaptor(RejectUnsupportedIRPass()));
     });
 }
 

@@ -8,6 +8,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/Support/Alignment.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -20,6 +21,7 @@ using namespace llvm;
 PreservedAnalyses PromoteInnerStructsPass::run(Module &M, ModuleAnalysisManager &AM){
     LLVMContext &Ctx = M.getContext();
     PtrTy = PointerType::get(Ctx, 0);
+    GepBuffer = SmallVector<GetElementPtrInst*, 64>();
 
     std::vector<StructType *> StructTypes = M.getIdentifiedStructTypes();
     for (StructType *st : StructTypes){
@@ -73,16 +75,17 @@ PreservedAnalyses PromoteInnerStructsPass::run(Module &M, ModuleAnalysisManager 
     return PreservedAnalyses::none();
 }
 
-static inline void insertStructAlloca(AllocaInst *AI, StructType *Outer, unsigned IndexInOuter) {
+void PromoteInnerStructsPass::insertStructAlloca(AllocaInst *AI, StructType *Outer, unsigned IndexInOuter) {
         IRBuilder<> Builder(AI);
         StructType *Inner = cast<StructType>(Outer->getElementType(IndexInOuter));
         Builder.SetInsertPointPastAllocas(AI->getFunction());
         AllocaInst *InnerAI = Builder.CreateAlloca(Inner);
         Value *InnerGEP = Builder.CreateStructGEP(Outer, AI, IndexInOuter);
-        Builder.CreateStore(InnerAI, InnerGEP);
+        Builder.CreateStore(InnerAI, InnerGEP, true);
+        GepBuffer.push_back(cast<GetElementPtrInst>(InnerGEP));
 }
 
-static inline void insertArrayAlloca(AllocaInst *AI, StructType *Outer, unsigned IndexInOuter,
+void PromoteInnerStructsPass::insertArrayAlloca(AllocaInst *AI, StructType *Outer, unsigned IndexInOuter,
                                             ArrayType *Array, unsigned IndexInArray) {
         IRBuilder<> Builder(AI);
         StructType *Inner = cast<StructType>(Outer->getElementType(IndexInOuter)->getArrayElementType());
@@ -90,7 +93,9 @@ static inline void insertArrayAlloca(AllocaInst *AI, StructType *Outer, unsigned
         Builder.SetInsertPointPastAllocas(AI->getFunction());
         Value *InnerGEP = Builder.CreateStructGEP(Outer, AI, IndexInOuter);
         Value *ArrayGEP = Builder.CreateConstInBoundsGEP2_32(Array, InnerGEP, 0, IndexInArray);
-        Builder.CreateStore(InnerAI, ArrayGEP);
+        Builder.CreateStore(InnerAI, ArrayGEP, true);
+        GepBuffer.push_back(cast<GetElementPtrInst>(InnerGEP));
+        GepBuffer.push_back(cast<GetElementPtrInst>(ArrayGEP));
 }
 
 bool PromoteInnerStructsPass::splitAllocaInst(AllocaInst *AI) {
@@ -147,6 +152,15 @@ bool PromoteInnerStructsPass::visitAllocaInst(AllocaInst *AI) {
     return true;
 }
 
+//This checks if this is a GEP that is part of an Object initialization.
+//These GEPs obviously do not need a load-ptr between them and the store that
+//is supposed to initialize the ptr field.
+static inline bool containsGEP(SmallVector<GetElementPtrInst*> Buffer, GetElementPtrInst *GEP) {
+    for (GetElementPtrInst* G : Buffer)
+        if (G == GEP) return true;
+    return false;
+}
+
 bool PromoteInnerStructsPass::visitGEPInst(GetElementPtrInst *GEP) {
     StructType *STy = dyn_cast<StructType>(GEP->getSourceElementType());
     ArrayType *ATy = dyn_cast<ArrayType>(GEP->getSourceElementType());
@@ -170,7 +184,7 @@ bool PromoteInnerStructsPass::visitGEPInst(GetElementPtrInst *GEP) {
     Type *OldResTy = GEP->getResultElementType();
     if (NewResTy != OldResTy) {
         GEP->setResultElementType(NewResTy);
-        if (NewResTy->isPointerTy()) { //We changed a ResTy that was not a Ptr to a Ptr, so we have to load whats at that position
+        if (!containsGEP(GepBuffer, GEP) && NewResTy->isPointerTy()) { //We changed a ResTy that was not a Ptr to a Ptr, so we have to load whats at that position
             IRBuilder<> Builder(GEP->getNextNonDebugInstruction()); //GEP is never last instruction of a basic block
             LoadInst *LI = Builder.CreateLoad(PtrTy, GEP);
             GEP->replaceAllUsesWith(LI);

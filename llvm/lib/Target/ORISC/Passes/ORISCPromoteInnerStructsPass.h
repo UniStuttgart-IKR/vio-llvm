@@ -22,12 +22,18 @@ private:
     typedef SmallMapVector<StructType*, StructType*, 32> BufferType;
     BufferType ReplaceBuffer;
 
+    SmallVector<GetElementPtrInst*> GepBuffer;
+
     Type *PtrTy;
 
     bool splitAllocaInst(AllocaInst *AI);
     bool splitGEPInst(GetElementPtrInst *GEP);
     bool visitAllocaInst(AllocaInst *I);
     bool visitGEPInst(GetElementPtrInst *GEP);
+
+    void insertStructAlloca(AllocaInst *AI, StructType *Outer, unsigned int IndexInOuter);
+    void insertArrayAlloca(AllocaInst *AI, StructType *Outer, unsigned int IndexInOuter,
+                           ArrayType *Array, unsigned int IndexInArray);
 
     friend PassInfoMixin<PromoteInnerStructsPass>;
 };

@@ -20,40 +20,38 @@ using namespace llvm;
 #define DEBUG_TYPE "ORISC-Mixed-Struct-Split"
 
 PreservedAnalyses SplitMixedStructsPass::run(Module &M, ModuleAnalysisManager &AM){
-    LLVMContext &Ctx = M.getContext();
-
     //We can assume that there are no inner Structs inside a Struct (handled by PromoteInnerStrucsPass)
     //Only primitives, pointers and (nested & single) arrays of such
     std::vector<StructType *> StructTypes = M.getIdentifiedStructTypes();
     for (StructType *ST : StructTypes){
-        std::vector<Type*> Primitives = std::vector<Type*>();
-        std::vector<Type*> Pointers = std::vector<Type*>();
+        std::vector<Type*> *Primitives = new std::vector<Type*>();
+        std::vector<Type*> *Pointers = new std::vector<Type*>();
         std::vector<unsigned> NewIndices = std::vector<unsigned>();
         for (unsigned i = 0; i < ST->getNumElements(); ++i) {
             if (ST->getElementType(i)->isPointerTy()) {
-                NewIndices.push_back(Pointers.size());
-                Pointers.push_back(ST->getElementType(i));
+                NewIndices.push_back(Pointers->size());
+                Pointers->push_back(ST->getElementType(i));
             } else if (!ST->getElementType(i)->isArrayTy()) { //aka is Primitive
-                NewIndices.push_back(Primitives.size());
-                Primitives.push_back(ST->getElementType(i));
+                NewIndices.push_back(Primitives->size());
+                Primitives->push_back(ST->getElementType(i));
             } else {
                 ArrayType *ATy = cast<ArrayType>(ST->getElementType(i));
                 while (ATy->getElementType()->isArrayTy())
                     ATy = cast<ArrayType>(ATy->getElementType());
                 if (ATy->getElementType()->isPointerTy()) {
-                    NewIndices.push_back(Pointers.size());
-                    Pointers.push_back(ST->getElementType(i));
+                    NewIndices.push_back(Pointers->size());
+                    Pointers->push_back(ST->getElementType(i));
                 } else {
-                    NewIndices.push_back(Primitives.size());
-                    Primitives.push_back(ST->getElementType(i));
+                    NewIndices.push_back(Primitives->size());
+                    Primitives->push_back(ST->getElementType(i));
                 }
             }
         }
-        if (Pointers.size() > 0 && Primitives.size() > 0) {
+        if (Pointers->size() > 0 && Primitives->size() > 0) {
             ReplaceIndices.insert_or_assign(ST, NewIndices);
             std::string OldName = ST->getStructName().str();
-            StructType *NewPrmStruct = StructType::create(ArrayRef<Type*>(Primitives), OldName.append(".prm"));
-            StructType *NewPtrStruct = StructType::create(ArrayRef<Type*>(Pointers), OldName.substr(0, OldName.size()-4).append(".ptr"));
+            StructType *NewPrmStruct = StructType::create(ArrayRef<Type*>(*Primitives), OldName.append(".prm"));
+            StructType *NewPtrStruct = StructType::create(ArrayRef<Type*>(*Pointers), OldName.substr(0, OldName.size()-4).append(".ptr"));
             std::pair<StructType*, StructType*> NewPair = { NewPrmStruct, NewPtrStruct };
             ReplaceBuffer.insert_or_assign(ST, NewPair);
         }
@@ -80,19 +78,27 @@ bool SplitMixedStructsPass::visitGEPInst(GetElementPtrInst *GEP) {
     if (!ReplaceBuffer.contains(STy))
         return false;
     
-    unsigned Index;
-    for (Index = 0; Index < STy->getNumElements(); ++Index){
-        if (STy->getTypeAtIndex(Index) == GEP->getResultElementType())
-            break;
-    }
+    ConstantInt *I = dyn_cast<ConstantInt>(GEP->getOperand(2));
+    if (!I) //Structs have to be indexed by a constant
+        return false;
+
+    unsigned Index = I->getZExtValue();
     if (STy->getTypeAtIndex(Index) != GEP->getResultElementType()) {
         GEP->getSourceElementType()->dump();
         GEP->getResultElementType()->dump();
         llvm_unreachable("Did not find ResultElementType in Source!?");
         return false;
     }
+
+    //Array of Pointers should also emit reference to ptr struct
+    Type *ResTy = GEP->getResultElementType();
+    while (ArrayType *ATy = dyn_cast<ArrayType>(ResTy))
+        ResTy = ATy->getArrayElementType();
+    assert(!ResTy->isStructTy() && "PromoteInnerStructs Pass should have eliminated this inner Struct!");
+
+    //At this Point, ResTy can only be single Pointer or Primitive
     IRBuilder<> Builder(GEP);
-    StructType *NewStructTy = GEP->getResultElementType()->isPointerTy() ? ReplaceBuffer[STy].first : ReplaceBuffer[STy].second;
+    StructType *NewStructTy = ResTy->isPointerTy() ? ReplaceBuffer[STy].second : ReplaceBuffer[STy].first;
     unsigned NewIndex = ReplaceIndices[STy][Index];
     Value *NewGEP = Builder.CreateStructGEP(NewStructTy, GEP->getPointerOperand(), NewIndex);
     GEP->replaceAllUsesWith(NewGEP);

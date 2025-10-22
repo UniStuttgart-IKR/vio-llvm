@@ -41,7 +41,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeORISCTarget() {
 }
 
 static std::string getDataLayout() {
-	return "E-p:8:8-i32:32:32-i16:16:16-i8:8:8-n32";
+	return "E-p:32:32-i32:32:32-i16:16:16-i8:8:8-n32";
 }
 
 static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
@@ -94,25 +94,21 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
 
   PB.registerPipelineStartEPCallback(
     [](ModulePassManager &MPM, OptimizationLevel Level){
-      //MPM.addPass(TransformStructIndicesPass());
-      //MPM.addPass(TransformLoadStorePointerPass());
       MPM.addPass(PromoteInnerStructsPass());
-      MPM.addPass(MoveAllocaOnHeapPass());
-      MPM.addPass(SplitMixedStructsPass()); 
+      MPM.addPass(MoveAllocaOnHeapPass()); //Has do be done here because opt will crash the program if you return a local pointer
+      MPM.addPass(SplitMixedStructsPass());
+      //if -NoUnnecessaryAllocations remove unneeded Allocates
     });
   PB.registerPeepholeEPCallback(
     [](FunctionPassManager &FPM, OptimizationLevel Level){
-      //FPM.addPass(EliminatePointerRedundanciesPass());
     });
   PB.registerScalarOptimizerLateEPCallback(
     [](FunctionPassManager &FPM, OptimizationLevel Level){
-      //FPM.addPass(TransformLoadStorePrimPass());
-      //FPM.addPass(TransformGEPsPass());
+      //FPM.addPass(DividePointerIndicesPass());
+      //FPM.addPass(BoxUnboxPointersPass());
     });
   PB.registerOptimizerLastEPCallback(
     [](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
-      //Should be called preISel, but called here for now
-      //MPM.addPass(createModuleToFunctionPassAdaptor(RejectUnsupportedIRPass()));
     });
 }
 

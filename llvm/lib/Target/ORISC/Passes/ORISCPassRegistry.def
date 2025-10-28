@@ -16,8 +16,6 @@
 #ifndef MODULE_PASS
 #define MODULE_PASS(NAME, CREATE_PASS)
 #endif
-MODULE_PASS("orisc-transform-indices", TransformStructIndicesPass())
-MODULE_PASS("orisc-transform-load-store-pointer", TransformLoadStorePointerPass())
 MODULE_PASS("orisc-promote-inner-structs", PromoteInnerStructsPass())
 MODULE_PASS("orisc-move-alloca-on-heap", MoveAllocaOnHeapPass())
 MODULE_PASS("orisc-split-mixed-structs", SplitMixedStructsPass())
@@ -26,7 +24,6 @@ MODULE_PASS("orisc-split-mixed-structs", SplitMixedStructsPass())
 #ifndef FUNCTION_PASS
 #define FUNCTION_PASS(NAME, CREATE_PASS)
 #endif
-FUNCTION_PASS("orisc-eliminate-pointer-redundancies", EliminatePointerRedundanciesPass())
 FUNCTION_PASS("orisc-reject-unsupported-ir", RejectUnsupportedIRPass())
 //FUNCTION_PASS("orisc-transform-load-store-prim", TransformLoadStorePrimPass())
 //FUNCTION_PASS("orisc-transform-geps", TransformGEPsPass())

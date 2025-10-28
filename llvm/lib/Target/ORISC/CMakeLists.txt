@@ -16,13 +16,8 @@ add_llvm_target(ORISCCodeGen
   ORISCFrameLowering.cpp
   Passes/ORISCPromoteInnerStructsPass.cpp
   Passes/ORISCSplitMixedStructsPass.cpp
-  Passes/ORISCTransferStructIndicesPass.cpp
-  Passes/ORISCTransformLoadStorePointerPass.cpp
-  Passes/ORISCTransformLoadStorePrimPass.cpp
-  Passes/ORISCEliminatePointerRedundanciesPass.cpp
   Passes/ORISCRejectUnsupportedIRPass.cpp
   Passes/ORISCMoveAllocaOnHeapPass.cpp
-  Passes/ORISCTransformGEPsPass.cpp
   Passes/ORISCShrinkPointerIndicesPass.cpp
   ORISCISelDAGToDAG.cpp
   ORISCISelLowering.cpp

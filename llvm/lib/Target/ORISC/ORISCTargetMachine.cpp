@@ -11,13 +11,8 @@
 
 #include "ORISC.h"
 #include "ORISCTargetMachine.h"
-#include "Passes/ORISCEliminatePointerRedundanciesPass.h"
 #include "Passes/ORISCMoveAllocaOnHeapPass.h"
 #include "Passes/ORISCRejectUnsupportedIRPass.h"
-#include "Passes/ORISCTransformLoadStorePointerPass.h"
-#include "Passes/ORISCTransformLoadStorePrimPass.h"
-#include "Passes/ORISCTransferStructIndicesPass.h"
-#include "Passes/ORISCTransformGEPsPass.h"
 #include "Passes/ORISCSplitMixedStructsPass.h"
 #include "Passes/ORISCPromoteInnerStructsPass.h"
 #include "ORISCSubtarget.h"

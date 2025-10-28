@@ -54,8 +54,8 @@ void initializeORISCDAGToDAGISelLegacyPass(PassRegistry &);
 //void initializeORISCGlobalBaseRegPass(PassRegistry &);
 //void initializeORISCCollapseMOVEMPass(PassRegistry &);
 
-ModulePass *createORISCGEPTransformPass();
-void initializeORISCGEPTransformPass(PassRegistry &);
+ModulePass *createORISCShrinkPointerIndicesPass();
+void initializeORISCShrinkPointerIndicesPass(PassRegistry &);
 } // namespace llvm
 
 #endif // LLVM_LIB_TARGET_ORISC_ORISC_H

@@ -81,7 +81,7 @@ public:
   const ORISCSubtarget &getORISCSubtarget() const {
     return *getORISCTargetMachine().getSubtargetImpl();
   }
-  //void addISelPrepare() override;
+  void addCodeGenPrepare() override;
   bool addInstSelector() override;
   void addPreLegalizeMachineIR() override;
 };
@@ -116,11 +116,9 @@ TargetPassConfig *ORISCTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new ORISCPassConfig(*this, PM);
 }
 
-/*
-void ORISCPassConfig::addISelPrepare() {
-  addPass(createORISCTransformLoadStorePrim());
-  addPass(createORISCTransformGEPs());
-}*/
+void ORISCPassConfig::addCodeGenPrepare() {
+  addPass(createORISCShrinkPointerIndicesPass());
+}
 
 bool ORISCPassConfig::addInstSelector() {
   addPass(createORISCISelDag(getORISCTargetMachine()));

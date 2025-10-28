@@ -1,4 +1,4 @@
-#include "Passes/ORISCMoveAllocaOnHeapPass.h"
+#include "Passes/ORISCEscapeAllocaPass.h"
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Constant.h"
@@ -32,7 +32,7 @@ This first implementation is a bit over conservative:
 6) Else, we check the Parent of this Instruction and continue with 4)
 
 */
-PreservedAnalyses MoveAllocaOnHeapPass::run(Module &M, ModuleAnalysisManager &AM){
+PreservedAnalyses EscapeAllocaPass::run(Module &M, ModuleAnalysisManager &AM){
     LLVMContext &Ctx = M.getContext();
 
     Type *PtrTy = PointerType::get(Ctx, 0);
@@ -61,7 +61,7 @@ PreservedAnalyses MoveAllocaOnHeapPass::run(Module &M, ModuleAnalysisManager &AM
     return Changed ? PreservedAnalyses::all() : PreservedAnalyses::none();
 }
 
-bool MoveAllocaOnHeapPass::visitCallInst(CallInst *I){
+bool EscapeAllocaPass::visitCallInst(CallInst *I){
     //Intrinsics are skipped (TODO: can we safely do that?)
     if (I->getIntrinsicID() != Intrinsic::not_intrinsic)
         return false;
@@ -72,11 +72,11 @@ bool MoveAllocaOnHeapPass::visitCallInst(CallInst *I){
     return Changed;
 }
 
-bool MoveAllocaOnHeapPass::visitStoreInst(StoreInst *I){
+bool EscapeAllocaPass::visitStoreInst(StoreInst *I){
     return checkArgument(I->getValueOperand());
 }
 
-bool MoveAllocaOnHeapPass::visitReturnInst(ReturnInst *I){
+bool EscapeAllocaPass::visitReturnInst(ReturnInst *I){
     Value *RetVal = I->getReturnValue();
     if (!RetVal)
         return false;
@@ -84,7 +84,7 @@ bool MoveAllocaOnHeapPass::visitReturnInst(ReturnInst *I){
 }
 
 //Follow Argument Parents until we meet a Alloca
-bool MoveAllocaOnHeapPass::checkArgument(Value *Arg){
+bool EscapeAllocaPass::checkArgument(Value *Arg){
     //Only Pointer Arguments can lead us to a Alloca
     if (!Arg->getType()->isPointerTy())
         return false;
@@ -133,7 +133,7 @@ bool MoveAllocaOnHeapPass::checkArgument(Value *Arg){
 }
 
 //FIXME: Paddings inside Structs not considered
-void MoveAllocaOnHeapPass::addTypeSizeToObjectSize(Type *AllocatedType, ObjectSize *OS){
+void EscapeAllocaPass::addTypeSizeToObjectSize(Type *AllocatedType, ObjectSize *OS){
     if (AllocatedType->isIntegerTy()){
         OS->DtConst = AllocatedType->getPrimitiveSizeInBits()/8;
         return;

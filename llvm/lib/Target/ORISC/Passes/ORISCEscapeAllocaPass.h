@@ -1,5 +1,5 @@
-#ifndef LLVM_LIB_TARGET_ORISC_ORISCMOVEALLOCAONHEAPPASS_H
-#define LLVM_LIB_TARGET_ORISC_ORISCMOVEALLOCAONHEAPPASS_H
+#ifndef LLVM_LIB_TARGET_ORISC_ORISCESCAPEALLOCAPASS_H
+#define LLVM_LIB_TARGET_ORISC_ORISCESCAPEALLOCAPASS_H
 
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/IRBuilder.h"
@@ -13,7 +13,7 @@
 
 namespace llvm {
 
-class MoveAllocaOnHeapPass : public PassInfoMixin<MoveAllocaOnHeapPass>  {
+class EscapeAllocaPass : public PassInfoMixin<EscapeAllocaPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
@@ -29,7 +29,7 @@ private:
     bool visitReturnInst(ReturnInst *I);
     bool checkArgument(Value *Arg);
 
-    friend PassInfoMixin<MoveAllocaOnHeapPass>;
+    friend PassInfoMixin<EscapeAllocaPass>;
 
     struct ObjectSize {
         Value *Pi;
@@ -126,4 +126,4 @@ private:
 
 } // namespace llvm
 
-#endif // LLVM_LIB_TARGET_ORISC_ORISCMOVEALLOCAONHEAPPASS_H
+#endif // LLVM_LIB_TARGET_ORISC_ORISCESCAPEALLOCAPASS_H

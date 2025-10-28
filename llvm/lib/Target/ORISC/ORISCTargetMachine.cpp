@@ -11,7 +11,7 @@
 
 #include "ORISC.h"
 #include "ORISCTargetMachine.h"
-#include "Passes/ORISCMoveAllocaOnHeapPass.h"
+#include "Passes/ORISCEscapeAllocaPass.h"
 #include "Passes/ORISCRejectUnsupportedIRPass.h"
 #include "Passes/ORISCSplitMixedStructsPass.h"
 #include "Passes/ORISCPromoteInnerStructsPass.h"
@@ -90,7 +90,7 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
   PB.registerPipelineStartEPCallback(
     [](ModulePassManager &MPM, OptimizationLevel Level){
       MPM.addPass(PromoteInnerStructsPass());
-      MPM.addPass(MoveAllocaOnHeapPass()); //Has do be done here because opt will crash the program if you return a local pointer
+      MPM.addPass(EscapeAllocaPass()); //Has do be done here because opt will crash the program if you return a local pointer
       MPM.addPass(SplitMixedStructsPass());
       //if -NoUnnecessaryAllocations remove unneeded Allocates
     });

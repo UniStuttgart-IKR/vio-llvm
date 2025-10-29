@@ -283,22 +283,6 @@ bool ORISCTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
   switch(Intrinsic) {
     default:
       return false;
-    case Intrinsic::orisc_loadpointer:
-      Info.opc = ISD::INTRINSIC_W_CHAIN;
-      Info.ptrVal = I.getArgOperand(0);
-      Info.offset = 0;
-      Info.align = Align(1);
-      Info.flags |= MachineMemOperand::MOLoad;
-      Info.memVT = MVT::iPTR;
-      return true;
-    case Intrinsic::orisc_storepointer:
-      Info.opc = ISD::INTRINSIC_W_CHAIN;
-      Info.ptrVal = I.getArgOperand(1);
-      Info.offset = 0;
-      Info.align = Align(1);
-      Info.flags |= MachineMemOperand::MOStore;
-      Info.memVT = MVT::iPTR;
-      return true;
   }
 }
 

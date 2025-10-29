@@ -38,7 +38,7 @@ PreservedAnalyses EscapeAllocaPass::run(Module &M, ModuleAnalysisManager &AM){
     Type *PtrTy = PointerType::get(Ctx, 0);
     Type *IntTy = Type::getInt32Ty(Ctx);
     FunctionType *AllocateFnTy = FunctionType::get(PtrTy, {IntTy, IntTy}, false);
-    AllocateFn = M.getOrInsertFunction("llvm.orisc.allocate", AllocateFnTy);
+    AllocateFn = M.getOrInsertFunction("llvm.orisc.allocate.placeholder", AllocateFnTy);
 
     Zero = ConstantInt::get(Type::getInt32Ty(Ctx), 0);
     One =  ConstantInt::get(Type::getInt32Ty(Ctx), 1);

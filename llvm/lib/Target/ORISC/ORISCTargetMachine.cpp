@@ -11,6 +11,7 @@
 
 #include "ORISC.h"
 #include "ORISCTargetMachine.h"
+#include "Passes/ORISCBoxUnboxPointersPass.h"
 #include "Passes/ORISCEscapeAllocaPass.h"
 #include "Passes/ORISCRejectUnsupportedIRPass.h"
 #include "Passes/ORISCSplitMixedStructsPass.h"
@@ -100,10 +101,10 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
   PB.registerScalarOptimizerLateEPCallback(
     [](FunctionPassManager &FPM, OptimizationLevel Level){
       //FPM.addPass(DividePointerIndicesPass());
-      //FPM.addPass(BoxUnboxPointersPass());
     });
   PB.registerOptimizerLastEPCallback(
     [](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
+      MPM.addPass(BoxUnboxPointersPass());
     });
 }
 

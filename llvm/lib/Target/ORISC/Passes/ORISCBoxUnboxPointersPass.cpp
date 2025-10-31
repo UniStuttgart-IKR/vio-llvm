@@ -140,7 +140,13 @@ bool BoxUnboxPointersPass::handleUser(Value *Base, Value *CurrentIndex, Value *P
             N = Builder.CreateCall(GepFn, {Base, CurrentIndex});
         else if (isa<LoadInst>(I) && I->getOperand(0) == Parent)
             N = Builder.CreateCall(GepFn, {Base, CurrentIndex});
-        else
+        else if (isa<CallInst>(Base) && (cast<CallInst>(Base)->getIntrinsicID() == Intrinsic::orisc_unbox_base)
+            && isa<CallInst>(CurrentIndex) && (cast<CallInst>(CurrentIndex)->getIntrinsicID() == Intrinsic::orisc_unbox_index)) {
+            //If we are boxing something that just got unboxed, then just use the parent box
+            N = cast<CallInst>(Base)->getOperand(0);
+            RemoveFromParentList.push_back(cast<Instruction>(Base));
+            RemoveFromParentList.push_back(cast<Instruction>(CurrentIndex));
+        } else 
             N = Builder.CreateCall(BoxFn, {Base, CurrentIndex});
         I->replaceUsesOfWith(Parent, N);
         Changed = true;

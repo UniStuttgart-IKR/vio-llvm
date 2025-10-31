@@ -155,6 +155,10 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::VACOPY, MVT::Other, Expand);
   setOperationAction(ISD::VAEND, MVT::Other, Expand);
 
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::pointer, Custom);
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i32, Custom);
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
+
   // Compute derived properties from the register classes
   computeRegisterProperties(STI.getRegisterInfo());
 }
@@ -271,8 +275,29 @@ SDValue ORISCTargetLowering::
   switch (IntrinsicID) {
   default:
     return Op;
+  case Intrinsic::orisc_box:
+    return lowerBoxIntrinsic(Op->getOperand(0), Op->getOperand(2), Op->getOperand(3), DAG);
   }
 }
+
+SDValue ORISCTargetLowering::
+  lowerBoxIntrinsic(SDValue Chain, SDValue Base, SDValue Index, SelectionDAG &DAG) const {
+    SDLoc DL(Chain);
+    SDValue Const0 = DAG.getConstant(0, DL, MVT::i32);
+    SDValue Const1 = DAG.getConstant(1, DL, MVT::i32);
+    SDValue Const4 = DAG.getConstant(4, DL, MVT::i32);
+    SDValue AlcID = DAG.getConstant(Intrinsic::orisc_allocate, DL, MVT::i32);
+    SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep, DL, MVT::i32);
+    
+    SDValue Alc = DAG.getNode(ISD::INTRINSIC_W_CHAIN, DL, 
+                          { MVT::pointer, MVT::Other }, { Chain, AlcID, Const1, Const4 });
+    Chain = Alc.getValue(1);
+    SDValue Gep = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, 
+                          MVT::pointer, { GepID, Alc, Const0 });
+    Chain = DAG.getStore(Chain, DL, Base, Gep, MachinePointerInfo());
+    Chain = DAG.getStore(Chain, DL, Index, Gep, MachinePointerInfo());
+    return DAG.getMergeValues(Alc, Chain);
+  }
 
 
 bool ORISCTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,

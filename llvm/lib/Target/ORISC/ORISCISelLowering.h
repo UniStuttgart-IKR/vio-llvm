@@ -136,6 +136,7 @@ private:
   };
 
   SDValue lowerIntrinsicWChain(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerBoxIntrinsic(SDValue Chain, SDValue Base, SDValue Index, SelectionDAG &DAG) const;
 };
 
 } // end namespace llvm

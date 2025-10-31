@@ -1,12 +1,11 @@
-def base_ptr_ty : LLVMQualPointerType<1>;
+def ptr_indx_ty : LLVMQualPointerType<1>;
 
 let TargetPrefix = "orisc" in {
 
-def int_orisc_allocate_placeholder : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty, llvm_i32_ty],   [IntrNoMem,    IntrHasSideEffects, IntrNoDuplicate, IntrNoMerge, Throws]>;
-def int_orisc_allocate             : Intrinsic<[base_ptr_ty], [llvm_i32_ty, llvm_i32_ty],   [IntrNoMem,    IntrHasSideEffects, IntrNoDuplicate, IntrNoMerge, Throws]>;
-def int_orisc_gep                  : Intrinsic<[llvm_ptr_ty], [base_ptr_ty, llvm_ptr_ty],   [IntrNoMem,    IntrSpeculatable]>;
-def int_orisc_box                  : Intrinsic<[llvm_ptr_ty], [base_ptr_ty, llvm_ptr_ty],   [IntrNoMem,    IntrSpeculatable]>;
-def int_orisc_unbox_base           : Intrinsic<[base_ptr_ty], [llvm_ptr_ty],                [IntrNoMem,    IntrSpeculatable]>;
-def int_orisc_unbox_index          : Intrinsic<[llvm_ptr_ty], [llvm_ptr_ty],                [IntrNoMem,    IntrSpeculatable]>;
+def int_orisc_allocate             : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty, llvm_i32_ty],   [IntrNoMem,    IntrHasSideEffects, IntrNoDuplicate, IntrNoMerge, Throws]>;
+def int_orisc_gep                  : Intrinsic<[llvm_ptr_ty], [llvm_ptr_ty, ptr_indx_ty],   [IntrNoMem,    IntrSpeculatable]>;
+def int_orisc_box                  : Intrinsic<[llvm_ptr_ty], [llvm_ptr_ty, ptr_indx_ty],   [IntrNoMem,    IntrSpeculatable]>;
+def int_orisc_unbox_base           : Intrinsic<[llvm_ptr_ty], [llvm_ptr_ty],                [IntrNoMem,    IntrSpeculatable]>;
+def int_orisc_unbox_index          : Intrinsic<[ptr_indx_ty], [llvm_ptr_ty],                [IntrNoMem,    IntrSpeculatable]>;
 
 }

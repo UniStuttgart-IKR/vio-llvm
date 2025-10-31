@@ -20,7 +20,6 @@ private:
 
     FunctionCallee GepFn;
     FunctionCallee BoxFn;
-    FunctionCallee AllocateFn;
     FunctionCallee UnboxBaseFn;
     FunctionCallee UnboxIndexFn;
     Type *IntTy;

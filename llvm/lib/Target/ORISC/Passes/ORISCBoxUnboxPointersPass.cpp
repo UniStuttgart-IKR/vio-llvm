@@ -12,9 +12,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/raw_ostream.h"
 #include <cassert>
 
 using namespace llvm;
@@ -24,19 +22,17 @@ using namespace llvm;
 PreservedAnalyses BoxUnboxPointersPass::run(Module &M, ModuleAnalysisManager &AM){
     LLVMContext &Ctx = M.getContext();
 
-    BaseTy = PointerType::get(Ctx, 1);
-    IndexTy = PointerType::get(Ctx, 0);
+    BaseTy = PointerType::get(Ctx, 0);
+    IndexTy = PointerType::get(Ctx, 1);
     Type *FatPtrTy = PointerType::get(Ctx, 0);
     IntTy = Type::getInt32Ty(Ctx);
     FunctionType *BoxFnTy = FunctionType::get(FatPtrTy, {BaseTy, IndexTy}, false);
     FunctionType *UnboxBaseFnTy = FunctionType::get(BaseTy, {FatPtrTy}, false);
     FunctionType *UnboxIndexFnTy = FunctionType::get(IndexTy, {FatPtrTy}, false);
-    FunctionType *AllocateFnTy = FunctionType::get(BaseTy, {IntTy, IntTy}, false);
     BoxFn = M.getOrInsertFunction("llvm.orisc.box", BoxFnTy);
     GepFn = M.getOrInsertFunction("llvm.orisc.gep", BoxFnTy);
     UnboxBaseFn = M.getOrInsertFunction("llvm.orisc.unbox.base", UnboxBaseFnTy);
     UnboxIndexFn = M.getOrInsertFunction("llvm.orisc.unbox.index", UnboxIndexFnTy);
-    AllocateFn = M.getOrInsertFunction("llvm.orisc.allocate", AllocateFnTy);
 
     bool Changed = false;
 
@@ -52,10 +48,9 @@ PreservedAnalyses BoxUnboxPointersPass::run(Module &M, ModuleAnalysisManager &AM
                 if (isa<AllocaInst>(&I)) {
                     Changed |= visitAlloc(&I);
                 } else if (CallInst *CI = dyn_cast<CallInst>(&I)) {
-                    if (CI->getIntrinsicID() == Intrinsic::orisc_allocate_placeholder)
+                    if (CI->getIntrinsicID() == Intrinsic::orisc_allocate)
                         Changed |= visitAlloc(CI);
-                    else if (CI->getIntrinsicID() == Intrinsic::orisc_allocate
-                            || CI->getIntrinsicID() == Intrinsic::orisc_box
+                    else if (CI->getIntrinsicID() == Intrinsic::orisc_box
                             || CI->getIntrinsicID() == Intrinsic::orisc_gep
                             || CI->getIntrinsicID() == Intrinsic::orisc_unbox_base
                             || CI->getIntrinsicID() == Intrinsic::orisc_unbox_index)
@@ -70,7 +65,7 @@ PreservedAnalyses BoxUnboxPointersPass::run(Module &M, ModuleAnalysisManager &AM
         }
     }
 
-    for (unsigned i = 0; i < RemoveFromParentList.size(); ++i) {
+    for (int i = RemoveFromParentList.size()-1; i >= 0; --i) {
         RemoveFromParentList[i]->eraseFromParent();
         Changed = true;
     }
@@ -98,16 +93,7 @@ bool BoxUnboxPointersPass::visitPointerArgument(Argument *A) {
 
 bool BoxUnboxPointersPass::visitAlloc(Instruction *I) {
     bool Changed = false;
-    Value *Base;
-    IRBuilder<> Builder(I->getContext());
-    if (isa<AllocaInst>(I)) {
-        Builder.SetInsertPointPastAllocas(I->getFunction());
-        Base = Builder.CreateAddrSpaceCast(I, BaseTy);
-    } else {
-        Builder.SetInsertPoint(I->getNextNonDebugInstruction());
-        Base = Builder.CreateCall(AllocateFn, { I->getOperand(0), I->getOperand(1) });
-        RemoveFromParentList.push_back(I);
-    }
+    Value *Base = I;
     Value *Index = ConstantPointerNull::get(IndexTy);
     SmallVector<User *> Users = SmallVector<User *, 32>(I->users());
     for (User *U : Users) {
@@ -140,9 +126,13 @@ bool BoxUnboxPointersPass::handleUser(Value *Base, Value *CurrentIndex, Value *P
     bool Changed = false;
     IRBuilder<> Builder(U->getContext());
     if (GetElementPtrInst *G = dyn_cast<GetElementPtrInst>(U)) {
-        G->setOperand(0, CurrentIndex);
+        RemoveFromParentList.push_back(G);
+        SmallVector<Value *, 8> Indices(G->indices());
+        Builder.SetInsertPoint(G->getNextNonDebugInstruction());
+        Value *NewG = Builder.CreateInBoundsGEP(G->getSourceElementType(), CurrentIndex, Indices);
         for (User *GU : G->users())
-            Changed |= handleUser(Base, G, G, GU);
+            if (GU != NewG)
+                Changed |= handleUser(Base, NewG, G, GU);
     } else if (Instruction *I = dyn_cast<Instruction>(U)) {
         Builder.SetInsertPoint(I);
         Value *N;

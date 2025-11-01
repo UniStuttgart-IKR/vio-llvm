@@ -90,6 +90,8 @@ public:
   getSingleConstraintMatchWeight(AsmOperandInfo &Info,
                                  const char *Constraint) const override;
 
+  SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
+
   void LowerAsmOperandForConstraint(SDValue Op, StringRef Constraint,
                                     std::vector<SDValue> &Ops,
                                     SelectionDAG &DAG) const override;
@@ -135,6 +137,8 @@ private:
     SDValue Index;
   };
 
+  SDValue lowerAdd(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerTruncate(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerIntrinsicWChain(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBoxIntrinsic(SDValue Chain, SDValue Base, SDValue Index, SelectionDAG &DAG) const;
 };

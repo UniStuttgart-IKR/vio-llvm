@@ -29,10 +29,11 @@ PreservedAnalyses BoxUnboxPointersPass::run(Module &M, ModuleAnalysisManager &AM
     Type *FatPtrTy = PointerType::get(Ctx, 0);
     IntTy = Type::getInt32Ty(Ctx);
     FunctionType *BoxFnTy = FunctionType::get(FatPtrTy, {BaseTy, IndexTy}, false);
+    FunctionType *GepFnTy = FunctionType::get(IndexTy, {BaseTy, IndexTy}, false);
     FunctionType *UnboxBaseFnTy = FunctionType::get(BaseTy, {FatPtrTy}, false);
     FunctionType *UnboxIndexFnTy = FunctionType::get(IndexTy, {FatPtrTy}, false);
     BoxFn = M.getOrInsertFunction("llvm.orisc.box", BoxFnTy);
-    GepFn = M.getOrInsertFunction("llvm.orisc.gep", BoxFnTy);
+    GepFn = M.getOrInsertFunction("llvm.orisc.gep", GepFnTy);
     UnboxBaseFn = M.getOrInsertFunction("llvm.orisc.unbox.base", UnboxBaseFnTy);
     UnboxIndexFn = M.getOrInsertFunction("llvm.orisc.unbox.index", UnboxIndexFnTy);
 

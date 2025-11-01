@@ -180,3 +180,4 @@ def : Pat<(int_orisc_unbox_base PR:$px), (LP_I PR:$px, 0)>;
 def : Pat<(int_orisc_unbox_index PR:$px), (LW_I PR:$px, 0)>;
 def : Pat<(orisc_ret), (RET)>;
 def : Pat<(uimm12:$ui12), (ORI D0, uimm12:$ui12)>;
+def : Pat<(imm:$imm), (ORI (LUI (Upper20 imm:$imm)), (Lower12 imm:$imm))>;

@@ -67,7 +67,7 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
 
   setMinFunctionAlignment(Align(4));
 
-  setTargetDAGCombine({ISD::LOAD, ISD::STORE, ISD::INTRINSIC_W_CHAIN});
+  setTargetDAGCombine({});
 
   setOperationAction(ISD::Constant, MVT::i32, Legal);
   setOperationAction(ISD::Constant, MVT::i64, Expand);
@@ -159,6 +159,8 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i32, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
 
+  setOperationAction(ISD::ADD, MVT::i32, Custom);
+
   // Compute derived properties from the register classes
   computeRegisterProperties(STI.getRegisterInfo());
 }
@@ -242,6 +244,10 @@ ORISCTargetLowering::getRegForInlineAsmConstraint(
   return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
 }
 
+SDValue ORISCTargetLowering::PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const {
+  return SDValue();
+}
+
 void ORISCTargetLowering::LowerAsmOperandForConstraint(
     SDValue Op, StringRef Constraint, std::vector<SDValue> &Ops,
     SelectionDAG &DAG) const {
@@ -259,12 +265,57 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
     //case ISD::SELECT:
     //  return lowerSelect(Op, DAG);
+    case ISD::ADD:
+      return lowerAdd(Op, DAG);
+    case ISD::TRUNCATE:
+      return lowerTruncate(Op, DAG);
     case ISD::INTRINSIC_W_CHAIN:
       return lowerIntrinsicWChain(Op, DAG);
 
     default: llvm_unreachable("Should not custom lower this!");
   }
 }
+
+SDValue ORISCTargetLowering::
+  lowerAdd(SDValue Op, SelectionDAG &DAG) const {
+
+    //ADD (GEP B, I), O -> GEP B, (ADD I, O)
+    //ADD O, (GEP B, I) -> GEP B, (ADD I, O)
+    bool LHSIsGep = Op->getOperand(0)->getOpcode() == ISD::INTRINSIC_WO_CHAIN
+                    && Op->getOperand(0).getConstantOperandVal(0) == Intrinsic::orisc_gep;
+    bool RHSIsGep = Op->getOperand(1)->getOpcode() == ISD::INTRINSIC_WO_CHAIN
+                    && Op->getOperand(1).getConstantOperandVal(0) == Intrinsic::orisc_gep;
+
+    if (LHSIsGep || RHSIsGep) {
+      SDLoc DL(Op);
+      SDValue OldGep = LHSIsGep ? Op->getOperand(0) : Op->getOperand(1);
+      SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep, DL, MVT::i32);
+      SDValue Base = OldGep->getOperand(1);
+      SDValue Index = OldGep->getOperand(2);
+      SDValue Offset = LHSIsGep ? Op->getOperand(1) : Op->getOperand(0);
+      SDValue Add = DAG.getNode(ISD::ADD, DL, Op.getValueType(), Index, Offset);
+      SDValue Gep = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL,
+                            Op.getValueType(), { GepID, Base, Add });
+      return Gep;
+    }
+    return Op;
+}
+
+SDValue ORISCTargetLowering::
+  lowerTruncate(SDValue Op, SelectionDAG &DAG) const {
+    SDValue N0 = Op->getOperand(0);
+    EVT VT = Op->getValueType(0);
+    if (ISD::isUNINDEXEDLoad(N0.getNode())) {
+      auto *LN0 = cast<LoadSDNode>(N0);
+      if (LN0->isSimple() && LN0->getMemoryVT().bitsLE(VT)) {
+        SDValue NewLoad = DAG.getExtLoad(
+            LN0->getExtensionType(), SDLoc(LN0), VT, LN0->getChain(),
+            LN0->getBasePtr(), LN0->getMemoryVT(), LN0->getMemOperand());
+        return NewLoad;
+      }
+    }
+    return Op;
+  }
 
 
 SDValue ORISCTargetLowering::
@@ -293,7 +344,7 @@ SDValue ORISCTargetLowering::
                           { MVT::pointer, MVT::Other }, { Chain, AlcID, Const1, Const4 });
     Chain = Alc.getValue(1);
     SDValue Gep = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, 
-                          MVT::pointer, { GepID, Alc, Const0 });
+                          MVT::i32, { GepID, Alc, Const0 });
     Chain = DAG.getStore(Chain, DL, Base, Gep, MachinePointerInfo());
     Chain = DAG.getStore(Chain, DL, Index, Gep, MachinePointerInfo());
     return DAG.getMergeValues(Alc, Chain);

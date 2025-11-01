@@ -95,6 +95,16 @@ def GetHalfsIndex : SDNodeXForm<imm, [{
                                     N->getValueType(0));
 }]>;
 
+def Upper20 : SDNodeXForm<imm, [{
+  return CurDAG->getTargetConstant(((N->getZExtValue() >> 12) & 0xFFFFF), SDLoc(N),
+                                     N->getValueType(0));
+}]>;
+
+def Lower12 : SDNodeXForm<imm, [{
+  return CurDAG->getTargetConstant((N->getZExtValue() & 0xFFF), SDLoc(N),
+                                    N->getValueType(0));
+}]>;
+
 //===----------------------------------------------------------------------===//
 // Instruction Formats
 //===----------------------------------------------------------------------===//

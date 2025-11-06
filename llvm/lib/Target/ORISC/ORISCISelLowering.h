@@ -15,6 +15,7 @@
 #define LLVM_LIB_TARGET_ORISC_ORISCISELLOWERING_H
 
 #include "MCTargetDesc/ORISCMCTargetDesc.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
@@ -26,11 +27,7 @@ namespace llvm {
 namespace ORISCISD {
 enum NodeType : unsigned  {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
-  ALLOCATE,
-  LOAD_POINTER,
-  STORE_POINTER,
-  PTR_ADD,
-  PTR_SUB,
+  BUILD_PTRARG,
   RET,
 };
 }
@@ -140,7 +137,10 @@ private:
   SDValue lowerAdd(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerTruncate(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerIntrinsicWChain(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerIntrinsicWOChain(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBoxIntrinsic(SDValue Chain, SDValue Base, SDValue Index, SelectionDAG &DAG) const;
+
+  void escapeCallBoxings(SmallVector<SDValue> &Users, SDValue Chain, SDValue Base, SDValue Index, SelectionDAG &DAG) const;
 };
 
 } // end namespace llvm

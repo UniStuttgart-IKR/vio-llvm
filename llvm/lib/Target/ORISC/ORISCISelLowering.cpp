@@ -20,6 +20,7 @@
 #include "ORISCTargetMachine.h"
 #include "MCTargetDesc/ORISCMCTargetDesc.h"
 #include "llvm-c/Types.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/CallingConvLower.h"
@@ -43,6 +44,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cassert>
 #include <cstdint>
 #include <deque>
 #include <map>
@@ -156,6 +158,10 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::VACOPY, MVT::Other, Expand);
   setOperationAction(ISD::VAEND, MVT::Other, Expand);
 
+  setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::pointer, Custom);
+  setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::i32, Custom);
+  setOperationAction(ISD::INTRINSIC_WO_CHAIN, MVT::Other, Custom);
+
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::pointer, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i32, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
@@ -176,6 +182,8 @@ const char *ORISCTargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch ((ORISCISD::NodeType) Opcode) {
     case ORISCISD::RET:
       return "ORISCISD::RET";
+    case ORISCISD::BUILD_PTRARG:
+      return "ORISCISD::BUILD_PTRARG";
     default:
       return "Unnamed Node";
   }
@@ -263,17 +271,19 @@ void ORISCTargetLowering::LowerAsmOperandForConstraint(
 
 SDValue ORISCTargetLowering::
 LowerOperation(SDValue Op, SelectionDAG &DAG) const {
-  switch (Op.getOpcode()) {
-    //case ISD::SELECT:
-    //  return lowerSelect(Op, DAG);
-    case ISD::ADD:
-      return lowerAdd(Op, DAG);
-    case ISD::TRUNCATE:
-      return lowerTruncate(Op, DAG);
-    case ISD::INTRINSIC_W_CHAIN:
-      return lowerIntrinsicWChain(Op, DAG);
+    switch (Op.getOpcode()) {
+        //case ISD::SELECT:
+        //  return lowerSelect(Op, DAG);
+        case ISD::ADD:
+            return lowerAdd(Op, DAG);
+        case ISD::TRUNCATE:
+            return lowerTruncate(Op, DAG);
+        case ISD::INTRINSIC_W_CHAIN:
+            return lowerIntrinsicWChain(Op, DAG);
+        case ISD::INTRINSIC_WO_CHAIN:
+            return lowerIntrinsicWOChain(Op, DAG);
 
-    default: llvm_unreachable("Should not custom lower this!");
+        default: llvm_unreachable("Should not custom lower this!");
   }
 }
 
@@ -320,38 +330,63 @@ SDValue ORISCTargetLowering::
 
 
 SDValue ORISCTargetLowering::
-  lowerIntrinsicWChain(SDValue Op,
-                        SelectionDAG &DAG) const {
-  SDLoc DL(Op);
-  uint64_t IntrinsicID = Op.getConstantOperandVal(1);
-  switch (IntrinsicID) {
-  default:
-    return Op;
-  case Intrinsic::orisc_box:
-    return lowerBoxIntrinsic(Op->getOperand(0), Op->getOperand(2), Op->getOperand(3), DAG);
-  }
+    lowerIntrinsicWOChain(SDValue Op,
+                            SelectionDAG &DAG) const {
+    SDLoc DL(Op);
+    uint64_t IntrinsicID = Op.getConstantOperandVal(0);
+    switch (IntrinsicID) {
+    default:
+        return Op;
+    case Intrinsic::orisc_unbox_base:
+        // LowerFormalArguments left a llvm.orisc.unbox.base( BUILD_PTRARG( CopyFromReg, CopyFromReg ) )
+        // And we are only interested in the Result of the first CopyFromReg (the Base)
+        if (Op->getOperand(1).getNode()->getOpcode() == ORISCISD::BUILD_PTRARG)
+            return Op->getOperand(1)->getOperand(0);
+        else
+            return Op;
+    case Intrinsic::orisc_unbox_index:
+        // LowerFormalArguments left a llvm.orisc.unbox.index( BUILD_PTRARG( CopyFromReg, CopyFromReg ) )
+        // And we are only interested in the Result of the second CopyFromReg (the Index)
+        if (Op->getOperand(1).getNode()->getOpcode() == ORISCISD::BUILD_PTRARG)
+            return Op->getOperand(1)->getOperand(1);
+        else
+            return Op;
+    }
 }
 
 SDValue ORISCTargetLowering::
-  lowerBoxIntrinsic(SDValue Chain, SDValue Base, SDValue Index, SelectionDAG &DAG) const {
-    //If we encounter a "llvm.orisc.box" intrinsic, we split it into
-    // allocate 1, 4 -> gep with index 0 -> store base-ptr to ptr slot -> store index to data slot
-    SDLoc DL(Chain);
-    SDValue Const0 = DAG.getConstant(0, DL, MVT::i32);
-    SDValue Const1 = DAG.getConstant(1, DL, MVT::i32);
-    SDValue Const4 = DAG.getConstant(4, DL, MVT::i32);
-    SDValue AlcID = DAG.getConstant(Intrinsic::orisc_allocate, DL, MVT::i32);
-    SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep, DL, MVT::i32);
-    
-    SDValue Alc = DAG.getNode(ISD::INTRINSIC_W_CHAIN, DL, 
-                          { MVT::pointer, MVT::Other }, { Chain, AlcID, Const1, Const4 });
-    Chain = Alc.getValue(1);
-    SDValue Gep = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, 
-                          MVT::i32, { GepID, Alc, Const0 });
-    Chain = DAG.getStore(Chain, DL, Base, Gep, MachinePointerInfo());
-    Chain = DAG.getStore(Chain, DL, Index, Gep, MachinePointerInfo());
-    return DAG.getMergeValues(Alc, Chain);
-  }
+    lowerIntrinsicWChain(SDValue Op,
+                            SelectionDAG &DAG) const {
+    SDLoc DL(Op);
+    uint64_t IntrinsicID = Op.getConstantOperandVal(1);
+    switch (IntrinsicID) {
+    default:
+        return Op;
+    case Intrinsic::orisc_box:
+        return lowerBoxIntrinsic(Op->getOperand(0), Op->getOperand(2), Op->getOperand(3), DAG);
+    }
+}
+
+SDValue ORISCTargetLowering::
+    lowerBoxIntrinsic(SDValue Chain, SDValue Base, SDValue Index, SelectionDAG &DAG) const {
+        // If we encounter a "llvm.orisc.box" intrinsic, we split it into
+        // allocate 1, 4 -> gep with index 0 -> store base-ptr to ptr slot -> store index to data slot
+        SDLoc DL(Chain);
+        SDValue Const0 = DAG.getConstant(0, DL, MVT::i32);
+        SDValue Const1 = DAG.getConstant(1, DL, MVT::i32);
+        SDValue Const4 = DAG.getConstant(4, DL, MVT::i32);
+        SDValue AlcID = DAG.getConstant(Intrinsic::orisc_allocate, DL, MVT::i32);
+        SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep, DL, MVT::i32);
+        
+        SDValue Alc = DAG.getNode(ISD::INTRINSIC_W_CHAIN, DL, 
+                            { MVT::pointer, MVT::Other }, { Chain, AlcID, Const1, Const4 });
+        Chain = Alc.getValue(1);
+        SDValue Gep = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, 
+                            MVT::i32, { GepID, Alc, Const0 });
+        Chain = DAG.getStore(Chain, DL, Base, Gep, MachinePointerInfo());
+        Chain = DAG.getStore(Chain, DL, Index, Gep, MachinePointerInfo());
+        return DAG.getMergeValues(Alc, Chain);
+    }
 
 
 bool ORISCTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
@@ -374,34 +409,40 @@ static inline bool includesEqualitySetCC(ISD::CondCode Code) {
 //===----------------------------------------------------------------------===//
 
 SDValue ORISCTargetLowering::LowerFormalArguments(
-    SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
-    const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL,
-    SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
-  MachineFunction &MF = DAG.getMachineFunction();
+        SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
+        const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL,
+        SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
+    MachineFunction &MF = DAG.getMachineFunction();
 
-  // Assign locations to all of the incoming arguments.
-  SmallVector<CCValAssign, 16> ArgLocs;
-  CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
-                 *DAG.getContext());
+    // Assign locations to all of the incoming arguments.
+    SmallVector<CCValAssign, 16> ArgLocs;
+    CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
+                    *DAG.getContext());
 
-  CCInfo.AnalyzeFormalArguments(Ins, CC_ORISC);
+    CCInfo.AnalyzeFormalArguments(Ins, CC_ORISC);
 
-  for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
-    CCValAssign &VA = ArgLocs[i];
+    for (unsigned I = 0, ArgIdx = 0; I != ArgLocs.size(); ++I, ++ArgIdx) {
+        CCValAssign &VA = ArgLocs[I];
 
-    if (VA.isRegLoc()) {
-      EVT RegVT = VA.getLocVT();
-      Register Reg;
-      if (RegVT == MVT::iPTR)
-        Reg = MF.addLiveIn(VA.getLocReg(), &ORISC::PRRegClass);
-      else
-        Reg = MF.addLiveIn(VA.getLocReg(), &ORISC::DRRegClass);
-      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegVT);
-      InVals.push_back(ArgValue);
+        if (VA.isRegLoc()) {
+            EVT RegVT = VA.getLocVT();
+            SDValue ArgValue;
+            if (RegVT == MVT::pointer) {
+                Register Reg = MF.addLiveIn(VA.getLocReg(), &ORISC::PRRegClass);
+                SDValue Base = DAG.getCopyFromReg(Chain, DL, Reg, RegVT);
+                VA = ArgLocs[++I];
+                Reg = MF.addLiveIn(VA.getLocReg(), &ORISC::DRRegClass);
+                SDValue Index = DAG.getCopyFromReg(Chain, DL, Reg, VA.getLocVT());
+                ArgValue = DAG.getNode(ORISCISD::BUILD_PTRARG, DL, MVT::pointer, Base, Index);
+            } else {
+                Register Reg = MF.addLiveIn(VA.getLocReg(), &ORISC::DRRegClass);
+                ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegVT);
+            }
+            InVals.push_back(ArgValue);
+        }
     }
-  }
 
-  return Chain;
+    return Chain;
 }
 
 
@@ -430,6 +471,12 @@ ORISCTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
                     *DAG.getContext());
 
+    CCInfo.AnalyzeCallOperands(Outs, CC_ORISC);
+    
+    SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
+    Chain = DAG.getNode(ISD::CALLSEQ_START, DL, {MVT::Other, MVT::Glue}, {Chain, Zero, Zero});
+    SDValue CallSeqStart = Chain;
+
     return CLI.Chain;
 }
 
@@ -446,38 +493,72 @@ ORISCTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool I
                                     const SmallVectorImpl<ISD::OutputArg> &Outs,
                                     const SmallVectorImpl<SDValue> &OutVals, const SDLoc &DL,
                                     SelectionDAG &DAG) const {
-  MachineFunction &MF = DAG.getMachineFunction();
+    MachineFunction &MF = DAG.getMachineFunction();
 
-  // Assign locations to each returned value.
-  SmallVector<CCValAssign, 16> RetLocs;
-  CCState RetCCInfo(CallConv, IsVarArg, MF, RetLocs, *DAG.getContext());
-  RetCCInfo.AnalyzeReturn(Outs, RetCC_ORISC);
+    // Check if Chain is from an Outgoing Box or Gep and replace it by parent Chain
+    if (Chain->getOpcode() == ISD::INTRINSIC_W_CHAIN && 
+        (Chain->getConstantOperandVal(1) == Intrinsic::orisc_box
+                    || Chain->getConstantOperandVal(1) == Intrinsic::orisc_gep))
+        Chain = Chain->getOperand(0);
 
-  SDValue Glue;
-  // Copy the result values into the output registers.
-  SmallVector<SDValue, 4> RetOps;
-  RetOps.push_back(Chain);
-  for (unsigned I = 0, E = RetLocs.size(); I != E; ++I) {
-    CCValAssign &VA = RetLocs[I];
-    SDValue RetValue = OutVals[I];
+    // Assign locations to each returned value.
+    SmallVector<CCValAssign, 16> RetLocs;
+    CCState RetCCInfo(CallConv, IsVarArg, MF, RetLocs, *DAG.getContext());
+    RetCCInfo.AnalyzeReturn(Outs, RetCC_ORISC);
 
-    // Make the return register live on exit.
-    assert(VA.isRegLoc() && "Can only return in registers!");
+    SDValue Glue;
+    // Copy the result values into the output registers.
+    SmallVector<SDValue, 4> RetOps;
+    RetOps.push_back(Chain);
+    for (unsigned I = 0, ArgIdx = 0; I != RetLocs.size(); ++I, ++ArgIdx) {
+        CCValAssign &VA = RetLocs[I];
+        SDValue RetValue = OutVals[ArgIdx];
 
-    // Chain and glue the copies together.
-    Register Reg = VA.getLocReg();
-    Chain = DAG.getCopyToReg(Chain, DL, Reg, RetValue, Glue);
-    Glue = Chain.getValue(1);
-    RetOps.push_back(DAG.getRegister(Reg, VA.getLocVT()));
-  }
+        // Make the return register live on exit.
+        assert(VA.isRegLoc() && "Can only return in registers!");
 
-  // Update chain and glue.
-  RetOps[0] = Chain;
-  if (Glue.getNode())
-    RetOps.push_back(Glue);
+        Register Reg = VA.getLocReg();
+        if (VA.getLocVT() == MVT::pointer) {
+            // Extract Base and Index from RetValue
+            SDValue Base, Index;
+            if (Chain->getOpcode() == ISD::INTRINSIC_W_CHAIN && 
+                Chain->getConstantOperandVal(1) == Intrinsic::orisc_box) {
+                Base = RetValue->getOperand(2);
+                Index = RetValue->getOperand(3);
+            } else if (Chain->getOpcode() == ISD::INTRINSIC_WO_CHAIN && 
+                        Chain->getConstantOperandVal(0) == Intrinsic::orisc_gep) {
+                Base = RetValue->getOperand(1);
+                Index = RetValue->getOperand(2);
+            } else {
+                Base = RetValue;
+                Index = DAG.getConstant(0, DL, MVT::i32);
+            }
 
-  // Quick exit for void returns
-  return DAG.getNode(ORISCISD::RET, DL, MVT::Other, RetOps);
+            // Push Base into Pointer Register
+            Chain = DAG.getCopyToReg(Chain, DL, Reg, Base, Glue);
+            Glue = Chain.getValue(1);
+            RetOps.push_back(DAG.getRegister(Reg, VA.getLocVT()));
+            // Push Index into Data Register
+            VA = RetLocs[++I];
+            Reg = VA.getLocReg();
+            Chain = DAG.getCopyToReg(Chain, DL, Reg, Index, Glue);
+            Glue = Chain.getValue(1);
+            RetOps.push_back(DAG.getRegister(Reg, VA.getLocVT()));
+        } else {
+            // Chain and glue the copies together.
+            Chain = DAG.getCopyToReg(Chain, DL, Reg, RetValue, Glue);
+            Glue = Chain.getValue(1);
+            RetOps.push_back(DAG.getRegister(Reg, VA.getLocVT()));
+        }
+    }
+
+    // Update chain and glue.
+    RetOps[0] = Chain;
+    if (Glue.getNode())
+        RetOps.push_back(Glue);
+
+    // Quick exit for void returns
+    return DAG.getNode(ORISCISD::RET, DL, MVT::Other, RetOps);
 }
 
 bool

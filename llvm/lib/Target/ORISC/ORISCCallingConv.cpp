@@ -44,8 +44,8 @@ inline bool CC_ORISC_AssignPointerIndexPair(unsigned &ValNo, MVT &ValVT,
         return false;
     }
     // Register both as locations for this argument
-    State.addLoc(CCValAssign::getReg(ValNo, ValVT, Pointer, LocVT, LocInfo));
-    State.addLoc(CCValAssign::getReg(ValNo, ValVT, Data, LocVT, LocInfo));
+    State.addLoc(CCValAssign::getCustomReg(ValNo, ValVT, Pointer, MVT::pointer, LocInfo));
+    State.addLoc(CCValAssign::getCustomReg(ValNo, ValVT, Data, MVT::i32, LocInfo));
 
     LLVM_DEBUG(dbgs() << "Assigned Pointer Arg to (" << printReg(Pointer, State.getMachineFunction().getRegInfo().getTargetRegisterInfo())
                     << ", " << printReg(Data, State.getMachineFunction().getRegInfo().getTargetRegisterInfo()) << ")\n");

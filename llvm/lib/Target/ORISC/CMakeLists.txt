@@ -20,6 +20,7 @@ add_llvm_target(ORISCCodeGen
   Passes/ORISCEscapeAllocaPass.cpp
   Passes/ORISCBoxUnboxPointersPass.cpp
   Passes/ORISCShrinkPointerIndicesPass.cpp
+  ORISCCallingConv.cpp
   ORISCISelDAGToDAG.cpp
   ORISCISelLowering.cpp
   ORISCInstrInfo.cpp

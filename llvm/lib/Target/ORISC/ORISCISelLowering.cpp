@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ORISCISelLowering.h"
+#include "ORISCCallingConv.h"
 #include "ORISCInstrInfo.h"
 #include "ORISCRegisterInfo.h"
 #include "ORISC.h"
@@ -333,6 +334,8 @@ SDValue ORISCTargetLowering::
 
 SDValue ORISCTargetLowering::
   lowerBoxIntrinsic(SDValue Chain, SDValue Base, SDValue Index, SelectionDAG &DAG) const {
+    //If we encounter a "llvm.orisc.box" intrinsic, we split it into
+    // allocate 1, 4 -> gep with index 0 -> store base-ptr to ptr slot -> store index to data slot
     SDLoc DL(Chain);
     SDValue Const0 = DAG.getConstant(0, DL, MVT::i32);
     SDValue Const1 = DAG.getConstant(1, DL, MVT::i32);
@@ -370,8 +373,6 @@ static inline bool includesEqualitySetCC(ISD::CondCode Code) {
 // Calling conventions
 //===----------------------------------------------------------------------===//
 
-#include "ORISCGenCallingConv.inc"
-
 SDValue ORISCTargetLowering::LowerFormalArguments(
     SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL,
@@ -406,8 +407,30 @@ SDValue ORISCTargetLowering::LowerFormalArguments(
 
 SDValue
 ORISCTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
-                               SmallVectorImpl<SDValue> &InVals) const {
-  return CLI.Chain;
+                               SmallVectorImpl<SDValue> &InVals) const {            
+    SelectionDAG &DAG                     = CLI.DAG;
+    SDLoc &DL                             = CLI.DL;
+    SmallVectorImpl<ISD::OutputArg> &Outs = CLI.Outs;
+    SmallVectorImpl<SDValue> &OutVals     = CLI.OutVals;
+    SmallVectorImpl<ISD::InputArg> &Ins   = CLI.Ins;
+    SDValue Chain                         = CLI.Chain;
+    SDValue Callee                        = CLI.Callee;
+    bool &IsTailCall                      = CLI.IsTailCall;
+    CallingConv::ID CallConv              = CLI.CallConv;
+    bool IsVarArg                         = CLI.IsVarArg;
+    bool IsPatchPoint                     = CLI.IsPatchPoint;
+    const CallBase *CB                    = CLI.CB;
+
+    MachineFunction &MF = DAG.getMachineFunction();
+
+    if (IsTailCall) {
+    }
+
+    SmallVector<CCValAssign, 16> ArgLocs;
+    CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
+                    *DAG.getContext());
+
+    return CLI.Chain;
 }
 
 bool

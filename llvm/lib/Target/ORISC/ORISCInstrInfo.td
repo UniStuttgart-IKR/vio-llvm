@@ -24,6 +24,14 @@ def oframeindex : SDNode<"ISD::FrameIndex",           SDTOPtrLeaf, [],
 def orisc_ret  : SDNode<"ORISCISD::RET", SDTNone,
                           [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
+
+def SDT_ORISCLocalCall     : SDTypeProfile<0, -1, [SDTCisVT<0, i32>]>;
+def orisc_local_call  : SDNode<"ORISCISD::LOCAL_CALL", SDT_ORISCLocalCall,
+                             [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
+def SDT_ORISCLibraryCall     : SDTypeProfile<0, -1, [SDTCisVT<0, i32>, SDTCisVT<1, iPTR>]>;
+def orisc_library_call  : SDNode<"ORISCISD::LIBRARY_CALL", SDT_ORISCLibraryCall,
+                             [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
+
 //===----------------------------------------------------------------------===//
 // Instruction Selection Patterns
 //===----------------------------------------------------------------------===//
@@ -84,18 +92,20 @@ def to_tframeindex : SDNodeXForm<frameindex, [{
 //				------ BRANCHES ------
 
 //Conditional Branches
-class BranchPat<CondCode Cond, ORISCInstr Inst, RegisterClass XR = DR>
-		: Pat<(brcc Cond, XR:$dy, XR:$dz, bb:$sd12), (Inst XR:$dy, XR:$dz, brtarget:$sd12)>;
+class BranchDPat<CondCode Cond, ORISCInstr Inst>
+		: Pat<(brcc Cond, DR:$dy, DR:$dz, bb:$sd12), (Inst DR:$dy, DR:$dz, brtarget:$sd12)>;
+class BranchPPat<CondCode Cond, ORISCInstr Inst>
+		: Pat<(brcc Cond, (pointer PR:$py), (pointer PR:$pz), bb:$sd12), (Inst PR:$py, PR:$pz, brtarget:$sd12)>;
 
-def : BranchPat<SETEQ,  BEQ>;
-def : BranchPat<SETNE,  BNE>;
-def : BranchPat<SETUGE, BGEU>;
-def : BranchPat<SETGE,  BGES>;
-def : BranchPat<SETULT, BLTU>;
-def : BranchPat<SETLT,  BLTS>;
+def : BranchDPat<SETEQ,  BEQ>;
+def : BranchDPat<SETNE,  BNE>;
+def : BranchDPat<SETUGE, BGEU>;
+def : BranchDPat<SETGE,  BGES>;
+def : BranchDPat<SETULT, BLTU>;
+def : BranchDPat<SETLT,  BLTS>;
 
-def : BranchPat<SETEQ, BEQP, PR>;
-def : BranchPat<SETNE, BNEP, PR>;
+def : BranchPPat<SETEQ, BEQP>;
+def : BranchPPat<SETNE, BNEP>;
 
 //Inversed Branch Conditions
 class InverseBranchPat<CondCode Cond, ORISCInstr Inst>
@@ -110,28 +120,36 @@ def : InverseBranchPat<SETLE,  BGES>;
 def : Pat<(br bb:$sd25), (BRA brtarget:$sd25)>;
 
 
+//				------ CALLS ------
+def : Pat<(orisc_local_call tglobaladdr:$symbol), (BSR call_symbol:$symbol)>;
+def : Pat<(orisc_local_call globaladdr:$symbol), (BSR call_symbol:$symbol)>;
+
+
 
 //				------ STORES ------
 
 //Stores with constant Offset
 class StoreIPat<PatFrag StoreOp, ORISCInstr Inst, RegisterClass XR = DR>
-		: Pat<(StoreOp XR:$dy, (int_orisc_gep PR:$px, uimm12:$ix12)), (Inst PR:$px, uimm12:$ix12, XR:$dy)>;
+		: Pat<(StoreOp XR:$dy, (int_orisc_gep (iPTR PR:$px), uimm12:$ix12)), (Inst PR:$px, uimm12:$ix12, XR:$dy)>;
 //					   value       			  base   	 offset				 base      offset     value
 
 //Stores with variable Index
 class StorePat<PatFrag StoreOp, ORISCInstr Inst, RegisterClass XR = DR>
-    : Pat<(StoreOp XR:$dy, (int_orisc_gep PR:$px, DR:$dz)), (Inst PR:$px, DR:$dz, 1, 0, XR:$dy)>;
+    : Pat<(StoreOp XR:$dy, (int_orisc_gep (iPTR PR:$px), DR:$dz)), (Inst PR:$px, DR:$dz, 1, 0, XR:$dy)>;
 //				   value		 	  	   base	  index   		   base	  index   s  p  value
 
-def : StoreIPat<store,         SP_I, PR>;
+//def : StoreIPat<store,         SP_I, PR>;
 def : StoreIPat<store,         SW_I>;
 def : StoreIPat<truncstorei16, SH_I>;
 def : StoreIPat<truncstorei8,  SB_I>;
 
-def : StorePat<store,         SP, PR>;
+//def : StorePat<store,         SP, PR>;
 def : StorePat<store,         SW>;
 def : StorePat<truncstorei16, SH>;
 def : StorePat<truncstorei8,  SB>;
+
+def : Pat<(store (pointer PR:$py), (int_orisc_gep (iPTR PR:$px), uimm12:$ix12)), (SP_I PR:$px, uimm12:$ix12, PR:$py)>;
+def : Pat<(store (pointer PR:$py), (int_orisc_gep (iPTR PR:$px), DR:$dz)), (SP PR:$px, DR:$dz, 1, 0, PR:$py)>;
 
 
 //				------ LOADS ------

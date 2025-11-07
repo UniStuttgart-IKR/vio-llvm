@@ -28,6 +28,9 @@ namespace ORISCISD {
 enum NodeType : unsigned  {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
   BUILD_PTRARG,
+  LOCAL_CALL,
+  LIBRARY_CALL,
+  TAIL_CALL,
   RET,
 };
 }
@@ -135,6 +138,7 @@ private:
   };
 
   SDValue lowerAdd(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerStore(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerTruncate(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerIntrinsicWChain(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerIntrinsicWOChain(SDValue Op, SelectionDAG &DAG) const;

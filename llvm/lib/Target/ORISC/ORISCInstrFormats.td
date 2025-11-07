@@ -86,6 +86,19 @@ def brtarget : Operand<OtherVT> {
   let ParserMatchClass = IKRRISC2BRTargetAsmOperand;
 }
 
+def CallSymbol : AsmOperandClass {
+  let Name = "CallSymbol";
+  let RenderMethod = "addImmOperands";
+  let DiagnosticType = "InvalidCallSymbol";
+  let DiagnosticString = "operand must be a bare symbol name";
+  let ParserMethod = "decodeCallSymbol";
+}
+
+// A bare symbol used in call/tail only.
+def call_symbol : Operand<iPTR> {
+  let ParserMatchClass = CallSymbol;
+}
+
 def GetWordsIndex : SDNodeXForm<imm, [{
 	return CurDAG->getTargetConstant((N->getZExtValue() / 4), SDLoc(N),
                                     N->getValueType(0));
@@ -221,6 +234,12 @@ class ORISCInstrBranchD<string opcodestr>
 class ORISCInstrBranch<string opcodestr>
 		: ORISCInstr<opcodestr, (outs), (ins brtarget:$sd25), "$sd25", FormatBPUD> {
 	let isBarrier = true;
+}
+
+class ORISCInstrLocalCall<string opcodestr>
+		: ORISCInstr<opcodestr, (outs), (ins call_symbol:$symbol), "$symbol", FormatBPUD> {
+	let isBarrier = true;
+	let isCall = true;
 }
 
 // Dynamic Jump Instructions
@@ -372,7 +391,7 @@ let mayLoad = 0, mayStore = 0, hasSideEffects = 0, isBranch = 1, isTerminator = 
 	def	BLTS:		ORISCInstrBranchD<"blts">;
 
 	let Defs = [P31] in
-	def BSR:		ORISCInstrBranch<"bsr">;
+	def BSR:		ORISCInstrLocalCall<"bsr">;
 }
 
 // Other Instructions

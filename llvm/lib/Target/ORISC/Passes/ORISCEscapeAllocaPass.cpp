@@ -80,6 +80,12 @@ bool EscapeAllocaPass::visitReturnInst(ReturnInst *I){
     Value *RetVal = I->getReturnValue();
     if (!RetVal)
         return false;
+    CallInst *Call = dyn_cast<CallInst>(RetVal);
+    if (Call && Call->getIntrinsicID() == Intrinsic::orisc_box){
+        RetVal = Call->getOperand(0);
+        I->setOperand(0, RetVal);
+        RemoveFromParentList.push_back(Call);
+    }
     return checkArgument(RetVal);
 }
 

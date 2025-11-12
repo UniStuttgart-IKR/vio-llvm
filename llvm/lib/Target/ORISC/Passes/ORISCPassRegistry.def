@@ -17,7 +17,8 @@
 #define MODULE_PASS(NAME, CREATE_PASS)
 #endif
 MODULE_PASS("orisc-promote-inner-structs", PromoteInnerStructsPass())
-MODULE_PASS("orisc-move-alloca-on-heap", EscapeAllocaPass())
+MODULE_PASS("orisc-escape-outgoing-local-pointers", EscapeOutgoingLocalPointersPass())
+MODULE_PASS("orisc-escape-allocas", EscapeAllocaPass())
 MODULE_PASS("orisc-split-mixed-structs", SplitMixedStructsPass())
 MODULE_PASS("orisc-box-unbox-pointers", BoxUnboxPointersPass())
 #undef MODULE_PASS

@@ -14,6 +14,7 @@
 #include "Passes/ORISCBoxUnboxPointersPass.h"
 #include "Passes/ORISCEscapeAllocaPass.h"
 #include "Passes/ORISCRejectUnsupportedIRPass.h"
+#include "Passes/ORISCEscapeOutgoingLocalPointersPass.h"
 #include "Passes/ORISCSplitMixedStructsPass.h"
 #include "Passes/ORISCPromoteInnerStructsPass.h"
 #include "ORISCSubtarget.h"
@@ -91,9 +92,7 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
   PB.registerPipelineStartEPCallback(
     [](ModulePassManager &MPM, OptimizationLevel Level){
       MPM.addPass(PromoteInnerStructsPass());
-      MPM.addPass(EscapeAllocaPass()); //Has do be done here because opt will crash the program if you return a local pointer
-      MPM.addPass(SplitMixedStructsPass());
-      //if -NoUnnecessaryAllocations remove unneeded Allocates
+      MPM.addPass(EscapeOutgoingLocalPointersPass()); //Has do be done here because opt will crash the program if you return a local pointer
     });
   PB.registerPeepholeEPCallback(
     [](FunctionPassManager &FPM, OptimizationLevel Level){
@@ -104,6 +103,9 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
     });
   PB.registerOptimizerLastEPCallback(
     [](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
+      MPM.addPass(EscapeAllocaPass());
+      //if -NoUnnecessaryAllocations remove unneeded Allocates
+      MPM.addPass(SplitMixedStructsPass());
       MPM.addPass(BoxUnboxPointersPass());
     });
 }

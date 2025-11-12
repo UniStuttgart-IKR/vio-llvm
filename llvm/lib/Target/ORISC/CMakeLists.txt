@@ -15,6 +15,7 @@ add_llvm_target(ORISCCodeGen
   ORISCAsmPrinter.cpp
   ORISCFrameLowering.cpp
   Passes/ORISCPromoteInnerStructsPass.cpp
+  Passes/ORISCEscapeOutgoingLocalPointersPass.cpp
   Passes/ORISCSplitMixedStructsPass.cpp
   Passes/ORISCRejectUnsupportedIRPass.cpp
   Passes/ORISCEscapeAllocaPass.cpp

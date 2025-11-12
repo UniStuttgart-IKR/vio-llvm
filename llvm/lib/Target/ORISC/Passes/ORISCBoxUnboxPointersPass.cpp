@@ -9,6 +9,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicsORISC.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Value.h"
@@ -56,7 +57,9 @@ PreservedAnalyses BoxUnboxPointersPass::run(Module &M, ModuleAnalysisManager &AM
                     else if (CI->getIntrinsicID() == Intrinsic::orisc_box
                             || CI->getIntrinsicID() == Intrinsic::orisc_gep
                             || CI->getIntrinsicID() == Intrinsic::orisc_unbox_base
-                            || CI->getIntrinsicID() == Intrinsic::orisc_unbox_index)
+                            || CI->getIntrinsicID() == Intrinsic::orisc_unbox_index
+                            || CI->getIntrinsicID() == Intrinsic::lifetime_start
+                            || CI->getIntrinsicID() == Intrinsic::lifetime_end)
                         continue;
                     else if (CI->getFunctionType()->getReturnType()->isPointerTy())
                         visitOther(CI);
@@ -106,6 +109,12 @@ bool BoxUnboxPointersPass::visitAlloc(Instruction *I) {
     Value *Index = ConstantPointerNull::get(IndexTy);
     SmallVector<User *> Users = SmallVector<User *, 32>(I->users());
     for (User *U : Users) {
+        if (CallInst *C = dyn_cast<CallInst>(U)) {
+            if (C->getIntrinsicID() == Intrinsic::lifetime_start)
+                continue;
+            if (C->getIntrinsicID() == Intrinsic::lifetime_end)
+                continue;
+        }
         if (U != Base) {
             Changed |= handleUser(Base, Index, I, U);
         }
@@ -115,10 +124,12 @@ bool BoxUnboxPointersPass::visitAlloc(Instruction *I) {
 
 bool BoxUnboxPointersPass::visitOther(Instruction *I) {
     bool Changed = false;
+    SmallVector<User *> Users = SmallVector<User *, 32>(I->users());
+    if (Users.empty())
+        return false;
     IRBuilder<> Builder(I->getNextNonDebugInstruction());
     Value *Base = Builder.CreateCall(UnboxBaseFn, I, I->getName() + ".base");
     Value *Index = Builder.CreateCall(UnboxIndexFn, I, I->getName() + ".index");
-    SmallVector<User *> Users = SmallVector<User *, 32>(I->users());
     for (User *U : Users) {
         if (CallInst *C = dyn_cast<CallInst>(U)) {
             if (C->getIntrinsicID() == Intrinsic::orisc_unbox_base)

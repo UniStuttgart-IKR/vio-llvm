@@ -399,20 +399,26 @@ SDValue ORISCTargetLowering::
         // If we encounter a "llvm.orisc.box" intrinsic, we split it into
         // allocate 1, 4 -> gep with index 0 -> store base-ptr to ptr slot -> store index to data slot
         SDLoc DL(BoxChain);
+        SDValue DummyChain = DAG.getUNDEF(MVT::Other);
         SDValue Const0 = DAG.getConstant(0, DL, MVT::i32);
         SDValue Const1 = DAG.getConstant(1, DL, MVT::i32);
         SDValue Const4 = DAG.getConstant(4, DL, MVT::i32);
         SDValue AlcID = DAG.getConstant(Intrinsic::orisc_allocate, DL, MVT::i32);
         SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep, DL, MVT::i32);
         
+        SDValue AlcOps[] = { DummyChain, AlcID, Const1, Const4 };
         SDValue Alc = DAG.getNode(ISD::INTRINSIC_W_CHAIN, DL, 
-                            { MVT::pointer, MVT::Other }, { BoxChain, AlcID, Const1, Const4 });
+                            { MVT::pointer, MVT::Other }, AlcOps);
         SDValue Chain = Alc.getValue(1);
         SDValue Gep = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, 
                             MVT::i32, { GepID, Alc, Const0 });
         Chain = DAG.getStore(Chain, DL, Base, Gep, MachinePointerInfo());
         if (isa<ConstantSDNode>(Index) && cast<ConstantSDNode>(Index)->getSExtValue() != 0)
             Chain = DAG.getStore(Chain, DL, Index, Gep, MachinePointerInfo());
+
+        DAG.ReplaceAllUsesOfValueWith(BoxChain, Chain);
+        AlcOps[0] = BoxChain;
+        DAG.UpdateNodeOperands(Alc.getNode(), AlcOps);
         
         return DAG.getMergeValues({Alc.getValue(0), Chain}, DL);
     }
@@ -483,6 +489,9 @@ static inline void getBaseIndex(SDValue Value, SDValue &Base, SDValue &Index, Se
                 Value->getConstantOperandVal(0) == Intrinsic::orisc_gep) {
         Base = Value->getOperand(1);
         Index = Value->getOperand(2);
+    } else if (Value->getOpcode() == ORISCISD::BUILD_PTRARG) {
+        Base = Value->getOperand(0);
+        Index = Value->getOperand(1);
     } else {
         Base = Value;
         Index = DAG.getConstant(0, SDLoc(Value), MVT::i32);

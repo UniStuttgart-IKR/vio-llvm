@@ -92,6 +92,7 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
   PB.registerPipelineStartEPCallback(
     [](ModulePassManager &MPM, OptimizationLevel Level){
       MPM.addPass(PromoteInnerStructsPass());
+      MPM.addPass(SplitMixedStructsPass());
       MPM.addPass(EscapeOutgoingLocalPointersPass()); //Has do be done here because opt will crash the program if you return a local pointer
     });
   PB.registerPeepholeEPCallback(
@@ -105,7 +106,6 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
     [](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
       MPM.addPass(EscapeAllocaPass());
       //if -NoUnnecessaryAllocations remove unneeded Allocates
-      MPM.addPass(SplitMixedStructsPass());
       MPM.addPass(BoxUnboxPointersPass());
     });
 }

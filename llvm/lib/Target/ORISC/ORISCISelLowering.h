@@ -138,6 +138,7 @@ private:
   };
 
   SDValue lowerAdd(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerLoad(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerStore(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerTruncate(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerIntrinsicWChain(SDValue Op, SelectionDAG &DAG) const;

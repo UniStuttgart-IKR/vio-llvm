@@ -94,15 +94,14 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   unsigned LoadList[] = {ISD::NON_EXTLOAD, ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD};
   for (MVT VT : MVT::integer_valuetypes()) {
     for (MVT OtherVT : MVT::integer_valuetypes()) {
-      LegalizeAction Action = OtherVT == MVT::i1 ? Promote : Legal;
+      LegalizeAction Action = OtherVT == MVT::i1 ? Promote : Custom;
       setTruncStoreAction(VT, OtherVT, Action);
       setLoadExtAction(LoadList, VT, OtherVT, Action);
     }
   }
-  setOperationAction(ISD::LOAD, MVT::i32, Legal);
-  setOperationAction(ISD::LOAD, MVT::iPTR, Legal);
-  setOperationAction(ISD::STORE, MVT::i32, Legal);
-  setOperationAction(ISD::STORE, MVT::iPTR, Legal);
+  setOperationAction(ISD::LOAD, MVT::iPTR, Custom);
+  setOperationAction(ISD::LOAD, MVT::pointer, Custom);
+  setOperationAction(ISD::STORE, MVT::iPTR, Custom);
   setOperationAction(ISD::STORE, MVT::pointer, Custom);
 
   setOperationAction(ISD::ConstantPool, PtrVT, Expand);
@@ -283,6 +282,8 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const {
             return lowerIntrinsicWChain(Op, DAG);
         case ISD::INTRINSIC_WO_CHAIN:
             return lowerIntrinsicWOChain(Op, DAG);
+        case ISD::LOAD:
+            return lowerLoad(Op, DAG);
         case ISD::STORE:
             return lowerStore(Op, DAG);
         case ISD::TRUNCATE:
@@ -317,26 +318,116 @@ SDValue ORISCTargetLowering::
     return Op;
 }
 
+static inline SDValue getShiftedIndexGep(SDValue GEP, EVT MemVT, SelectionDAG &DAG){
+    SDLoc DL(GEP);
+    uint64_t S;
+    if (MemVT == MVT::i16)
+        S = 1;
+    else if (MemVT == MVT::i64)
+        S = 3;
+    else
+        S = 2;
+    SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep, DL, MVT::i32);
+    SDValue Base = GEP->getOperand(1);
+    SDValue Index = GEP->getOperand(2);
+
+    //Optimization: if there is a ADDI before ShiftRight
+    //Shift Imm on Compile time and put Add after SRA
+    //So Add can be combined with Load
+    SDValue AddAfterShift;
+    if (Index->getOpcode() == ISD::ADD) {
+      bool LHSIsConst = isa<ConstantSDNode>(Index->getOperand(0));
+      bool RHSIsConst = isa<ConstantSDNode>(Index->getOperand(1));
+      if (LHSIsConst || RHSIsConst) {
+        SDValue ConstValue = LHSIsConst ? Index->getOperand(0) : Index->getOperand(1);
+        ConstantSDNode *Const = cast<ConstantSDNode>(ConstValue);
+        int64_t NewImm = Const->getSExtValue() >> S;
+        //See if NewImm Fits in Load/Store Displacement and ensure that we don't shift out some bits
+        if (NewImm >= 0 && NewImm <= 15 && NewImm << S == Const->getSExtValue()){
+          AddAfterShift = DAG.getConstant(Const->getSExtValue() >> S, DL, ConstValue.getValueType());
+          Index = LHSIsConst ? Index->getOperand(1) : Index->getOperand(0);
+        }
+      }
+    }
+
+    SDValue Shamt = DAG.getShiftAmountConstant(S, MVT::i32, DL);
+    Index = DAG.getNode(ISD::SRA, DL, Index.getValueType(), Index, Shamt);
+    if (AddAfterShift)
+      Index = DAG.getNode(ISD::ADD, DL, Index.getValueType(), Index, AddAfterShift);
+    return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL,
+                            GEP.getValueType(), { GepID, Base, Index });
+}
+
 SDValue ORISCTargetLowering::
     lowerStore(SDValue Op, SelectionDAG &DAG) const {
     // If we are trying to store a BUILD_PTRARG, we are storing the
     // Pointer to the Box in Memory. But because we never really allocated
     // that box, we have to do it here.
     StoreSDNode *OrigStore = cast<StoreSDNode>(Op);
-    if (OrigStore->getValue().getValueType() != MVT::pointer)
+    if (OrigStore->getMemOperand()->getFlags() & MachineMemOperand::MOTargetFlag1)
         return Op;
-    if (OrigStore->getValue()->getOpcode() != ORISCISD::BUILD_PTRARG)
-        return Op;
+    MachineMemOperand *MMO = OrigStore->getMemOperand();
+    MMO->setFlags(MachineMemOperand::MOTargetFlag1);
 
     SDLoc DL(Op);
-    SDValue Base = OrigStore->getValue()->getOperand(0);
-    SDValue Index = OrigStore->getValue()->getOperand(1);
-    SDValue Chain = OrigStore->getChain();
+    SDValue GEP = OrigStore->getBasePtr();
+    if (GEP->getOpcode() == ISD::ADD)
+        GEP = lowerAdd(GEP, DAG);
 
-    SDValue Box = lowerBoxIntrinsic(Chain, Base, Index, DAG);
-    DAG.ReplaceAllUsesOfValueWith(OrigStore->getValue(), Box->getOperand(0));
+    assert(GEP->getOpcode() == ISD::INTRINSIC_WO_CHAIN
+            && GEP.getConstantOperandVal(0) == Intrinsic::orisc_gep
+                && "Pointer Addresses Have To Be GEPs!");
+    
+    EVT MemVT = OrigStore->getMemoryVT();
+    if (MemVT != MVT::i8) {
+        GEP = getShiftedIndexGep(GEP, MemVT, DAG);
+    }
 
-    return DAG.getStore(Box->getOperand(1), DL, Box->getOperand(0), OrigStore->getBasePtr(), OrigStore->getMemOperand());
+    if (OrigStore->getValue()->getOpcode() == ORISCISD::BUILD_PTRARG) {
+        SDValue Base = OrigStore->getValue()->getOperand(0);
+        SDValue Index = OrigStore->getValue()->getOperand(1);
+        SDValue Chain = OrigStore->getChain();
+
+        SDValue Box = lowerBoxIntrinsic(Chain, Base, Index, DAG);
+        DAG.ReplaceAllUsesOfValueWith(OrigStore->getValue(), Box->getOperand(0));
+
+        return DAG.getStore(Box->getOperand(1), DL, Box->getOperand(0), GEP, MMO);
+    }
+
+    if (MemVT == MVT::i32 || MemVT == MVT::pointer || MemVT == MVT::iPTR)
+      return DAG.getStore(OrigStore->getChain(), DL, OrigStore->getValue(), GEP, MMO);
+
+    return DAG.getTruncStore(OrigStore->getChain(), DL, OrigStore->getValue(), GEP, 
+                            MemVT, MMO);
+}
+
+SDValue ORISCTargetLowering::
+    lowerLoad(SDValue Op, SelectionDAG &DAG) const {
+    LoadSDNode *OrigLoad = cast<LoadSDNode>(Op);
+    if (OrigLoad->getMemOperand()->getFlags() & MachineMemOperand::MOTargetFlag1)
+        return Op;
+    MachineMemOperand *MMO = OrigLoad->getMemOperand();
+    MMO->setFlags(MachineMemOperand::MOTargetFlag1);
+    
+    SDLoc DL(Op);
+    SDValue GEP = OrigLoad->getBasePtr();
+    if (GEP->getOpcode() == ISD::ADD)
+        GEP = lowerAdd(GEP, DAG);
+
+    assert(GEP->getOpcode() == ISD::INTRINSIC_WO_CHAIN
+            && GEP.getConstantOperandVal(0) == Intrinsic::orisc_gep
+                && "Pointer Addresses Have To Be GEPs!");
+    
+    EVT MemVT = OrigLoad->getMemoryVT();
+    if (MemVT != MVT::i8) {
+        GEP = getShiftedIndexGep(GEP, OrigLoad->getMemoryVT(), DAG);
+    }
+    if (MemVT == MVT::i32 || MemVT == MVT::pointer || MemVT == MVT::iPTR)
+      return DAG.getLoad(MemVT, DL, OrigLoad->getChain(), GEP, MMO);
+
+    return DAG.getExtLoad(ISD::LoadExtType::EXTLOAD, DL, MVT::i32, OrigLoad->getChain(), GEP, 
+                          MMO->getPointerInfo(), MemVT, 
+                          OrigLoad->getOriginalAlign(), MMO->getFlags());
 }
 
 SDValue ORISCTargetLowering::

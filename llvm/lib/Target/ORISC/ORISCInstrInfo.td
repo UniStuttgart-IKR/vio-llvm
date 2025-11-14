@@ -134,9 +134,11 @@ class StoreIPat<PatFrag StoreOp, ORISCInstr Inst, RegisterClass XR = DR>
 //					   value       			  base   	 offset				 base      offset     value
 
 //Stores with variable Index
-class StorePat<PatFrag StoreOp, ORISCInstr Inst, RegisterClass XR = DR>
-    : Pat<(StoreOp XR:$dy, (int_orisc_gep (iPTR PR:$px), DR:$dz)), (Inst PR:$px, DR:$dz, 1, 0, XR:$dy)>;
-//				   value		 	  	   base	  index   		   base	  index   s  p  value
+multiclass StorePat<PatFrag StoreOp, ORISCInstr Inst, RegisterClass XR = DR> {
+	def  : Pat<(StoreOp XR:$dy, (int_orisc_gep (iPTR PR:$px), (add DR:$dz, uimm4:$ui4))), (Inst PR:$px, DR:$dz, 1, uimm4:$ui4, XR:$dy)>;
+	def  : Pat<(StoreOp XR:$dy, (int_orisc_gep (iPTR PR:$px), DR:$dz)), (Inst PR:$px, DR:$dz, 1, 0, XR:$dy)>;
+//					     value		 	  			   base	   index   		    base	index  s  p  value
+}
 
 //def : StoreIPat<store,         SP_I, PR>;
 def : StoreIPat<store,         SW_I>;
@@ -144,12 +146,13 @@ def : StoreIPat<truncstorei16, SH_I>;
 def : StoreIPat<truncstorei8,  SB_I>;
 
 //def : StorePat<store,         SP, PR>;
-def : StorePat<store,         SW>;
-def : StorePat<truncstorei16, SH>;
-def : StorePat<truncstorei8,  SB>;
+defm : StorePat<store,         SW>;
+defm : StorePat<truncstorei16, SH>;
+defm : StorePat<truncstorei8,  SB>;
 
 def : Pat<(store (pointer PR:$py), (int_orisc_gep (iPTR PR:$px), uimm12:$ix12)), (SP_I PR:$px, uimm12:$ix12, PR:$py)>;
 def : Pat<(store (pointer PR:$py), (int_orisc_gep (iPTR PR:$px), DR:$dz)), (SP PR:$px, DR:$dz, 1, 0, PR:$py)>;
+def : Pat<(store (pointer PR:$py), (int_orisc_gep (iPTR PR:$px), (add DR:$dz, uimm4:$ui4))), (SP PR:$px, DR:$dz, 1, uimm4:$ui4, PR:$py)>;
 
 
 //				------ LOADS ------
@@ -160,9 +163,11 @@ class LoadIPat<PatFrag LoadOp, ORISCInstr Inst, ValueType vt = i32>
 //					   					  base       offset   			 base       offset
 
 //Loads with variable Index
-class LoadPat<PatFrag LoadOp, ORISCInstr Inst, ValueType vt = i32>
-    : Pat<(vt (LoadOp (int_orisc_gep PR:$px, DR:$dz))), (Inst PR:$px, DR:$dz, 1, 0)>;
-//					   				  base   index		 	   base	  index   s  p
+multiclass LoadPat<PatFrag LoadOp, ORISCInstr Inst, ValueType vt = i32> {
+	def : Pat<(vt (LoadOp (int_orisc_gep PR:$px, (add DR:$dz, uimm4:$ui4)))), (Inst PR:$px, DR:$dz, 1, uimm4:$ui4)>;
+	def : Pat<(vt (LoadOp (int_orisc_gep PR:$px, DR:$dz))), (Inst PR:$px, DR:$dz, 1, 0)>;
+//					   				  	  base   index		 	   base	  index   s  p
+}
 
 def : LoadIPat<sextloadi8,  LBS_I>;
 def : LoadIPat<zextloadi8,  LBU_I>;
@@ -173,14 +178,14 @@ def : LoadIPat<extloadi16,  LHU_I>;
 def : LoadIPat<load,        LW_I>;
 def : LoadIPat<load,        LP_I, iPTR>;
 
-def : LoadPat<sextloadi8,  LBS>;
-def : LoadPat<zextloadi8,  LBU>;
-def : LoadPat<extloadi8,   LBU>;
-def : LoadPat<sextloadi16, LHS>;
-def : LoadPat<zextloadi16, LHU>;
-def : LoadPat<extloadi16,  LHU>;
-def : LoadPat<load,        LW>;
-def : LoadPat<load,        LP, iPTR>;
+defm : LoadPat<sextloadi8,  LBS>;
+defm : LoadPat<zextloadi8,  LBU>;
+defm : LoadPat<extloadi8,   LBU>;
+defm : LoadPat<sextloadi16, LHS>;
+defm : LoadPat<zextloadi16, LHU>;
+defm : LoadPat<extloadi16,  LHU>;
+defm : LoadPat<load,        LW>;
+defm : LoadPat<load,        LP, iPTR>;
 
 
 //				------ ALLOCATES ------

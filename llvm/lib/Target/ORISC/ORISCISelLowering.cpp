@@ -319,7 +319,9 @@ SDValue ORISCTargetLowering::
 }
 
 static inline SDValue getShiftedIndexGep(SDValue GEP, EVT MemVT, SelectionDAG &DAG){
-    SDLoc DL(GEP);
+    if (MemVT == MVT::i8)
+        return GEP;
+
     uint64_t S;
     if (MemVT == MVT::i16)
         S = 1;
@@ -327,6 +329,8 @@ static inline SDValue getShiftedIndexGep(SDValue GEP, EVT MemVT, SelectionDAG &D
         S = 3;
     else
         S = 2;
+    
+    SDLoc DL(GEP);
     SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep, DL, MVT::i32);
     SDValue Base = GEP->getOperand(1);
     SDValue Index = GEP->getOperand(2);
@@ -379,16 +383,14 @@ SDValue ORISCTargetLowering::
                 && "Pointer Addresses Have To Be GEPs!");
     
     EVT MemVT = OrigStore->getMemoryVT();
-    if (MemVT != MVT::i8) {
-        GEP = getShiftedIndexGep(GEP, MemVT, DAG);
-    }
+    GEP = getShiftedIndexGep(GEP, MemVT, DAG);
 
     if (OrigStore->getValue()->getOpcode() == ORISCISD::BUILD_PTRARG) {
         SDValue Base = OrigStore->getValue()->getOperand(0);
         SDValue Index = OrigStore->getValue()->getOperand(1);
         SDValue Chain = OrigStore->getChain();
 
-        SDValue Box = lowerBoxIntrinsic(Chain, Base, Index, DAG);
+        SDValue Box = lowerBoxIntrinsic(Chain, Chain, Base, Index, DAG);
         DAG.ReplaceAllUsesOfValueWith(OrigStore->getValue(), Box->getOperand(0));
 
         return DAG.getStore(Box->getOperand(1), DL, Box->getOperand(0), GEP, MMO);
@@ -419,9 +421,8 @@ SDValue ORISCTargetLowering::
                 && "Pointer Addresses Have To Be GEPs!");
     
     EVT MemVT = OrigLoad->getMemoryVT();
-    if (MemVT != MVT::i8) {
-        GEP = getShiftedIndexGep(GEP, OrigLoad->getMemoryVT(), DAG);
-    }
+    GEP = getShiftedIndexGep(GEP, MemVT, DAG);
+
     if (MemVT == MVT::i32 || MemVT == MVT::pointer || MemVT == MVT::iPTR)
       return DAG.getLoad(MemVT, DL, OrigLoad->getChain(), GEP, MMO);
 
@@ -455,6 +456,15 @@ SDValue ORISCTargetLowering::
     switch (IntrinsicID) {
     default:
         return Op;
+
+    case Intrinsic::orisc_gep:
+        if (isa<FrameIndexSDNode>(Op->getOperand(1)) 
+                && isa<ConstantSDNode>(Op->getOperand(2)) && Op->getConstantOperandVal(2) == 0) {
+            uint64_t FI = cast<FrameIndexSDNode>(Op->getOperand(1))->getIndex();
+            return DAG.getFrameIndex(FI, MVT::i32);
+        } else {
+            return Op;
+        }
     case Intrinsic::orisc_unbox_base:
         // LowerFormalArguments left a llvm.orisc.unbox.base( BUILD_PTRARG( CopyFromReg, CopyFromReg ) )
         // And we are only interested in the Result of the first CopyFromReg (the Base)
@@ -481,15 +491,18 @@ SDValue ORISCTargetLowering::
     default:
         return Op;
     case Intrinsic::orisc_box:
-        return lowerBoxIntrinsic(Op->getOperand(0), Op->getOperand(2), Op->getOperand(3), DAG);
+        return lowerBoxIntrinsic(Op->getOperand(0), SDValue(Op.getNode(), 1), Op->getOperand(2), Op->getOperand(3), DAG);
     }
 }
 
 SDValue ORISCTargetLowering::
-    lowerBoxIntrinsic(SDValue BoxChain, SDValue Base, SDValue Index, SelectionDAG &DAG) const {
+    lowerBoxIntrinsic(SDValue ChainIn, SDValue ChainOut, SDValue Base, SDValue Index, SelectionDAG &DAG) const {
+        SDLoc DL(ChainIn);
+        //SDValue Dummy = DAG.getConstant(0, DL, MVT::i32);
+        //return DAG.getNode(ORISCISD::BOX, DL, MVT::pointer, ChainIn, Base, Index);
+
         // If we encounter a "llvm.orisc.box" intrinsic, we split it into
         // allocate 1, 4 -> gep with index 0 -> store base-ptr to ptr slot -> store index to data slot
-        SDLoc DL(BoxChain);
         SDValue DummyChain = DAG.getUNDEF(MVT::Other);
         SDValue Const0 = DAG.getConstant(0, DL, MVT::i32);
         SDValue Const1 = DAG.getConstant(1, DL, MVT::i32);
@@ -507,11 +520,12 @@ SDValue ORISCTargetLowering::
         if (isa<ConstantSDNode>(Index) && cast<ConstantSDNode>(Index)->getSExtValue() != 0)
             Chain = DAG.getStore(Chain, DL, Index, Gep, MachinePointerInfo());
 
-        DAG.ReplaceAllUsesOfValueWith(BoxChain, Chain);
-        AlcOps[0] = BoxChain;
+        if (ChainIn != ChainOut)
+            DAG.ReplaceAllUsesOfValueWith(ChainOut, Chain);
+        AlcOps[0] = ChainIn;
         DAG.UpdateNodeOperands(Alc.getNode(), AlcOps);
-        
-        return DAG.getMergeValues({Alc.getValue(0), Chain}, DL);
+        SDValue Res = DAG.getMergeValues({Alc.getValue(0), Chain}, DL);
+        return Res;
     }
 
 

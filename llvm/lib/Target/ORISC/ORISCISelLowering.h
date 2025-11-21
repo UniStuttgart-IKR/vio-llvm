@@ -27,6 +27,7 @@ namespace llvm {
 namespace ORISCISD {
 enum NodeType : unsigned  {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
+  BOX,
   BUILD_PTRARG,
   LOCAL_CALL,
   LIBRARY_CALL,
@@ -143,7 +144,7 @@ private:
   SDValue lowerTruncate(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerIntrinsicWChain(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerIntrinsicWOChain(SDValue Op, SelectionDAG &DAG) const;
-  SDValue lowerBoxIntrinsic(SDValue Chain, SDValue Base, SDValue Index, SelectionDAG &DAG) const;
+  SDValue lowerBoxIntrinsic(SDValue ChainIn, SDValue ChainOut, SDValue Base, SDValue Index, SelectionDAG &DAG) const;
 
   void escapeCallBoxings(SmallVector<SDValue> &Users, SDValue Chain, SDValue Base, SDValue Index, SelectionDAG &DAG) const;
 };

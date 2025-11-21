@@ -35,6 +35,7 @@ INITIALIZE_PASS(ORISCDAGToDAGISelLegacy, DEBUG_TYPE, PASS_NAME, false,
 
 void ORISCDAGToDAGISel::Select(SDNode *Node) {
   switch (Node->getOpcode()) {
+    
     // Select the default instruction.
     default:
       SelectCode(Node);

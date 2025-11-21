@@ -21,6 +21,7 @@
 #include "llvm/IR/Type.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
+#include <cassert>
 #include "MCTargetDesc/ORISCMCTargetDesc.h"
 
 using namespace llvm;
@@ -103,6 +104,15 @@ ORISCRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 	Register FrameReg;
 	int Offset;
 	Offset = TFI->getFrameIndexReference(MF, FrameIndex, FrameReg).getFixed();
+	if (MI.getOpcode() == ORISC::LW_I || MI.getOpcode() == ORISC::LP_I
+		|| MI.getOpcode() == ORISC::SW_I || MI.getOpcode() == ORISC::SP_I) {
+		assert(Offset % 4 == 0 && "Unalligned Memory Access");
+		Offset = Offset/4;
+	} else if (MI.getOpcode() == ORISC::LHS_I || MI.getOpcode() == ORISC::LHU_I
+		|| MI.getOpcode() == ORISC::SH_I) {
+		assert(Offset % 2 == 0 && "Unalligned Memory Access");
+		Offset = Offset/2;
+	}
 	//Offset += MI.getOperand(FIOperandNum + 1).getImm();  
 
 	replaceFI(MF, II, MI, dl, FIOperandNum, Offset, FrameReg);

@@ -94,6 +94,10 @@ def CallSymbol : AsmOperandClass {
   let ParserMethod = "decodeCallSymbol";
 }
 
+def to_tframeindex : SDNodeXForm<frameindex, [{
+  return CurDAG->getTargetFrameIndex(N->getIndex(), N->getValueType(0));
+}]>;
+
 // A bare symbol used in call/tail only.
 def call_symbol : Operand<iPTR> {
   let ParserMatchClass = CallSymbol;

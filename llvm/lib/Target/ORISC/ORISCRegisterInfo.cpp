@@ -69,7 +69,6 @@ static void replaceFI(MachineFunction &MF, MachineBasicBlock::iterator II,
 	if (Offset <= 4095) {
 		// If the offset is small enough to fit in the immediate field, directly
 		// encode it.
-		MI.dump();
 		MI.getOperand(FIOperandNum).ChangeToImmediate(Offset);
 		return;
 	}
@@ -123,4 +122,44 @@ ORISCRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
 Register ORISCRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
 	return ORISC::P30;
+}
+
+bool ORISCRegisterInfo::isPointerRegister(const unsigned int RegIdx) const {
+    switch (RegIdx) {
+    	default:
+        	return false;
+		case ORISC::P0:
+		case ORISC::P1:
+		case ORISC::P2:
+		case ORISC::P3:
+		case ORISC::P4:
+		case ORISC::P5:
+		case ORISC::P6:
+		case ORISC::P7:
+		case ORISC::P8:
+		case ORISC::P9:
+		case ORISC::P10:
+		case ORISC::P11:
+		case ORISC::P12:
+		case ORISC::P13:
+		case ORISC::P14:
+		case ORISC::P15:
+		case ORISC::P16:
+		case ORISC::P17:
+		case ORISC::P18:
+		case ORISC::P19:
+		case ORISC::P20:
+		case ORISC::P21:
+		case ORISC::P22:
+		case ORISC::P23:
+		case ORISC::P24:
+		case ORISC::P25:
+		case ORISC::P26:
+		case ORISC::P27:
+		case ORISC::P28:
+		case ORISC::P29:
+		case ORISC::P30:
+		case ORISC::P31:
+			return true;
+    }
 }

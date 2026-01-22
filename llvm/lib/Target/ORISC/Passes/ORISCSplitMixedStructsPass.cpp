@@ -34,7 +34,7 @@ PreservedAnalyses SplitMixedStructsPass::run(Module &M, ModuleAnalysisManager &A
             } else if (!ST->getElementType(i)->isArrayTy()) { //aka is Primitive
                 NewIndices.push_back(Primitives->size());
                 Primitives->push_back(ST->getElementType(i));
-            } else {
+            } else { // is Array
                 ArrayType *ATy = cast<ArrayType>(ST->getElementType(i));
                 while (ATy->getElementType()->isArrayTy())
                     ATy = cast<ArrayType>(ATy->getElementType());

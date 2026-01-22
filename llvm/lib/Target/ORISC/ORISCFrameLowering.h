@@ -16,20 +16,23 @@
 #include "llvm/CodeGen/TargetFrameLowering.h"
 
 namespace llvm {
+class ORISCSubtarget;
 class ORISCFrameLowering : public TargetFrameLowering {
 
 public:
-  explicit ORISCFrameLowering()
+  explicit ORISCFrameLowering(const ORISCSubtarget &STI)
       : TargetFrameLowering(StackGrowsDown,
                             /*StackAlignment=*/Align(16),
-                            /*LocalAreaOffset=*/0) {}
+                            /*LocalAreaOffset=*/0), STI(STI) {}
 
   void emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
   void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
 
   StackOffset getFrameIndexReference(const MachineFunction &MF, int FI, Register &FrameReg) const override;
+  void processFunctionBeforeFrameIndicesReplaced(MachineFunction &MF, RegScavenger *RS = nullptr) const override;
 
 protected:
+  const ORISCSubtarget &STI;
   bool hasFPImpl(const MachineFunction &MF) const override;
 };
 } // end namespace llvm

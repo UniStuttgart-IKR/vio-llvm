@@ -328,8 +328,8 @@ let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
 
 // Stack Instructions
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Defs = [P30] in {
-	def	PUSH:	ORISCInstr<"push", (outs PR:$px), (ins uimm11:$pi11, uimm15:$delta15), "$px = $pi11, $delta15", FormatPGU6>;
-	def	PUSHT:	ORISCInstr<"pusht", (outs PR:$px), (ins uimm11:$pi11, uimm15:$delta15), "$px = $pi11, $delta15", FormatPGU5>;
+	def	PUSH:	ORISCInstr<"push", (outs PR:$px), (ins uimm11:$pi11, uimm15:$delta15), "$pi11, $delta15", FormatPGU6>;
+	def	PUSHT:	ORISCInstr<"pusht", (outs PR:$px), (ins uimm11:$pi11, uimm15:$delta15), "$pi11, $delta15", FormatPGU5>;
 }
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Uses = [P30] in {
 	def	POP:		ORISCInstr<"pop", (outs), (ins), "", FormatReg0>;

@@ -11,14 +11,89 @@
 //===----------------------------------------------------------------------===//
 
 #include "ORISCFrameLowering.h"
+#include "MCTargetDesc/ORISCMCTargetDesc.h"
+#include "ORISCInstrInfo.h"
+#include "ORISCSubtarget.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/Support/Debug.h"
+#include <cassert>
+#include <cstdint>
+#include <sys/types.h>
 
 using namespace llvm;
 
+static int64_t roundUpToRegSize(u_int16_t RegSizeBytes, int64_t ToRound) {
+  int64_t Rest = ToRound % RegSizeBytes;
+  if (Rest != 0)
+    return ToRound-Rest+RegSizeBytes;
+  return ToRound;
+}
+
 void ORISCFrameLowering::emitPrologue(MachineFunction &MF,
-                                      MachineBasicBlock &MBB) const {}
+                                      MachineBasicBlock &MBB) const {
+  DebugLoc DL;
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  const ORISCInstrInfo *TII = STI.getInstrInfo();
+  const ORISCRegisterInfo *TRI = STI.getRegisterInfo();
+  MachineBasicBlock::iterator MBBI = MBB.begin();
+
+  if (MFI.getStackSize() == 0 && MFI.getCalleeSavedInfo().empty())
+    return;
+
+  unsigned PointersOnStack = 0;
+  unsigned PrimitivesOnStack = 0;
+
+  for (auto CSI : MFI.getCalleeSavedInfo()) {
+    if (TRI->isPointerRegister(CSI.getReg())) {
+      if (CSI.getReg() == ORISC::P31)
+        continue;
+      PointersOnStack += 1;
+    } else {
+      PrimitivesOnStack += 4;
+    }
+  }
+
+  for (unsigned I = 0; I < MFI.getNumObjects(); ++I) {
+    const AllocaInst *Alc = MFI.getObjectAllocation(I);
+    if (Alc) {
+      // 1: Allocating Pointer on Stack
+      if (Alc->getAllocatedType()->isPointerTy()) {
+        PointersOnStack += 1;
+      // 2: Allocating Array on Stack
+      } else if (Alc->getAllocatedType()->isArrayTy()) {
+        // 2.1: Array of Pointers
+        if (Alc->getAllocatedType()->getArrayElementType()->isPointerTy()) {
+          PointersOnStack += Alc->getAllocatedType()->getArrayNumElements();
+        // 2.2: Array of Primitives
+        } else {
+          assert(!Alc->getAllocatedType()->getArrayElementType()->isAggregateType() && "Arrays of Structs not handled yet");
+          PrimitivesOnStack += roundUpToRegSize(4, MFI.getObjectSize(I));
+        }
+      // 3: Allocating Struct on Stack
+      } else if (Alc->getAllocatedType()->isAggregateType()) {
+        //We assume that Mixed Structs have been eliminated by an IR Pass
+        if (Alc->getAllocatedType()->getStructElementType(0)->isPointerTy()) {
+          PointersOnStack += Alc->getAllocatedType()->getStructNumElements();
+        } else {
+          PrimitivesOnStack += roundUpToRegSize(4, MFI.getObjectSize(I));
+        }
+      // 4: Only Primitives would be left here(?)
+      } else {
+        PrimitivesOnStack += roundUpToRegSize(4, MFI.getObjectSize(I));
+      }
+    }
+  }
+  
+  unsigned int Opcode = MFI.hasCalls() ? ORISC::PUSH : ORISC::PUSHT;
+  BuildMI(MBB, MBBI, DL, TII->get(Opcode), TRI->getFrameRegister(MF))
+      .addImm(PointersOnStack)
+      .addImm(PrimitivesOnStack)
+      .setMIFlags(MachineInstr::FrameSetup);
+  return;
+}
                                       
 void ORISCFrameLowering::emitEpilogue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {}
@@ -43,4 +118,65 @@ ORISCFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   FrameReg = RI->getFrameRegister(MF);
 
   return StackOffset::getFixed(MFI.getObjectOffset(FI));
+}
+
+void
+ORISCFrameLowering::processFunctionBeforeFrameIndicesReplaced(MachineFunction &MF,
+                                                              RegScavenger *RS) const {
+  DebugLoc DL;
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  const ORISCInstrInfo *TII = STI.getInstrInfo();
+  const ORISCRegisterInfo *TRI = STI.getRegisterInfo();
+
+  unsigned PointerCounter = 0;
+  unsigned PrimitivesCounter = 0;
+
+  for (auto CSI : MFI.getCalleeSavedInfo()) {
+    if (TRI->isPointerRegister(CSI.getReg())) {
+      if (CSI.getReg() == ORISC::P31)
+        continue;
+      CSI.setFrameIdx(PointerCounter);
+      PointerCounter += 4;
+    } else {
+      CSI.setFrameIdx(PrimitivesCounter);
+      PrimitivesCounter += 4;
+    }
+  }
+
+  for (unsigned I = 0; I < MFI.getNumObjects(); ++I) {
+    const AllocaInst *Alc = MFI.getObjectAllocation(I);
+    if (Alc) {
+      // 1: Allocating Pointer on Stack
+      if (Alc->getAllocatedType()->isPointerTy()) {
+        MFI.setObjectOffset(I, PointerCounter);
+        PointerCounter += 4;
+      // 2: Allocating Array on Stack
+      } else if (Alc->getAllocatedType()->isArrayTy()) {
+        // 2.1: Array of Pointers
+        if (Alc->getAllocatedType()->getArrayElementType()->isPointerTy()) {
+          MFI.setObjectOffset(I, PointerCounter);
+          PointerCounter += (Alc->getAllocatedType()->getArrayNumElements()*4);
+        // 2.2: Array of Primitives
+        } else {
+          assert(!Alc->getAllocatedType()->getArrayElementType()->isAggregateType() && "Arrays of Structs not handled yet");
+          MFI.setObjectOffset(I, PrimitivesCounter);
+          PrimitivesCounter += roundUpToRegSize(4, MFI.getObjectSize(I));
+        }
+      // 3: Allocating Struct on Stack
+      } else if (Alc->getAllocatedType()->isAggregateType()) {
+        //We assume that Mixed Structs have been eliminated by an IR Pass
+        if (Alc->getAllocatedType()->getStructElementType(0)->isPointerTy()) {
+          MFI.setObjectOffset(I, PointerCounter);
+          PointerCounter += (Alc->getAllocatedType()->getStructNumElements()*4);
+        } else {
+          MFI.setObjectOffset(I, PrimitivesCounter);
+          PrimitivesCounter += roundUpToRegSize(4, MFI.getObjectSize(I));
+        }
+      // 4: Only Primitives would be left here(?)
+      } else {
+        MFI.setObjectOffset(I, PrimitivesCounter);
+        PrimitivesCounter += roundUpToRegSize(4, MFI.getObjectSize(I));
+      }
+    }
+  }
 }

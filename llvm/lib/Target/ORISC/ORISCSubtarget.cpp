@@ -36,7 +36,7 @@ void ORISCSubtarget::anchor() {}
 ORISCSubtarget::ORISCSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
                              const ORISCTargetMachine &TM)
     : ORISCGenSubtargetInfo(TT, CPU, /*TuneCPU*/ CPU, FS),
-      FrameLowering(), RegisterInfo(), InstrInfo(*this),
+      FrameLowering(*this), RegisterInfo(), InstrInfo(*this),
       TLInfo(TM, *this), TSInfo() {
         
 }

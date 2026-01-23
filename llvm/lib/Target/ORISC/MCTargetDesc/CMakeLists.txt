@@ -2,6 +2,7 @@ add_llvm_component_library(LLVMORISCDesc
   ORISCInstPrinter.cpp
   ORISCMCAsmInfo.cpp
   ORISCMCTargetDesc.cpp
+  ORISCTargetStreamer.cpp
 
   LINK_COMPONENTS
   MC

@@ -11,6 +11,7 @@
 
 #include "ORISC.h"
 #include "ORISCTargetMachine.h"
+#include "ORISCTargetObjectFile.h"
 #include "Passes/ORISCBoxUnboxPointersPass.h"
 #include "Passes/ORISCEscapeAllocaPass.h"
 #include "Passes/ORISCRejectUnsupportedIRPass.h"
@@ -53,7 +54,7 @@ ORISCTargetMachine::ORISCTargetMachine(const Target &T, const Triple &TT,
                                        std::optional<CodeModel::Model> CM,
                                        CodeGenOptLevel OL, bool JIT)
     : CodeGenTargetMachineImpl(T, getDataLayout(), TT, CPU, FS, Options, getEffectiveRelocModel(RM), getEffectiveCodeModel(CM, CodeModel::Small), OL),
-      TLOF(std::make_unique<TargetLoweringObjectFileELF>()) ,
+      TLOF(std::make_unique<ORISCTargetObjectFile>()),
       Subtarget(TT, CPU, FS, *this){
   initAsmInfo();
 }

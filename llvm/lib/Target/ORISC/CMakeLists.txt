@@ -28,6 +28,7 @@ add_llvm_target(ORISCCodeGen
   ORISCRegisterInfo.cpp
   ORISCSubtarget.cpp
   ORISCTargetMachine.cpp
+  ORISCTargetObjectFile.cpp
 
   LINK_COMPONENTS
   AsmPrinter

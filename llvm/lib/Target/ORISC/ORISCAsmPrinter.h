@@ -16,6 +16,7 @@
 #include "ORISCTargetMachine.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/Compiler.h"
 
 namespace llvm {
@@ -39,6 +40,8 @@ public:
     void emitEndOfAsmFile(Module &M) override;
 
     void emitInstruction(const MachineInstr *MI) override;
+    void emitLinkage(const GlobalValue *GV, MCSymbol *GVSym) const override;
+    void emitFunctionEntryLabel() override;
 
     void printOperand(const MachineInstr *MI, int opNum, raw_ostream &O);
 
@@ -59,6 +62,8 @@ public:
     }
 
 private:
+      SmallVector<const MCSymbol *, 16> PublicFunctions;
+
       MCOperand lowerSymbolOperand(const MachineOperand &MO,
                                     MachineOperand::MachineOperandType MOTy,
                                     unsigned Offset) const;

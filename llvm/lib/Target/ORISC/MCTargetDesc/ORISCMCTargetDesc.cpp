@@ -13,6 +13,7 @@
 #include "ORISCMCTargetDesc.h"
 #include "ORISCInstPrinter.h"
 #include "ORISCMCAsmInfo.h"
+#include "ORISCTargetStreamer.h"
 #include "TargetInfo/ORISCTargetInfo.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -70,6 +71,12 @@ createORISCMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
     return createORISCMCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS);
 }
 
+static MCTargetStreamer *
+createORISCAsmTargetStreamer(MCStreamer &S, formatted_raw_ostream &OS,
+                              MCInstPrinter *InstPrint) {
+  return new ORISCTargetAsmStreamer(S, OS);
+}
+
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeORISCTargetMC() {
     for (Target *T : {&getTheORISCTarget()}) {
         TargetRegistry::RegisterMCRegInfo(*T, createORISCMCRegisterInfo);
@@ -83,7 +90,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeORISCTargetMC() {
         //TargetRegistry::RegisterELFStreamer(*T, createLoongArchELFStreamer);
         //TargetRegistry::RegisterObjectTargetStreamer(
         //    *T, createLoongArchObjectTargetStreamer);
-        //TargetRegistry::RegisterAsmTargetStreamer(*T,
-        //                                          createLoongArchAsmTargetStreamer);
+        TargetRegistry::RegisterAsmTargetStreamer(*T, createORISCAsmTargetStreamer);
     }
 }

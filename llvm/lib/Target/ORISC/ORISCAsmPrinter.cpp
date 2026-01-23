@@ -16,6 +16,7 @@
 #include "MCTargetDesc/ORISCInstPrinter.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/BinaryFormat/ELF.h"
+#include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineModuleInfoImpls.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
@@ -39,6 +40,16 @@ void ORISCAsmPrinter::emitInstruction(const MachineInstr *MI) {
     EmitToStreamer(*OutStreamer, LoweredMI);
     return;
   }
+}
+
+void ORISCAsmPrinter::emitLinkage(const GlobalValue *GV, MCSymbol *GVSym) const {
+  //No Linkage Information needed yet
+}
+
+void ORISCAsmPrinter::emitFunctionEntryLabel() {
+  AsmPrinter::emitFunctionEntryLabel();
+  if (CurrentFnSym && CurrentFnSym->isExternal())
+    PublicFunctions.push_back(CurrentFnSym);
 }
 
 void ORISCAsmPrinter::printOperand(const MachineInstr *MI, int OpNo,

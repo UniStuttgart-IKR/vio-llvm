@@ -97,12 +97,12 @@ ORISCRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 	MachineInstr &MI = *II;
 	DebugLoc dl = MI.getDebugLoc();
 	int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
+	
 	MachineFunction &MF = *MI.getParent()->getParent();
 	const ORISCFrameLowering *TFI = getFrameLowering(MF);
 
 	Register FrameReg;
-	int Offset;
-	Offset = TFI->getFrameIndexReference(MF, FrameIndex, FrameReg).getFixed();
+	int Offset = TFI->getFrameIndexReference(MF, FrameIndex, FrameReg).getFixed();
 	if (MI.getOpcode() == ORISC::LW_I || MI.getOpcode() == ORISC::LP_I
 		|| MI.getOpcode() == ORISC::SW_I || MI.getOpcode() == ORISC::SP_I) {
 		assert(Offset % 4 == 0 && "Unalligned Memory Access");
@@ -122,44 +122,4 @@ ORISCRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
 Register ORISCRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
 	return ORISC::P30;
-}
-
-bool ORISCRegisterInfo::isPointerRegister(const unsigned int RegIdx) const {
-    switch (RegIdx) {
-    	default:
-        	return false;
-		case ORISC::P0:
-		case ORISC::P1:
-		case ORISC::P2:
-		case ORISC::P3:
-		case ORISC::P4:
-		case ORISC::P5:
-		case ORISC::P6:
-		case ORISC::P7:
-		case ORISC::P8:
-		case ORISC::P9:
-		case ORISC::P10:
-		case ORISC::P11:
-		case ORISC::P12:
-		case ORISC::P13:
-		case ORISC::P14:
-		case ORISC::P15:
-		case ORISC::P16:
-		case ORISC::P17:
-		case ORISC::P18:
-		case ORISC::P19:
-		case ORISC::P20:
-		case ORISC::P21:
-		case ORISC::P22:
-		case ORISC::P23:
-		case ORISC::P24:
-		case ORISC::P25:
-		case ORISC::P26:
-		case ORISC::P27:
-		case ORISC::P28:
-		case ORISC::P29:
-		case ORISC::P30:
-		case ORISC::P31:
-			return true;
-    }
 }

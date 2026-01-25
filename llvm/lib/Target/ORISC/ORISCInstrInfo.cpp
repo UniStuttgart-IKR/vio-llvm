@@ -12,6 +12,7 @@
 
 #include "ORISCInstrInfo.h"
 #include "ORISCRegisterInfo.h"
+#include "ORISCSubtarget.h"
 #include "ORISCTargetMachine.h"
 #include "MCTargetDesc/ORISCMCTargetDesc.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
@@ -29,7 +30,7 @@ using namespace llvm;
 #include "ORISCGenInstrInfo.inc"
 
 ORISCInstrInfo::ORISCInstrInfo(ORISCSubtarget &STI)
-    : ORISCGenInstrInfo() {}
+    : ORISCGenInstrInfo(), STI(STI) {}
 
 MCInst ORISCInstrInfo::getNop() const {
     return MCInstBuilder(ORISC::CLZ)
@@ -89,9 +90,8 @@ Register ORISCInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
     //    break;
     }
 
-    if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
-        MI.getOperand(2).getImm() == 0) {
-        FrameIndex = MI.getOperand(1).getIndex();
+    if (MI.getOperand(2).isFI()) {
+        FrameIndex = MI.getOperand(2).getIndex();
         return MI.getOperand(0).getReg();
     }
 
@@ -110,11 +110,18 @@ void ORISCInstrInfo::loadRegFromStackSlot(
         MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
         MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
 
-    unsigned int Opcode = DstReg == ORISC::P31 ? ORISC::RSTRPC : ORISC::LW_I;
+    unsigned int Opcode;
+    if (DstReg == ORISC::P31)
+        Opcode = ORISC::RSTRPC;
+    else if (ORISC::PRRegClass.contains(DstReg))
+        Opcode = ORISC::LP_I;
+    else
+        Opcode = ORISC::LW_I;
 
-    BuildMI(MBB, I, DL, get(Opcode), DstReg)
+    BuildMI(MBB, I, DebugLoc(), get(Opcode))
+        .addReg(DstReg)
+        .addReg(TRI->getFrameRegister(*MF))
         .addFrameIndex(FI)
-        .addImm(0)
         .addMemOperand(MMO)
         .setMIFlag(Flags);
 }
@@ -149,10 +156,9 @@ Register ORISCInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
     //    break;
     }
 
-    if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
-        MI.getOperand(2).getImm() == 0) {
+    if (MI.getOperand(1).isFI()) {
         FrameIndex = MI.getOperand(1).getIndex();
-        return MI.getOperand(0).getReg();
+        return MI.getOperand(2).getReg();
     }
 
     return 0;
@@ -167,16 +173,23 @@ void ORISCInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                                          MachineInstr::MIFlag Flags) const {
     MachineFunction *MF = MBB.getParent();
     MachineFrameInfo &MFI = MF->getFrameInfo();
+
     MachineMemOperand *MMO = MF->getMachineMemOperand(
-        MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
+        MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
         MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
 
-    unsigned int Opcode = SrcReg == ORISC::P31 ? ORISC::SVRPC : ORISC::SW_I;
+    unsigned int Opcode;
+    if (SrcReg == ORISC::P31)
+        Opcode = ORISC::SVRPC;
+    else if (ORISC::PRRegClass.contains(SrcReg))
+        Opcode = ORISC::SP_I;
+    else
+        Opcode = ORISC::SW_I;
 
     BuildMI(MBB, I, DebugLoc(), get(Opcode))
-        .addReg(SrcReg, getKillRegState(IsKill))
+        .addReg(TRI->getFrameRegister(*MF), getKillRegState(IsKill))
         .addFrameIndex(FI)
-        .addImm(0)
+        .addReg(SrcReg, getKillRegState(IsKill))
         .addMemOperand(MMO)
         .setMIFlag(Flags);
 }

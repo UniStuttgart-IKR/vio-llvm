@@ -94,6 +94,9 @@ private:
         return Opc == ORISC::JMP || Opc == ORISC::JSR || Opc == ORISC::JLIB;
     }
 
+protected:
+  const ORISCSubtarget &STI;
+
 };
 }
 #endif

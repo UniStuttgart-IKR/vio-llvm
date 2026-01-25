@@ -42,8 +42,6 @@ struct ORISCRegisterInfo : public ORISCGenRegisterInfo {
   Register getFrameRegister(const MachineFunction &MF) const override;
 
   const TargetRegisterClass *getPointerRegClass(const MachineFunction &MF, unsigned Kind) const override;
-
-  bool isPointerRegister(const unsigned int RegIdx) const;
 };
 
 } // end namespace llvm

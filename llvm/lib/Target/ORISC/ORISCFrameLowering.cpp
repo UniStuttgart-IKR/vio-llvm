@@ -14,6 +14,7 @@
 #include "MCTargetDesc/ORISCMCTargetDesc.h"
 #include "ORISCInstrInfo.h"
 #include "ORISCSubtarget.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
@@ -46,9 +47,9 @@ void ORISCFrameLowering::emitPrologue(MachineFunction &MF,
   unsigned PointersOnStack = 0;
   unsigned PrimitivesOnStack = 0;
 
-  for (auto CSI : MFI.getCalleeSavedInfo()) {
-    if (TRI->isPointerRegister(CSI.getReg())) {
-      if (CSI.getReg() == ORISC::P31)
+  for (auto CS : MFI.getCalleeSavedInfo()) {
+    if (ORISC::PRRegClass.contains(CS.getReg())) {
+      if (CS.getReg() == ORISC::P31)
         continue;
       PointersOnStack += 1;
     } else {
@@ -56,7 +57,7 @@ void ORISCFrameLowering::emitPrologue(MachineFunction &MF,
     }
   }
 
-  for (unsigned I = 0; I < MFI.getNumObjects(); ++I) {
+  for (int I = 0; I < MFI.getObjectIndexEnd(); ++I) {
     const AllocaInst *Alc = MFI.getObjectAllocation(I);
     if (Alc) {
       // 1: Allocating Pointer on Stack
@@ -96,7 +97,27 @@ void ORISCFrameLowering::emitPrologue(MachineFunction &MF,
 }
                                       
 void ORISCFrameLowering::emitEpilogue(MachineFunction &MF,
-                                      MachineBasicBlock &MBB) const {}
+                                      MachineBasicBlock &MBB) const {
+  DebugLoc DL;
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  const ORISCInstrInfo *TII = STI.getInstrInfo();
+  const ORISCRegisterInfo *TRI = STI.getRegisterInfo();
+
+  if (MFI.getStackSize() == 0 && MFI.getCalleeSavedInfo().empty())
+    return;
+
+  MachineBasicBlock::iterator MBBI = MBB.end();
+  if (!MBB.empty()) {
+    MBBI = MBB.getLastNonDebugInstr();
+    if (MBBI != MBB.end())
+      DL = MBBI->getDebugLoc();
+
+    MBBI = MBB.getFirstTerminator();
+  }
+
+  BuildMI(MBB, MBBI, DL, TII->get(ORISC::POP), TRI->getFrameRegister(MF))
+      .setMIFlags(MachineInstr::FrameDestroy);
+}
                                       
 bool ORISCFrameLowering::hasFPImpl(const MachineFunction &MF) const {
   return false;
@@ -116,8 +137,9 @@ ORISCFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   // getFrameRegister() says. The target can override this if it's doing
   // something different.
   FrameReg = RI->getFrameRegister(MF);
+  uint64_t Offset = MFI.getObjectOffset(FI);
 
-  return StackOffset::getFixed(MFI.getObjectOffset(FI));
+  return StackOffset::getFixed(Offset);
 }
 
 void
@@ -125,25 +147,32 @@ ORISCFrameLowering::processFunctionBeforeFrameIndicesReplaced(MachineFunction &M
                                                               RegScavenger *RS) const {
   DebugLoc DL;
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  const ORISCInstrInfo *TII = STI.getInstrInfo();
-  const ORISCRegisterInfo *TRI = STI.getRegisterInfo();
+
+  bool SpillHandled[64] = { false };
 
   unsigned PointerCounter = 0;
   unsigned PrimitivesCounter = 0;
 
-  for (auto CSI : MFI.getCalleeSavedInfo()) {
-    if (TRI->isPointerRegister(CSI.getReg())) {
-      if (CSI.getReg() == ORISC::P31)
+  for (auto CS : MFI.getCalleeSavedInfo()) {
+    if (ORISC::PRRegClass.contains(CS.getReg())) {
+      if (CS.getReg() == ORISC::P31)
         continue;
-      CSI.setFrameIdx(PointerCounter);
+      MFI.setObjectOffset(CS.getFrameIdx(), PointerCounter);
+      if (CS.getFrameIdx() >= 0)
+        SpillHandled[CS.getFrameIdx()] = true;
       PointerCounter += 4;
     } else {
-      CSI.setFrameIdx(PrimitivesCounter);
+      MFI.setObjectOffset(CS.getFrameIdx(), PrimitivesCounter);
+      if (CS.getFrameIdx() >= 0)
+        SpillHandled[CS.getFrameIdx()] = true;
       PrimitivesCounter += 4;
     }
   }
 
-  for (unsigned I = 0; I < MFI.getNumObjects(); ++I) {
+  for (int I = 0; I < MFI.getObjectIndexEnd(); ++I) {
+    if (MFI.isSpillSlotObjectIndex(I) && SpillHandled[I])
+      continue;
+
     const AllocaInst *Alc = MFI.getObjectAllocation(I);
     if (Alc) {
       // 1: Allocating Pointer on Stack

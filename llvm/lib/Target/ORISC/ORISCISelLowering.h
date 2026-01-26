@@ -31,6 +31,7 @@ enum NodeType : unsigned  {
   BUILD_PTRARG,
   LOCAL_CALL,
   LIBRARY_CALL,
+  LOAD_CONST,
   TAIL_CALL,
   RET,
 };
@@ -142,6 +143,7 @@ private:
   SDValue lowerLoad(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerStore(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerTruncate(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerIntrinsicWChain(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerIntrinsicWOChain(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBoxIntrinsic(SDValue ChainIn, SDValue ChainOut, SDValue Base, SDValue Index, SelectionDAG &DAG) const;

@@ -104,8 +104,8 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::STORE, MVT::iPTR, Custom);
   setOperationAction(ISD::STORE, MVT::pointer, Custom);
 
-  setOperationAction(ISD::ConstantPool, PtrVT, Expand);
-  setOperationAction(ISD::GlobalAddress, PtrVT, Expand);
+  setOperationAction(ISD::ConstantPool, MVT::pointer, Custom);
+  setOperationAction(ISD::GlobalAddress, MVT::pointer, Custom);
   setOperationAction(ISD::BlockAddress, PtrVT, Expand);
   setOperationAction(ISD::JumpTable, PtrVT, Expand);
 
@@ -120,9 +120,9 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT_CC, MVT::i32, Expand);
   setOperationAction(ISD::SETCC, MVT::i32, Legal);
 
-  setOperationAction(ISD::MUL, MVT::i32, Expand);
-  setOperationAction(ISD::MULHU, MVT::i32, Expand);
-  setOperationAction(ISD::MULHS, MVT::i32, Expand);
+  setOperationAction(ISD::MUL, MVT::i32, Legal);
+  setOperationAction(ISD::MULHU, MVT::i32, Legal);
+  setOperationAction(ISD::MULHS, MVT::i32, Legal);
   setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
   setOperationAction(ISD::UMUL_LOHI, MVT::i32, Expand);
 
@@ -288,6 +288,9 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const {
             return lowerStore(Op, DAG);
         case ISD::TRUNCATE:
             return lowerTruncate(Op, DAG);
+        case ISD::ConstantPool:
+        case ISD::GlobalAddress:
+          return lowerGlobalAddress(Op, DAG);
 
         default: llvm_unreachable("Should not custom lower this!");
   }
@@ -445,6 +448,17 @@ SDValue ORISCTargetLowering::
       }
     }
     return Op;
+  }
+
+
+SDValue ORISCTargetLowering::
+  lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const {
+    SDLoc DL(Op);
+    GlobalAddressSDNode *GA = cast<GlobalAddressSDNode>(Op);
+    dbgs() << GA->getGlobal()->getGlobalIdentifier() << "\n";
+    GA->dump();
+    SDValue Addr = DAG.getTargetGlobalAddress(GA->getGlobal(), DL, Op.getValueType());
+    return DAG.getNode(ORISCISD::LOAD_CONST, DL, MVT::pointer, Addr);
   }
 
 

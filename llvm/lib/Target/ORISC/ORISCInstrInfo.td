@@ -32,6 +32,10 @@ def SDT_ORISCLibraryCall     : SDTypeProfile<0, -1, [SDTCisVT<0, i32>, SDTCisVT<
 def orisc_library_call  : SDNode<"ORISCISD::LIBRARY_CALL", SDT_ORISCLibraryCall,
                              [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 
+def SDT_ORISCLoadConst     : SDTypeProfile<0, -1, []>;
+def orisc_load_const  : SDNode<"ORISCISD::LOAD_CONST", SDT_ORISCLoadConst, []>;
+
+
 //===----------------------------------------------------------------------===//
 // Instruction Selection Patterns
 //===----------------------------------------------------------------------===//
@@ -119,7 +123,7 @@ def : Pat<(br bb:$sd25), (BRA brtarget:$sd25)>;
 def : Pat<(orisc_local_call tglobaladdr:$symbol), (BSR call_symbol:$symbol)>;
 def : Pat<(orisc_local_call globaladdr:$symbol), (BSR call_symbol:$symbol)>;
 
-
+def : Pat<(orisc_load_const tglobaladdr:$symbol), (LP_I (pointer P28), call_symbol:$symbol)>;
 
 //				------ STORES ------
 

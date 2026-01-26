@@ -41,7 +41,7 @@ PreservedAnalyses BoxUnboxPointersPass::run(Module &M, ModuleAnalysisManager &AM
     bool Changed = false;
 
     for (Function &F : M) {
-        if (F.isIntrinsic())
+        if (F.isIntrinsic() || F.isDeclaration())
             continue;
         for (unsigned i = 0; i < F.arg_size(); ++i) {
             if (F.getArg(i)->getType()->isPointerTy())

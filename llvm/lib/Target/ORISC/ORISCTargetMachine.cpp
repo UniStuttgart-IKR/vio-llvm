@@ -16,10 +16,13 @@
 #include "Passes/ORISCEscapeAllocaPass.h"
 #include "Passes/ORISCRejectUnsupportedIRPass.h"
 #include "Passes/ORISCEscapeOutgoingLocalPointersPass.h"
+#include "Passes/ORISCReplaceDeAllocLibCallsPass.h"
+#include "Passes/ORISCReplaceNullPointersPass.h"
 #include "Passes/ORISCSplitMixedStructsPass.h"
 #include "Passes/ORISCPromoteInnerStructsPass.h"
 #include "ORISCSubtarget.h"
 #include "TargetInfo/ORISCTargetInfo.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
@@ -94,6 +97,7 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
     [](ModulePassManager &MPM, OptimizationLevel Level){
       MPM.addPass(PromoteInnerStructsPass());
       MPM.addPass(SplitMixedStructsPass());
+      MPM.addPass(createModuleToFunctionPassAdaptor(ReplaceDeAllocLibCallsPass()));
       MPM.addPass(EscapeOutgoingLocalPointersPass()); //Has do be done here because opt will crash the program if you return a local pointer
     });
   PB.registerPeepholeEPCallback(
@@ -108,6 +112,7 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
       MPM.addPass(EscapeAllocaPass());
       //if -NoUnnecessaryAllocations remove unneeded Allocates
       MPM.addPass(BoxUnboxPointersPass());
+      MPM.addPass(ReplaceNullPointersPass());
     });
 }
 

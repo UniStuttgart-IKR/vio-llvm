@@ -8,4 +8,6 @@ def int_orisc_gep                  : Intrinsic<[ptr_indx_ty], [llvm_ptr_ty, ptr_
 def int_orisc_unbox_base           : Intrinsic<[llvm_ptr_ty], [llvm_ptr_ty],                [IntrNoMem,    IntrSpeculatable]>;
 def int_orisc_unbox_index          : Intrinsic<[ptr_indx_ty], [llvm_ptr_ty],                [IntrNoMem,    IntrSpeculatable]>;
 
+def int_orisc_null                 : Intrinsic<[llvm_ptr_ty], [],                           [IntrNoMem,    IntrSpeculatable]>;
+
 }

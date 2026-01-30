@@ -493,6 +493,8 @@ SDValue ORISCTargetLowering::
             return Op->getOperand(1)->getOperand(1);
         else
             return Op;
+    case Intrinsic::orisc_null:
+      return DAG.getRegister(ORISC::P0, MVT::pointer);
     }
 }
 

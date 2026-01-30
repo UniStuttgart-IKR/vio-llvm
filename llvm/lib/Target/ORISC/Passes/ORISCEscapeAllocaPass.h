@@ -1,6 +1,7 @@
 #ifndef LLVM_LIB_TARGET_ORISC_ORISCESCAPEALLOCAPASS_H
 #define LLVM_LIB_TARGET_ORISC_ORISCESCAPEALLOCAPASS_H
 
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instruction.h"
@@ -21,6 +22,12 @@ public:
 private:
     FunctionCallee AllocateFn;
     Value *Zero, *One;
+    const DataLayout *DL;
+    std::vector<StructType *> StructTys;
+
+    typedef SmallMapVector<StructType*, std::pair<StructType*, StructType*>, 32> BufferType;
+    BufferType ReplaceBuffer;
+    bool FilledReplaceBuffer = false;
 
     SmallVector<Instruction *> RemoveFromParentList = SmallVector<Instruction *>();
 
@@ -115,6 +122,44 @@ private:
                     NumElements);
                 IRBuilder<> Builder(AI);
                 NewDt = Builder.CreateMul(Dt, NumElsAsValue);
+            }
+
+            return {AI, NewPi, NewPiConst, NewDt, NewDtConst};
+        }
+        
+        ObjectSize operator * (Value *NumElementsValue) const {
+            Value *NewPi = nullptr;
+            uint64_t NewPiConst = 0;
+            Value *NewDt = nullptr;
+            uint64_t NewDtConst = 0;
+
+            if (!Pi) {
+                if (PiConst == 1) {
+                    NewPi = NumElementsValue;
+                } else if (PiConst != 0) {
+                    IRBuilder<> Builder(AI);
+                    Value *PiConstAsValue = ConstantInt::get(
+                        Type::getInt32Ty(AI->getContext()),
+                        PiConst);
+                    NewPi = Builder.CreateMul(PiConstAsValue, NumElementsValue);
+                }
+            } else {
+                IRBuilder<> Builder(AI);
+                NewPi = Builder.CreateMul(Pi, NumElementsValue);
+            }
+            if (!Dt) {
+                if (DtConst == 1) {
+                    NewDt = NumElementsValue;
+                } else if (DtConst != 0) {
+                    IRBuilder<> Builder(AI);
+                    Value *DtConstAsValue = ConstantInt::get(
+                        Type::getInt32Ty(AI->getContext()),
+                        DtConst);
+                    NewDt = Builder.CreateMul(DtConstAsValue, NumElementsValue);   
+                }
+            } else {
+                IRBuilder<> Builder(AI);
+                NewDt = Builder.CreateMul(Dt, NumElementsValue);
             }
 
             return {AI, NewPi, NewPiConst, NewDt, NewDtConst};

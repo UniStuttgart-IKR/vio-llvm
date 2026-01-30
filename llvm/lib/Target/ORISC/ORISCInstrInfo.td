@@ -206,5 +206,6 @@ def : Pat<(int_orisc_allocate uimm11:$pi11, uimm15:$delta15), (ALC_PD uimm11:$pi
 def : Pat<(int_orisc_unbox_base PR:$px), (LP_I PR:$px, 0)>;
 def : Pat<(int_orisc_unbox_index PR:$px), (LW_I PR:$px, 0)>;
 def : Pat<(orisc_ret), (RET)>;
+def : Pat<(i32 0), (i32 D0)>;
 def : Pat<(uimm12:$ui12), (ORI D0, uimm12:$ui12)>;
 def : Pat<(imm:$imm), (ORI (LUI (Upper20 imm:$imm)), (Lower12 imm:$imm))>;

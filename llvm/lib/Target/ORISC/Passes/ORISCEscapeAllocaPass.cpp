@@ -1,4 +1,5 @@
 #include "Passes/ORISCEscapeAllocaPass.h"
+#include "Passes/ORISCStructLayoutHelper.h"
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Constant.h"
@@ -42,6 +43,9 @@ PreservedAnalyses EscapeAllocaPass::run(Module &M, ModuleAnalysisManager &AM){
 
     Zero = ConstantInt::get(Type::getInt32Ty(Ctx), 0);
     One =  ConstantInt::get(Type::getInt32Ty(Ctx), 1);
+
+    StructTys = M.getIdentifiedStructTypes();
+    DL = &M.getDataLayout();
 
     bool Changed = false;
     for (Function &F : M)
@@ -114,6 +118,8 @@ bool EscapeAllocaPass::checkArgument(Value *Arg){
     //Determine Pi and Delta
     ObjectSize OS = ObjectSize(AI);
     addTypeSizeToObjectSize(AI->getAllocatedType(), &OS);
+    if (AI->isArrayAllocation())
+        OS = OS * AI->getArraySize();
     
     //Get Pi and Delta as "Value"
     Value *Pi = OS.Pi;
@@ -132,6 +138,7 @@ bool EscapeAllocaPass::checkArgument(Value *Arg){
     //Replace Alloca by Intrinsic Call
     IRBuilder<> Builder(AI);
     CallInst *CI = Builder.CreateCall(AllocateFn, { Pi, Dt });
+    CI->takeName(AI);
     AI->replaceAllUsesWith(CI);
     RemoveFromParentList.push_back(AI);
 
@@ -155,7 +162,39 @@ void EscapeAllocaPass::addTypeSizeToObjectSize(Type *AllocatedType, ObjectSize *
         return;
     }
     assert(AllocatedType->isStructTy() && "Not Array, Not Struct, Not Pointer, Not Integer?!");
+    //find ptr and prm structs
+    unsigned Pi = 0;
+    unsigned Dt = 0;
+    std::string PtrName = (cast<StructType>(AllocatedType)->getName() + ".ptr").str();
+    std::string PrmName = (cast<StructType>(AllocatedType)->getName() + ".prm").str();
+    for (StructType *STy : StructTys){
+        if (PtrName == STy->getName().str()) {
+            Pi = DL->getTypeAllocSize(STy) / DL->getPointerSize();
+        } else if (PrmName == STy->getName().str()) {
+            Dt = DL->getTypeAllocSize(STy);
+        }
+    }
+    if (Pi > 0 || Dt > 0) {
+        *OS = *OS + ObjectSize(OS->AI, nullptr, Pi, nullptr, Dt);
+        return;
+    }
 
+    //Fallback if StructTypes where destroyed: recalculate them!
+    if (!FilledReplaceBuffer) {
+        splitStructs(*OS->AI->getModule(), StructTys, &ReplaceBuffer);
+        FilledReplaceBuffer = true;
+    }
+    if (ReplaceBuffer.contains(cast<StructType>(AllocatedType))) {
+        auto STy = ReplaceBuffer[cast<StructType>(AllocatedType)];
+        Pi = DL->getTypeAllocSize(STy.first) / DL->getPointerSize();
+        Dt = DL->getTypeAllocSize(STy.second);
+        if (Pi > 0 || Dt > 0) {
+            *OS = *OS + ObjectSize(OS->AI, nullptr, Pi, nullptr, Dt);
+            return;
+        }
+    }
+
+    // Fallback Fallback if we couldnt find any split structs
     for (unsigned i = 0; i < AllocatedType->getStructNumElements(); ++i) {
         ObjectSize ElOS(OS->AI);
         addTypeSizeToObjectSize(AllocatedType->getStructElementType(i), &ElOS);

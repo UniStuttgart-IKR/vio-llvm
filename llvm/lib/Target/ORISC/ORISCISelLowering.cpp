@@ -22,6 +22,7 @@
 #include "llvm-c/Types.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
@@ -45,10 +46,12 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
+#include "Helper/ORISCMangling.h"
 #include <cassert>
 #include <cstdint>
 #include <deque>
 #include <map>
+#include <string>
 #include <utility>
 
 using namespace llvm;
@@ -106,6 +109,8 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::ConstantPool, MVT::pointer, Custom);
   setOperationAction(ISD::GlobalAddress, MVT::pointer, Custom);
+  setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
+  setOperationAction(ISD::ExternalSymbol, MVT::pointer, Custom);
   setOperationAction(ISD::BlockAddress, PtrVT, Expand);
   setOperationAction(ISD::JumpTable, PtrVT, Expand);
 
@@ -180,6 +185,8 @@ const char *ORISCTargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch ((ORISCISD::NodeType) Opcode) {
     case ORISCISD::BUILD_PTRARG:
       return "ORISCISD::BUILD_PTRARG";
+    case ORISCISD::GET_CAPABILITY:
+      return "ORISCISD::GET_CAPABILITY";
     case ORISCISD::LIBRARY_CALL:
         return "ORISCISD::LIBRARY_CALL";
     case ORISCISD::LOCAL_CALL:
@@ -290,6 +297,7 @@ LowerOperation(SDValue Op, SelectionDAG &DAG) const {
             return lowerTruncate(Op, DAG);
         case ISD::ConstantPool:
         case ISD::GlobalAddress:
+        case ISD::ExternalSymbol:
           return lowerGlobalAddress(Op, DAG);
 
         default: llvm_unreachable("Should not custom lower this!");
@@ -689,17 +697,39 @@ ORISCTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
         InGlue = Chain.getValue(1);
     }
 
+    SDValue GetCap;
     if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
         const GlobalValue *GV = S->getGlobal();
-        Callee = DAG.getTargetGlobalAddress(GV, DL, MVT::i32, 0, 0);
+        if (GV->isDeclaration()) {
+          Callee = DAG.getTargetExternalSymbol(GV->getName().begin(), MVT::i32, 0);
+          SmallVector<StringRef, 4> Names;
+          if(parseNestedNames(GV->getName().begin(), Names)){
+            Names.pop_back();
+            if (!Names.empty()) {
+              std::string *ClassName = new std::string();
+              ClassName->append("_ZN");
+              for (StringRef N : Names) {
+                ClassName->append(std::to_string(N.size()));
+                ClassName->append(N.str());
+              }
+              ClassName->append("E");
+              GetCap = DAG.getTargetExternalSymbol(ClassName->c_str(), MVT::i32, 0);
+              GetCap = DAG.getNode(ORISCISD::GET_CAPABILITY, DL, MVT::pointer, GetCap);
+            }
+          }
+        } else {
+          Callee = DAG.getTargetGlobalAddress(GV, DL, MVT::i32, 0, 0);
+        }
     } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
         Callee = DAG.getTargetExternalSymbol(S->getSymbol(), MVT::pointer, 0);
     }
-
+    
     // The first call operand is the chain and the second is the target address.
     SmallVector<SDValue, 8> Ops;
     Ops.push_back(Chain);
     Ops.push_back(Callee);
+    if (GetCap.getNode())
+      Ops.push_back(GetCap);
 
     // Add argument registers to the end of the list so that they are
     // known live into the call.
@@ -726,7 +756,10 @@ ORISCTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
         return Ret;
     }
     
-    Chain = DAG.getNode(ORISCISD::LOCAL_CALL, DL, NodeTys, Ops);
+    if (GetCap.getNode())
+      Chain = DAG.getNode(ORISCISD::LIBRARY_CALL, DL, NodeTys, Ops);
+    else
+      Chain = DAG.getNode(ORISCISD::LOCAL_CALL, DL, NodeTys, Ops);
     if (CLI.CFIType)
         Chain.getNode()->setCFIType(CLI.CFIType->getZExtValue());
     DAG.addNoMergeSiteInfo(Chain.getNode(), CLI.NoMerge);

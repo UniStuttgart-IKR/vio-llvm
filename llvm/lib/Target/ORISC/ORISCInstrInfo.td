@@ -34,6 +34,7 @@ def orisc_library_call  : SDNode<"ORISCISD::LIBRARY_CALL", SDT_ORISCLibraryCall,
 
 def SDT_ORISCLoadConst     : SDTypeProfile<0, -1, []>;
 def orisc_load_const  : SDNode<"ORISCISD::LOAD_CONST", SDT_ORISCLoadConst, []>;
+def orisc_get_capability  : SDNode<"ORISCISD::GET_CAPABILITY", SDT_ORISCLoadConst, []>;
 
 
 //===----------------------------------------------------------------------===//
@@ -122,9 +123,12 @@ def : Pat<(br bb:$sd25), (BRA brtarget:$sd25)>;
 //				------ CALLS ------
 def : Pat<(orisc_local_call tglobaladdr:$symbol), (BSR call_symbol:$symbol)>;
 def : Pat<(orisc_local_call globaladdr:$symbol), (BSR call_symbol:$symbol)>;
+def : Pat<(orisc_local_call texternalsym:$symbol), (BSR call_symbol:$symbol)>;
 
 def : Pat<(orisc_load_const tglobaladdr:$symbol), (LP_I (pointer P28), call_symbol:$symbol)>;
-
+// def : Pat<(orisc_local_call texternalsym:$symbol), (JLIB (LP_I (pointer P29), call_symbol:$symbol), call_symbol:$symbol)>;
+def : Pat<(orisc_get_capability texternalsym:$symbol), (LP_I (pointer P29), call_symbol:$symbol)>;
+def : Pat<(orisc_library_call texternalsym:$symbol, PR:$px), (JLIB PR:$px, call_symbol:$symbol)>;
 //				------ STORES ------
 
 //Stores with constant Offset
@@ -209,3 +213,4 @@ def : Pat<(orisc_ret), (RET)>;
 def : Pat<(i32 0), (i32 D0)>;
 def : Pat<(uimm12:$ui12), (ORI D0, uimm12:$ui12)>;
 def : Pat<(imm:$imm), (ORI (LUI (Upper20 imm:$imm)), (Lower12 imm:$imm))>;
+def : Pat<(orisc_load_const tglobaladdr:$symbol), (LP_I (pointer P28), call_symbol:$symbol)>;

@@ -33,11 +33,12 @@ ORISCTargetAsmStreamer::ORISCTargetAsmStreamer(MCStreamer &S,
     
 void ORISCTargetAsmStreamer::changeSection(const MCSection *CurSection, MCSection *Section,
                              uint32_t SubSection, raw_ostream &OS) {
-  if (Section->getName() == ".text") {
+  MCTargetStreamer::changeSection(CurSection, Section, SubSection, OS);
+  /*if (Section->getName() == ".text") {
     OS << "@user:" << "\n\tpublic" << "\n\tprivate" << "\n\n";
   } else {
     //MCTargetStreamer::changeSection(CurSection, Section, SubSection, OS);
-  }
+  } */
 }
 
 

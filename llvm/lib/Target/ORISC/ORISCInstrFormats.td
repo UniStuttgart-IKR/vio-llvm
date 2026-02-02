@@ -57,6 +57,7 @@ class ORISCScaleImmLeafOp<int bitsNum> :
 
 def uimm4  : ORISCUImmLeafOp<4>;
 def uimm5  : ORISCUImmLeafOp<5>;
+def uimm9  : ORISCUImmLeafOp<9>;
 def uimm10 : ORISCUImmLeafOp<10>;
 def uimm11 : ORISCUImmLeafOp<11>;
 def uimm12 : ORISCUImmLeafOp<12>; 
@@ -72,7 +73,7 @@ def simm25 : ORISCSImmLeafOp<25>;
 def scimm3 : ORISCScaleImmLeafOp<3>;
 
 
-def IKRRISC2BRTargetAsmOperand : AsmOperandClass {
+def ORISCBRTargetAsmOperand : AsmOperandClass {
   let Name = "BRTarget";
   let ParserMethod = "parseBRTarget";
   let PredicateMethod = "isImm";
@@ -83,7 +84,7 @@ def brtarget : Operand<OtherVT> {
   let PrintMethod = "printBranchTarget";
   let EncoderMethod = "getBranchTargetEncoding";
   let DecoderMethod = "decodeBranchOperand";
-  let ParserMatchClass = IKRRISC2BRTargetAsmOperand;
+  let ParserMatchClass = ORISCBRTargetAsmOperand;
 }
 
 def CallSymbol : AsmOperandClass {
@@ -148,6 +149,10 @@ def FormatPseudo : InstrFormat;
 class ORISCInstr<string opcodestr, dag outs, dag ins, string argstr, InstrFormat fmt>
 		: Instruction {
 	let Namespace = "ORISC";
+	
+  	field bits<32> Inst;
+	let Inst{31-29} = 0;
+  	let Size = 4;
 
 	InstrFormat Format = fmt;
 	dag OutOperandList = outs;
@@ -155,101 +160,419 @@ class ORISCInstr<string opcodestr, dag outs, dag ins, string argstr, InstrFormat
 	let AsmString = opcodestr # !if(!empty(argstr), "", !if(!lt(!size(opcodestr), 4), "\t", "") # "\t" # argstr);
 }
 
-// ALU Instructions
-class ORISCInstrRegALU<string opcodestr, bit Commutable = 0>
-		: ORISCInstr<opcodestr, (outs DR:$dx), (ins DR:$dy, DR:$dz), "$dx = $dy, $dz", FormatReg0> {
 
-	let isCommutable = Commutable;
+// REG0 Instructions
+class ORISCInstrReg0<string opcodestr, dag outs, dag ins, bits<4> h4, bits<3> g3, string argstr>
+		: ORISCInstr<opcodestr, outs, ins, argstr, FormatReg0> {
+	bits<5> x;
+	bits<5> y;
+	bits<5> z;
+
+	let Inst{28-25} = 0;
+	let Inst{24-20} = x;
+	let Inst{19-16} = h4;
+	let Inst{15-13} = 0;
+	let Inst{12-8} = z;
+	let Inst{7-3} = y;
+	let Inst{2-0} = g3;
 }
 
-class ORISCInstrUImmALU<string opcodestr>
-		: ORISCInstr<opcodestr, (outs DR:$dx), (ins DR:$dy, uimm12:$ui12), "$dx = $dy, $ui12", FormatALU1> {
+class ORISCInstrReg0AluX<string opcodestr, bits<4> h4, bits<3> g3, bit commutable>
+		: ORISCInstrReg0<opcodestr, (outs DR:$dx), (ins DR:$dy, DR:$dz), h4, g3, "$dx = $dy, $dz"> {
+	bits<5> dx;
+	bits<5> dy;
+	bits<5> dz;
+	let x = dx;
+	let y = dy;
+	let z = dz;
+	let isCommutable = commutable;
 }
 
-class ORISCInstrSImmALU<string opcodestr>
-		: ORISCInstr<opcodestr, (outs DR:$dx), (ins DR:$dy, simm12:$si12), "$dx = $dy, $si12", FormatALU2> {
+class ORISCInstrReg0Alu0<string opcodestr, bits<3> g3, bit commutable = 0>
+		: ORISCInstrReg0AluX<opcodestr, 0, g3, commutable>;
+
+class ORISCInstrReg0Alu1<string opcodestr, bits<3> g3, bit commutable = 0>
+		: ORISCInstrReg0AluX<opcodestr, 1, g3, commutable>;
+
+class ORISCInstrReg0Alu2<string opcodestr, bits<3> g3, bit commutable = 0>
+		: ORISCInstrReg0AluX<opcodestr, 2, g3, commutable>;
+
+class ORISCInstrReg0Alu4<string opcodestr, bits<3> g3, bit commutable = 0>
+		: ORISCInstrReg0AluX<opcodestr, 4, g3, commutable>;
+
+class ORISCInstrReg0Alu5<string opcodestr, bits<3> g3>
+		: ORISCInstrReg0<opcodestr, (outs DR:$dx), (ins DR:$dy, uimm5:$ui5), 5, g3, "$dx = $dy, $ui5"> {
+	bits<5> dx;
+	bits<5> dy;
+	bits<5> ui5;
+	let x = dx;
+	let y = dy;
+	let z = ui5;
 }
 
-class ORISCInstrRegShiftImm<string opcodestr>
-		: ORISCInstr<opcodestr, (outs DR:$dx), (ins DR:$dy, uimm5:$ui5), "$dx = $dy, $ui5", FormatReg0> {
+class ORISCInstrReg0Alu7<string opcodestr, bits<3> g3>
+		: ORISCInstrReg0<opcodestr, (outs DR:$dx), (ins DR:$dz), 7, g3, "$dx = $dz"> {
+	bits<5> dx;
+	bits<5> dz;
+	let x = dx;
+	let y = 0;
+	let z = dz;
 }
 
-class ORISCInstrRegUnary<string opcodestr>
-		: ORISCInstr<opcodestr, (outs DR:$dx), (ins DR:$dz), "$dx = $dz", FormatReg0> {
+class ORISCInstrReg0Alu72<string opcodestr, bits<3> g3>
+		: ORISCInstrReg0<opcodestr, (outs), (ins uimm10:$ui10), 7, g3, "$ui10"> {
+	bits<10> ui10;
+	let x = 0;
+	let y = ui10{4-0};
+	let z = ui10{9-5};
 }
 
-// Attribute Instructions
-class ORISCInstrRegAttr<string opcodestr>
-		: ORISCInstr<opcodestr, (outs DR:$dy), (ins PR:$px), "$dy = $px", FormatReg0> {
+class ORISCInstrReg0AtuB<string opcodestr, bits<3> g3>
+		: ORISCInstrReg0<opcodestr, (outs DR:$dy), (ins PR:$px), 11, g3, "$dy = $px"> {
+	bits<5> px;
+	bits<5> dy;
+	let x = px;
+	let y = dy;
+	let z = 0;
 }
 
-// Load/Store Instructions with Immediate Index
-class ORISCInstrLoadImmD<string opcodestr>
+class ORISCInstrReg0AtuC<string opcodestr, bits<3> g3, string argstr = "$dz = $px, $py">
+		: ORISCInstrReg0<opcodestr, (outs DR:$dz), (ins PR:$px, PR:$py), 12, g3, argstr> {
+	bits<5> px;
+	bits<5> py;
+	bits<5> dz;
+	let x = px;
+	let y = py;
+	let z = dz;
+}
+
+class ORISCInstrReg0PguD<string opcodestr, bits<3> g3, string argstr = "$py = $px">
+		: ORISCInstrReg0<opcodestr, (outs PR:$py), (ins PR:$px), 13, g3, argstr> {
+	bits<5> px;
+	bits<5> py;
+	let x = px;
+	let y = py;
+	let z = 0;
+}
+
+class ORISCInstrReg0PguE<string opcodestr, bits<3> g3, string argstr = "$px = $dy,$dz">
+		: ORISCInstrReg0<opcodestr, (outs PR:$px), (ins DR:$dy, DR:$dz), 14, g3, argstr> {
+	bits<5> px;
+	bits<5> dy;
+	bits<5> dz;
+	let x = px;
+	let y = dy;
+	let z = dz;
+}
+
+class ORISCInstrReg0PguE2<string opcodestr>
+		: ORISCInstrReg0<opcodestr, (outs), (ins PR:$px), 14, 4, "$px"> {
+	bits<5> px;
+	let x = px;
+	let y = 0;
+	let z = 0;
+}
+
+class ORISCInstrReg0PguE3<string opcodestr>
+		: ORISCInstrReg0<opcodestr, (outs), (ins), 14, 5, "frame"> {
+	let x = 30;
+	let y = 0;
+	let z = 0;
+}
+
+class ORISCInstrReg0BpuF<string opcodestr, bits<3> g3, string argstr = "$dy">
+		: ORISCInstrReg0<opcodestr, (outs), (ins DR:$dy), 15, g3, argstr> {
+	bits<5> dy;
+	let x = 0;
+	let y = dy;
+	let z = 0;
+}
+
+class ORISCInstrReg0BpuF2<string opcodestr>
+		: ORISCInstrReg0<opcodestr, (outs), (ins), 15, 3, ""> {
+	let x = 0;
+	let y = 31;
+	let z = 0;
+}
+
+
+//ALUX Instructions
+class ORISCInstrAlu12U<string opcodestr, bits<4> f4, bits<3> g3>
+		: ORISCInstr<opcodestr, (outs DR:$dx), (ins DR:$dy, uimm12:$ui12), "$dx = $dy,$ui12", FormatALU1> {
+	bits<5> dx;
+	bits<5> dy;
+	bits<12> ui12;
+
+	let Inst{28-25} = f4;
+	let Inst{24-20} = dx;
+	let Inst{19-8} = ui12;
+	let Inst{7-3} = dy;
+	let Inst{2-0} = g3;
+}
+
+class ORISCInstrAlu12S<string opcodestr, bits<4> f4, bits<3> g3>
+		: ORISCInstr<opcodestr, (outs DR:$dx), (ins DR:$dy, simm12:$si12), "$dx = $dy,$si12", FormatALU1> {
+	bits<5> dx;
+	bits<5> dy;
+	bits<12> si12;
+
+	let Inst{28-25} = f4;
+	let Inst{24-20} = dx;
+	let Inst{19-8} = si12;
+	let Inst{7-3} = dy;
+	let Inst{2-0} = g3;
+}
+
+class ORISCInstrAlu3<string opcodestr>
+		: ORISCInstr<opcodestr, (outs DR:$dx), (ins uimm20:$ui20), "$dx = $ui20", FormatALU3> {
+	bits<5> dx;
+	bits<20> ui20;
+
+	let Inst{28-25} = 3;
+	let Inst{24-20} = dx;
+	let Inst{19-0} = ui20;
+}
+
+
+//PGUX Instructions
+
+class ORISCInstrPgu4<string opcodestr>
+		: ORISCInstr<opcodestr, (outs PR:$px), (ins DR:$dy, uimm15:$delta15), "$px = $dy, $delta15", FormatPGU4> {
+	bits<5> px;
+	bits<5> dy;
+	bits<15> delta15;
+
+	let Inst{28-25} = 4;
+	let Inst{24-20} = px;
+	let Inst{19-8} = delta15{14-3};
+	let Inst{7-3} = dy;
+	let Inst{2-0} = delta15{2-0};
+}
+
+class ORISCInstrPgu51<string opcodestr>
+		: ORISCInstr<opcodestr, (outs PR:$px), (ins uimm15:$pi15, DR:$dz), "$px = $pi15, $dz", FormatPGU5> {
+	bits<5> px;
+	bits<5> dz;
+	bits<15> pi15;
+
+	let Inst{28-25} = 5;
+	let Inst{24-20} = px;
+	let Inst{19-13} = pi15{14-8};
+	let Inst{12-8} = dz;
+	let Inst{7-0} = pi15{7-0};
+}
+
+class ORISCInstrPgu52<string opcodestr>
+		: ORISCInstr<opcodestr, (outs PR:$px), (ins uimm9:$pi9, uimm11:$delta11), "$px = $pi9, $delta11", FormatPGU5> {
+	bits<5> px;
+	bits<9> pi9;
+	bits<11> delta11;
+
+	let Inst{28-25} = 5;
+	let Inst{24-20} = px;
+	let Inst{19-11} = pi9;
+	let Inst{10-0} = delta11;
+}
+
+class ORISCInstrPgu6<string opcodestr>
+		: ORISCInstr<opcodestr, (outs PR:$px), (ins uimm9:$pi9, uimm11:$delta11), "$px = $pi9, $delta11", FormatPGU5> {
+	bits<5> px;
+	bits<9> pi9;
+	bits<11> delta11;
+
+	let Inst{28-25} = 6;
+	let Inst{24-20} = px;
+	let Inst{19-11} = pi9;
+	let Inst{10-0} = delta11;
+}
+
+
+//LSUX Instructions
+
+class ORISCInstrLsu8<string opcodestr, bits<3> g3>
 		: ORISCInstr<opcodestr, (outs DR:$dy), (ins PR:$px, uimm12:$ix12), "$dy = $px[$ix12]", FormatLSU8> {
-
+	bits<5> px;
+	bits<5> dy;
+	bits<12> ix12;
+	
+	let Inst{28-25} = 8;
+	let Inst{24-20} = px;
+	let Inst{19-8} = ix12;
+	let Inst{7-3} = dy;
+	let Inst{2-0} = g3;
 }
 
-class ORISCInstrStoreImmD<string opcodestr>
-		: ORISCInstr<opcodestr, (outs), (ins PR:$px, uimm12:$ix12, DR:$dy), "$px[$ix12] = $dy", FormatLSU9> {
-
+class ORISCInstrLsu9<string opcodestr, bits<3> g3, dag outs, dag ins, string argstr>
+		: ORISCInstr<opcodestr, outs, ins, argstr, FormatLSU9> {
+	let Inst{28-25} = 9;
+	let Inst{2-0} = g3;
 }
 
-class ORISCInstrLoadImmP<string opcodestr>
-		: ORISCInstr<opcodestr, (outs PR:$py), (ins PR:$px, uimm12:$ix12), "$py = $px[$ix12]", FormatLSU9> {
-
+class ORISCInstrLsu91<string opcodestr, bits<3> g3>
+		: ORISCInstrLsu9<opcodestr, g3, (outs), (ins PR:$px, uimm12:$ix12, DR:$dy), "$px[$ix12] = $dy"> {
+	bits<5> px;
+	bits<5> dy;
+	bits<12> ix12;
+	let Inst{24-20} = px;
+	let Inst{19-8} = ix12;
+	let Inst{7-3} = dy;
 }
 
-class ORISCInstrStoreImmP<string opcodestr>
-		: ORISCInstr<opcodestr, (outs), (ins PR:$px, uimm12:$ix12, PR:$py), "$px[$ix12] = $py", FormatLSU9> {
-
+class ORISCInstrLsu92<string opcodestr, bits<3> g3>
+		: ORISCInstrLsu9<opcodestr, g3, (outs PR:$py), (ins PR:$px, uimm12:$ix12), "$py = $px[$ix12]"> {
+	bits<5> px;
+	bits<5> py;
+	bits<12> ix12;
+	let Inst{24-20} = px;
+	let Inst{19-8} = ix12;
+	let Inst{7-3} = py;
 }
 
-// Load/Store Instructions with Register Index
-class ORISCInstrLoadRegD<string opcodestr>
+class ORISCInstrLsu93<string opcodestr, bits<3> g3>
+		: ORISCInstrLsu9<opcodestr, g3, (outs), (ins PR:$px, uimm12:$ix12, PR:$py), "$px[$ix12] = $py"> {
+	bits<5> px;
+	bits<5> py;
+	bits<12> ix12;
+	let Inst{24-20} = px;
+	let Inst{19-8} = ix12;
+	let Inst{7-3} = py;
+}
+
+class ORISCInstrLsuA<string opcodestr, bits<3> g3>
 		: ORISCInstr<opcodestr, (outs DR:$dy), (ins PR:$px, DR:$dz, scimm3:$s3, uimm4:$ud4), "$dy = $px[$dz*$s3+$ud4]", FormatLSUA> {
-
+	bits<5> px;
+	bits<5> dy;
+	bits<5> dz;
+	bits<3> s3;
+	bits<4> ud4;
+	let Inst{28-25} = 10;
+	let Inst{24-20} = px;
+	let Inst{19-16} = ud4;
+	let Inst{15-13} = s3;
+	let Inst{12-8} = dz;
+	let Inst{7-3} = dy;
+	let Inst{2-0} = g3;
 }
 
-class ORISCInstrStoreRegD<string opcodestr>
+class ORISCInstrLsuB1<string opcodestr, bits<3> g3>
 		: ORISCInstr<opcodestr, (outs), (ins PR:$px, DR:$dz, scimm3:$s3, uimm4:$ud4, DR:$dy), "$px[$dz*$s3+$ud4] = $dy", FormatLSUB> {
-
+	bits<5> px;
+	bits<5> dy;
+	bits<5> dz;
+	bits<3> s3;
+	bits<4> ud4;
+	let Inst{28-25} = 11;
+	let Inst{24-20} = px;
+	let Inst{19-16} = ud4;
+	let Inst{15-13} = s3;
+	let Inst{12-8} = dz;
+	let Inst{7-3} = dy;
+	let Inst{2-0} = g3;
 }
 
-class ORISCInstrLoadRegP<string opcodestr>
+class ORISCInstrLsuB2<string opcodestr, bits<3> g3>
 		: ORISCInstr<opcodestr, (outs PR:$py), (ins PR:$px, DR:$dz, scimm3:$s3, uimm4:$ud4), "$py = $px[$dz*$s3+$ud4]", FormatLSUB> {
-
+	bits<5> px;
+	bits<5> py;
+	bits<5> dz;
+	bits<3> s3;
+	bits<4> ud4;
+	let Inst{28-25} = 11;
+	let Inst{24-20} = px;
+	let Inst{19-16} = ud4;
+	let Inst{15-13} = s3;
+	let Inst{12-8} = dz;
+	let Inst{7-3} = py;
+	let Inst{2-0} = g3;
 }
 
-class ORISCInstrStoreRegP<string opcodestr>
+class ORISCInstrLsuB3<string opcodestr, bits<3> g3>
 		: ORISCInstr<opcodestr, (outs), (ins PR:$px, DR:$dz, scimm3:$s3, uimm4:$ud4, PR:$py), "$px[$dz*$s3+$ud4] = $py", FormatLSUB> {
-
+	bits<5> px;
+	bits<5> py;
+	bits<5> dz;
+	bits<3> s3;
+	bits<4> ud4;
+	let Inst{28-25} = 11;
+	let Inst{24-20} = px;
+	let Inst{19-16} = ud4;
+	let Inst{15-13} = s3;
+	let Inst{12-8} = dz;
+	let Inst{7-3} = py;
+	let Inst{2-0} = g3;
 }
+
+class ORISCInstrLsuB4<string opcodestr, bits<3> g3>
+		: ORISCInstr<opcodestr, (outs), (ins PR:$py), "$py", FormatLSUB> {
+	bits<5> py;
+
+	let Inst{28-25} = 11;
+	let Inst{24-20} = 30;
+	let Inst{19-8} = 0;
+	let Inst{7-3} = py;
+	let Inst{2-0} = g3;
+}
+
 
 // Branch Instructions
-class ORISCInstrBranchP<string opcodestr>
+
+class ORISCInstrBpuC1<string opcodestr, bits<3> g3>
 		: ORISCInstr<opcodestr, (outs), (ins PR:$px, PR:$py, brtarget:$sd12), "$px, $py, $sd12", FormatBPUC> {
+	bits<5> px;
+	bits<5> py;
+	bits<12> sd12;
+	
+	let Inst{28-25} = 12;
+	let Inst{24-20} = px;
+	let Inst{19-8} = sd12;
+	let Inst{7-3} = py;
+	let Inst{2-0} = g3;
 }
 
-class ORISCInstrBranchD<string opcodestr>
+class ORISCInstrBpuC2<string opcodestr, bits<3> g3>
 		: ORISCInstr<opcodestr, (outs), (ins DR:$dy, DR:$dz, brtarget:$sd12), "$dy, $dz, $sd12", FormatBPUC> {
+	bits<5> dy;
+	bits<5> dz;
+	bits<12> sd12;
+
+	let Inst{28-25} = 12;
+	let Inst{24-20} = sd12{11-7};
+	let Inst{19-13} = sd12{6-0};
+	let Inst{12-8} = dz;
+	let Inst{7-3} = dy;
+	let Inst{2-0} = g3;
 }
 
 
-class ORISCInstrBranch<string opcodestr>
+class ORISCInstrBpuD<string opcodestr>
 		: ORISCInstr<opcodestr, (outs), (ins brtarget:$sd25), "$sd25", FormatBPUD> {
+	bits<25> sd25;
+
 	let isBarrier = true;
+	let Inst{28-25} = 13;
+	let Inst{24-0} = sd25;
 }
 
-class ORISCInstrLocalCall<string opcodestr>
-		: ORISCInstr<opcodestr, (outs), (ins call_symbol:$symbol), "$symbol", FormatBPUD> {
+class ORISCInstrBpuE<string opcodestr>
+		: ORISCInstr<opcodestr, (outs), (ins call_symbol:$sd25), "$sd25", FormatBPUD> {
+	bits<25> sd25;
+
 	let isBarrier = true;
 	let isCall = true;
+	let Inst{28-25} = 14;
+	let Inst{24-0} = sd25;
 }
 
-// Dynamic Jump Instructions
-class ORISCInstrRegJ<string opcodestr>
-		: ORISCInstr<opcodestr, (outs), (ins DR:$dy), "$dy", FormatReg0> {
+class ORISCInstrBpuF<string opcodestr>
+		: ORISCInstr<opcodestr, (outs), (ins PR:$px, uimm20:$ix20), "$px, $ix20", FormatBPUF> {
+	bits<25> ix20;
+
+	let isBarrier = true;
+	let isCall = true;
+	let Inst{28-25} = 15;
+	let Inst{24-0} = ix20;
 }
+
 
 //===----------------------------------------------------------------------===//
 // Concrete Instructions
@@ -260,147 +583,145 @@ class ORISCInstrRegJ<string opcodestr>
 
 // ALU Instructions
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
-	def ADD:	ORISCInstrRegALU<"add",    1>;
-	def SUB:	ORISCInstrRegALU<"sub",    0>;
-	def AND:	ORISCInstrRegALU<"and",    1>;
-	def ANDN:	ORISCInstrRegALU<"andn",   1>;
-	def OR:		ORISCInstrRegALU<"or",     1>;
-	def XOR:	ORISCInstrRegALU<"xor",    1>;
-	def SLTU:	ORISCInstrRegALU<"sltu",   0>;
-	def SLTS:	ORISCInstrRegALU<"slts",   0>;
-	def MUL:	ORISCInstrRegALU<"mul",    1>;
-	def MULHS:	ORISCInstrRegALU<"mulhs",  1>;
-	def MULHU:	ORISCInstrRegALU<"mulhu",  1>;
-	def MULHSU:	ORISCInstrRegALU<"mulhsu", 0>;
+	def ADD:	ORISCInstrReg0Alu0<"add",    0, 1>;
+	def SUB:	ORISCInstrReg0Alu0<"sub",    1, 0>;
+	def AND:	ORISCInstrReg0Alu0<"and",    4, 1>;
+	def ANDN:	ORISCInstrReg0Alu0<"andn",   5, 1>;
+	def OR:		ORISCInstrReg0Alu0<"or",     6, 1>;
+	def XOR:	ORISCInstrReg0Alu0<"xor",    7, 1>;
+	def SLTU:	ORISCInstrReg0Alu1<"sltu",   0, 0>;
+	def SLTS:	ORISCInstrReg0Alu1<"slts",   1, 0>;
+	def MUL:	ORISCInstrReg0Alu2<"mul",    0, 1>;
+	def MULHS:	ORISCInstrReg0Alu2<"mulhs",  1, 1>;
+	def MULHU:	ORISCInstrReg0Alu2<"mulhu",  2, 1>;
+	def MULHSU:	ORISCInstrReg0Alu2<"mulhsu", 3, 0>;
+	def SRL:	ORISCInstrReg0Alu4<"srl", 	 0, 0>;
+	def SRA:	ORISCInstrReg0Alu4<"sra", 	 1, 0>;
+	def SLL:	ORISCInstrReg0Alu4<"sll", 	 2, 0>;
+	def ROL:	ORISCInstrReg0Alu4<"rol", 	 3, 0>;
+	//def ROR	ORISCInstrReg0Alu4<"ror", 	 4, 0>;
 
-	def ADDI:	ORISCInstrUImmALU<"addi">;
-	def SUBI:	ORISCInstrUImmALU<"subi">;
-	def ANDI:	ORISCInstrUImmALU<"andi">;
-	def ANDNI:	ORISCInstrUImmALU<"andni">;
-	def ORI:	ORISCInstrUImmALU<"ori">;
-	def XORI:	ORISCInstrUImmALU<"xori">;
-	def SLTIU:	ORISCInstrUImmALU<"sltui">;
-	def SLTIS:	ORISCInstrSImmALU<"sltsi">;
-	def MULIU:	ORISCInstrUImmALU<"muliu">;
-	def MULIS:	ORISCInstrSImmALU<"mulis">;
+	def SRLI:	ORISCInstrReg0Alu5<"srli",  0>;
+	def SRAI:	ORISCInstrReg0Alu5<"srai",  1>;
+	def SLLI:	ORISCInstrReg0Alu5<"slli",  2>;
+	def ROLI:	ORISCInstrReg0Alu5<"roli",  3>;
+	def NOT:	ORISCInstrReg0Alu7<"not",   0>;
+	def EXTBS:	ORISCInstrReg0Alu7<"extbs", 1>;
+	def EXTHU:	ORISCInstrReg0Alu7<"exthu", 2>;
+	def EXTHS:	ORISCInstrReg0Alu7<"exths", 3>;
+	def CLZ:	ORISCInstrReg0Alu7<"clz",   4>;
+	
+	def QPI:	ORISCInstrReg0AtuB<"qpi",  0>;
+	def QDTB:	ORISCInstrReg0AtuB<"qdtb", 4>;
+	def QDTH:	ORISCInstrReg0AtuB<"qdth", 5>;
+	def QDTW:	ORISCInstrReg0AtuB<"qdtw", 6>;
+	def QDTD:	ORISCInstrReg0AtuB<"qdtd", 7>;
 
-	def SRL:	ORISCInstrRegALU<"srl", 0>;
-	def SRA:	ORISCInstrRegALU<"sra", 0>;
-	def SLL:	ORISCInstrRegALU<"sll", 0>;
-	def ROL:	ORISCInstrRegALU<"rol", 0>;
-	//def ROR	ORISCInstrRegALU<"ror", 0>;
-	def SRLI:	ORISCInstrRegShiftImm<"srli">;
-	def SRAI:	ORISCInstrRegShiftImm<"srai">;
-	def SLLI:	ORISCInstrRegShiftImm<"slli">;
-	def ROLI:	ORISCInstrRegShiftImm<"roli">;
+	def	CPP:	ORISCInstrReg0PguD<"cpp", 0>;
+	def	GCP:	ORISCInstrReg0PguE2<"gcp">;
 
-	def NOT:	ORISCInstrRegUnary<"not">;
-	def EXTBS:	ORISCInstrRegUnary<"extbs">;
-	def EXTHU:	ORISCInstrRegUnary<"exthu">;
-	def EXTHS:	ORISCInstrRegUnary<"exths">;
-	def CLZ:	ORISCInstrRegUnary<"clz">;
+	def ADDI:	ORISCInstrAlu12U<"addi",  1, 0>;
+	def SUBI:	ORISCInstrAlu12U<"subi",  1, 1>;
+	def ANDI:	ORISCInstrAlu12U<"andi",  1, 4>;
+	def ANDNI:	ORISCInstrAlu12U<"andni", 1, 5>;
+	def ORI:	ORISCInstrAlu12U<"ori",   1, 6>;
+	def XORI:	ORISCInstrAlu12U<"xori",  1, 7>;
+	def SLTIU:	ORISCInstrAlu12U<"sltui", 2, 0>;
+	def SLTIS:	ORISCInstrAlu12S<"sltsi", 2, 1>;
+	def MULIU:	ORISCInstrAlu12U<"muliu", 2, 4>;
+	def MULIS:	ORISCInstrAlu12S<"mulis", 2, 5>;
 
-	def LUI:	ORISCInstr<"lui", (outs DR:$dx), (ins uimm20:$ui20), "$dx = $ui20", FormatALU3>;
+	def LUI:	ORISCInstrAlu3<"lui">;
 }
 
-// Attribute Instructions
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
-	def QPI:		ORISCInstrRegAttr<"qpi">;
-	def QDTB:		ORISCInstrRegAttr<"qdtb">;
-	def QDTH:		ORISCInstrRegAttr<"qdth">;
-	def QDTW:		ORISCInstrRegAttr<"qdtw">;
-	def QDTD:		ORISCInstrRegAttr<"qdtd">;
-}
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
-	def NCHK:		ORISCInstr<"nchk", (outs), (ins PR:$px), "$px", FormatReg0>;
-
-// Pointer Instructions
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
-	def	CPP:	ORISCInstr<"cpp", (outs PR:$py), (ins PR:$px), "$py = $px", FormatReg0>;
-	def	GCP:	ORISCInstr<"gcp", (outs PR:$px), (ins), "$px", FormatReg0>;
-}
-let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
-	def	ALC:	ORISCInstr<"alc", (outs PR:$px), (ins DR:$dy, DR:$dz), "$px = $dy, $dz", FormatReg0>;
-	def	ALC_D:	ORISCInstr<"alc", (outs PR:$px), (ins DR:$dy, uimm15:$delta15), "$px = $dy, $delta15", FormatPGU4>;
-	def	ALC_P:	ORISCInstr<"alc", (outs PR:$px), (ins uimm11:$pi11, DR:$dz), "$px = $pi11, $dz", FormatPGU5>;
-	def	ALC_PD:	ORISCInstr<"alc", (outs PR:$px), (ins uimm11:$pi11, uimm15:$delta15), "$px = $pi11, $delta15", FormatPGU6>;
-}
+	def NCHK:		ORISCInstrReg0AtuC<"nchk", 0>;
 
 // Stack Instructions
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Defs = [P30] in {
-	def	PUSH:	ORISCInstr<"push", (outs PR:$px), (ins uimm11:$pi11, uimm15:$delta15), "$pi11, $delta15", FormatPGU6>;
-	def	PUSHT:	ORISCInstr<"pusht", (outs PR:$px), (ins uimm11:$pi11, uimm15:$delta15), "$pi11, $delta15", FormatPGU5>;
+	def	PUSH:	ORISCInstrPgu6<"push">;
+	def	PUSHT:	ORISCInstrPgu52<"pusht">;
 }
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Uses = [P30] in {
-	def	POP:		ORISCInstr<"pop", (outs), (ins), "", FormatReg0>;
+	def	POP:		ORISCInstrReg0PguE3<"pop">;
+}
+
+// Alc Instructions
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
+	def	ALC:	ORISCInstrReg0PguE<"alc", 0>;
+	def	ALC_D:	ORISCInstrPgu4<"alc">;
+	def	ALC_P:	ORISCInstrPgu51<"alc">;
+	def	ALC_PD:	ORISCInstrPgu6<"alc">;
 }
 
 let hasSideEffects = 1, mayLoad = 0, mayStore = 1, Uses = [P31] in
-	def	SVRPC:	ORISCInstr<"sv", (outs), (ins), "rpc", FormatLSUB>;
+	def	SVRPC:	ORISCInstrLsuB4<"sv", 4>;
 let hasSideEffects = 1, mayLoad = 1, mayStore = 0, Defs = [P31] in
-	def	RSTRPC:	ORISCInstr<"rst", (outs), (ins), "rpc", FormatLSUB>;
+	def	RSTRPC:	ORISCInstrLsuB4<"rst", 6>;
 
 // Load/Store Instructions
 let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
-	def LBU_I:	ORISCInstrLoadImmD<"lbu">;
-	def LBS_I:	ORISCInstrLoadImmD<"lbs">;
-	def LHU_I:	ORISCInstrLoadImmD<"lhu">;
-	def LHS_I:	ORISCInstrLoadImmD<"lhs">;
-	def LW_I:	ORISCInstrLoadImmD<"lw">;
-	def LP_I:	ORISCInstrLoadImmP<"lp">;
+	def LBU_I:	ORISCInstrLsu8<"lbu", 0>;
+	def LBS_I:	ORISCInstrLsu8<"lbs", 1>;
+	def LHU_I:	ORISCInstrLsu8<"lhu", 2>;
+	def LHS_I:	ORISCInstrLsu8<"lhs", 3>;
+	def LW_I:	ORISCInstrLsu8<"lw",  5>;
+	def LP_I:	ORISCInstrLsu92<"lp", 4>;
+	def LCP_I:	ORISCInstrLsu92<"lcp", 5>;
 
-	def LBU:	ORISCInstrLoadRegD<"lbu">;
-	def LBS:	ORISCInstrLoadRegD<"lbs">;
-	def LHU:	ORISCInstrLoadRegD<"lhu">;
-	def LHS:	ORISCInstrLoadRegD<"lhs">;
-	def LW:		ORISCInstrLoadRegD<"lw">;
-	def LP:		ORISCInstrLoadRegP<"lp">;
-
-	def ADDT:	ORISCInstrRegALU<"add",    1>;
+	def LBU:	ORISCInstrLsuA<"lbu", 0>;
+	def LBS:	ORISCInstrLsuA<"lbs", 1>;
+	def LHU:	ORISCInstrLsuA<"lhu", 2>;
+	def LHS:	ORISCInstrLsuA<"lhs", 3>;
+	def LW:		ORISCInstrLsuA<"lw", 4>;
+	def LP:		ORISCInstrLsuB2<"lp", 4>;
+	def LCP:	ORISCInstrLsuB2<"lcp", 5>;
 }
 
 let mayLoad = 0, mayStore = 1, hasSideEffects = 0 in {
-	def SB_I:	ORISCInstrStoreImmD<"sb">;
-	def SH_I:	ORISCInstrStoreImmD<"sh">;
-	def SW_I:	ORISCInstrStoreImmD<"sw">;
-	def SP_I:	ORISCInstrStoreImmP<"sp">;
+	def SB_I:	ORISCInstrLsu91<"sb", 0>;
+	def SH_I:	ORISCInstrLsu91<"sh", 1>;
+	def SW_I:	ORISCInstrLsu91<"sw", 2>;
+	def SP_I:	ORISCInstrLsu93<"sp", 6>;
+	def SCP_I:	ORISCInstrLsu93<"scp", 7>;
 
-	def SB:		ORISCInstrStoreRegD<"sb">;
-	def SH:		ORISCInstrStoreRegD<"sh">;
-	def SW:		ORISCInstrStoreRegD<"sw">;
-	def SP:		ORISCInstrStoreRegP<"sp">;
+	def SB:		ORISCInstrLsuB1<"sb", 0>;
+	def SH:		ORISCInstrLsuB1<"sh", 1>;
+	def SW:		ORISCInstrLsuB1<"sw", 2>;
+	def SP:		ORISCInstrLsuB3<"sp", 6>;
+	def SCP:	ORISCInstrLsuB3<"scp", 7>;
 }
 
 // Branch and Jump Instructions
 let mayLoad = 0, mayStore = 0, hasSideEffects = 0 in {
-	def JMP:		ORISCInstrRegJ<"jmp">;
+	def JMP:		ORISCInstrReg0BpuF<"jmp", 0>;
 	let Defs = [P31] in
-	def JSR:		ORISCInstrRegJ<"jsr">;
+	def JSR:		ORISCInstrReg0BpuF<"jsr", 2>;
 	let Defs = [P31] in
-	def JLIB:		ORISCInstr<"jlib", (outs), (ins PR:$px, uimm20:$ix20), "$px, $ix20", FormatBPUF>;
+	def JLIB:		ORISCInstrBpuF<"jlib">;
 }
 
 let isReturn = 1, isTerminator = 1, mayLoad = 0, mayStore = 0, hasSideEffects = 0, Uses = [P31] in
-	def	RET:		ORISCInstr<"ret", (outs), (ins), "", FormatReg0>;
+	def	RET:		ORISCInstrReg0BpuF2<"ret">;
 
 let mayLoad = 0, mayStore = 0, hasSideEffects = 0, isBranch = 1, isTerminator = 1 in {
-	def BRA:		ORISCInstrBranch<"bra">;
-	def	BEQP:		ORISCInstrBranchP<"beqp">;
-	def	BNEP:		ORISCInstrBranchP<"bnep">;
-	def	BEQ:		ORISCInstrBranchD<"beq">;
-	def	BNE:		ORISCInstrBranchD<"bne">;
-	def	BGEU:		ORISCInstrBranchD<"bgeu">;
-	def	BGES:		ORISCInstrBranchD<"bges">;
-	def	BLTU:		ORISCInstrBranchD<"bltu">;
-	def	BLTS:		ORISCInstrBranchD<"blts">;
+	def	BEQP:		ORISCInstrBpuC1<"beqp", 0>;
+	def	BNEP:		ORISCInstrBpuC1<"bnep", 1>;
+	def	BEQ:		ORISCInstrBpuC2<"beq", 2>;
+	def	BNE:		ORISCInstrBpuC2<"bne", 3>;
+	def	BGEU:		ORISCInstrBpuC2<"bgeu", 4>;
+	def	BGES:		ORISCInstrBpuC2<"bges", 5>;
+	def	BLTU:		ORISCInstrBpuC2<"bltu", 6>;
+	def	BLTS:		ORISCInstrBpuC2<"blts", 7>;
+	def BRA:		ORISCInstrBpuD<"bra">;
 
 	let Defs = [P31] in
-	def BSR:		ORISCInstrLocalCall<"bsr">;
+	def BSR:		ORISCInstrBpuE<"bsr">;
 }
 
 // Other Instructions
 let hasSideEffects = 1, mayLoad = 1, mayStore = 1 in
-	def	TRAP:		ORISCInstr<"trap", (outs), (ins uimm10:$ui10), "$ui10", FormatReg0>;
+	def	TRAP:		ORISCInstrReg0Alu72<"trap", 7>;
 
 
 // Pseudo Instructions

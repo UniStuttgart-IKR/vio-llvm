@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ORISCAsmPrinter.h"
+#include "MCTargetDesc/ORISCTargetStreamer.h"
 #include "TargetInfo/ORISCTargetInfo.h"
 #include "MCTargetDesc/ORISCInstPrinter.h"
 #include "llvm/ADT/StringExtras.h"
@@ -192,7 +193,8 @@ MCOperand ORISCAsmPrinter::lowerOperand(const MachineOperand &MO,
 
 
 void ORISCAsmPrinter::emitStartOfAsmFile(Module &M){
-  OutStreamer->emitRawText(startString);
+  if (OutStreamer->hasRawTextSupport())
+    OutStreamer->emitRawText(startString);
 }
 
 void ORISCAsmPrinter::emitEndOfAsmFile(Module &M){

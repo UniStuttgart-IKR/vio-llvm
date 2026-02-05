@@ -14,6 +14,9 @@
 #define LLVM_LIB_TARGET_ORISC_MCTARGETDESC_ORISCMCTARGETDESC_H
 
 #include "llvm/ADT/StringRef.h"
+#include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCCodeEmitter.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/DataTypes.h"
 
 #include <memory>
@@ -24,7 +27,20 @@ class MCInstrInfo;
 class MCRegisterInfo;
 class MCSubtargetInfo;
 class Target;
+
+MCCodeEmitter *createORISCMCCodeEmitter(const MCInstrInfo &MCII,
+                                      MCContext &Ctx);
+
+MCAsmBackend *createORISCMCAsmBackend(const Target &T,
+                                       const MCSubtargetInfo &STI,
+                                       const MCRegisterInfo &MRI,
+                                       const MCTargetOptions &Options);
+
+std::unique_ptr<MCObjectTargetWriter>
+createORISCELFObjectWriter(uint8_t OSABI, bool Is64Bit);
+
 }
+
 
 // Defines symbolic names for ORISC registers.
 #define GET_REGINFO_ENUM

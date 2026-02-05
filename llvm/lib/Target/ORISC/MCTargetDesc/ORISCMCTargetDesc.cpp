@@ -11,8 +11,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "ORISCMCTargetDesc.h"
+#include "ORISCELFStreamer.h"
 #include "ORISCInstPrinter.h"
 #include "ORISCMCAsmInfo.h"
+#include "ORISCMCCodeEmitter.h"
 #include "ORISCTargetStreamer.h"
 #include "TargetInfo/ORISCTargetInfo.h"
 #include "llvm/MC/MCInstrDesc.h"
@@ -77,19 +79,24 @@ createORISCAsmTargetStreamer(MCStreamer &S, formatted_raw_ostream &OS,
   return new ORISCTargetAsmStreamer(S, OS);
 }
 
+static MCTargetStreamer *
+createORISCObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
+  return new ORISCTargetELFStreamer(S);
+}
+
+
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeORISCTargetMC() {
     for (Target *T : {&getTheORISCTarget()}) {
         TargetRegistry::RegisterMCRegInfo(*T, createORISCMCRegisterInfo);
         TargetRegistry::RegisterMCInstrInfo(*T, createORISCMCInstrInfo);
         TargetRegistry::RegisterMCSubtargetInfo(*T, createORISCMCSubtargetInfo);
         TargetRegistry::RegisterMCAsmInfo(*T, createORISCMCAsmInfo);
-        //TargetRegistry::RegisterMCCodeEmitter(*T, createLoongArchMCCodeEmitter);
-        //TargetRegistry::RegisterMCAsmBackend(*T, createLoongArchAsmBackend);
+        TargetRegistry::RegisterMCCodeEmitter(*T, createORISCMCCodeEmitter);
+        TargetRegistry::RegisterMCAsmBackend(*T, createORISCMCAsmBackend);
         TargetRegistry::RegisterMCInstPrinter(*T, createORISCMCInstPrinter);
         //TargetRegistry::RegisterMCInstrAnalysis(*T, createLoongArchInstrAnalysis);
-        //TargetRegistry::RegisterELFStreamer(*T, createLoongArchELFStreamer);
-        //TargetRegistry::RegisterObjectTargetStreamer(
-        //    *T, createLoongArchObjectTargetStreamer);
+        TargetRegistry::RegisterELFStreamer(*T, createORISCELFStreamer);
+        TargetRegistry::RegisterObjectTargetStreamer( *T, createORISCObjectTargetStreamer);
         TargetRegistry::RegisterAsmTargetStreamer(*T, createORISCAsmTargetStreamer);
     }
 }

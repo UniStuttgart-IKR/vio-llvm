@@ -8,6 +8,7 @@ tablegen(LLVM ORISCGenRegisterInfo.inc   -gen-register-info)
 tablegen(LLVM ORISCGenSubtargetInfo.inc  -gen-subtarget)
 tablegen(LLVM ORISCGenDAGISel.inc        -gen-dag-isel)
 tablegen(LLVM ORISCGenCallingConv.inc    -gen-callingconv)
+tablegen(LLVM ORISCGenMCCodeEmitter.inc  -gen-emitter)
 
 add_public_tablegen_target(ORISCCommonTableGen)
 

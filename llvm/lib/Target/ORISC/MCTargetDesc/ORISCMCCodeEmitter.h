@@ -24,14 +24,18 @@ namespace llvm {
 
 class ORISCMCCodeEmitter : public MCCodeEmitter {
   const MCInstrInfo &MCII;
-  const MCContext &CTX;
+  const MCContext &Ctx;
 
 public:
   ORISCMCCodeEmitter(const MCInstrInfo &mcii, MCContext &ctx)
-      : MCII(mcii), CTX(ctx) {}
+      : MCII(mcii), Ctx(ctx) {}
   ~ORISCMCCodeEmitter() {}
 
   uint32_t getBranchTargetEncoding(const MCInst &MI, unsigned int OpNum,
+                                   SmallVectorImpl<MCFixup> &Fixups,
+                                   const MCSubtargetInfo &STI) const;
+
+  uint32_t getExternalSymbolEncoding(const MCInst &MI, unsigned int OpNum,
                                    SmallVectorImpl<MCFixup> &Fixups,
                                    const MCSubtargetInfo &STI) const;
 

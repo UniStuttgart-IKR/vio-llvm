@@ -64,7 +64,7 @@ void ORISCInstPrinter::printOperand(const MCInst *MI, unsigned OpNo, raw_ostream
   printOperand(MI->getOperand(OpNo), O);
 }
 
-void ORISCInstPrinter::printBranchTarget(const MCInst *MI, int OpNo,
+void ORISCInstPrinter::printSymbol(const MCInst *MI, unsigned OpNo,
                                           raw_ostream &O) {
   if (OpNo >= MI->size()) {
     O << "<unknown>";
@@ -77,7 +77,7 @@ void ORISCInstPrinter::printBranchTarget(const MCInst *MI, int OpNo,
     llvm_unreachable("Invalid Branch Operand");
 }
 
-void ORISCInstPrinter::printImmBitmap(const MCInst *MI, int OpNo,
+void ORISCInstPrinter::printImmBitmap(const MCInst *MI, unsigned OpNo,
                                           raw_ostream &O) {
   if (OpNo >= MI->size()) {
     O << "<unknown>";

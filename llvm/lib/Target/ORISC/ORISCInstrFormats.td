@@ -81,28 +81,43 @@ def ORISCBRTargetAsmOperand : AsmOperandClass {
 }
 
 def brtarget : Operand<OtherVT> {
-  let PrintMethod = "printBranchTarget";
+  let PrintMethod = "printSymbol";
   let EncoderMethod = "getBranchTargetEncoding";
   let DecoderMethod = "decodeBranchOperand";
   let ParserMatchClass = ORISCBRTargetAsmOperand;
 }
 
-def CallSymbol : AsmOperandClass {
-  let Name = "CallSymbol";
+def ExternalSymbol : AsmOperandClass {
+  let Name = "ExternalSymbol";
   let RenderMethod = "addImmOperands";
   let DiagnosticType = "InvalidCallSymbol";
   let DiagnosticString = "operand must be a bare symbol name";
   let ParserMethod = "decodeCallSymbol";
 }
 
+// A bare symbol used in call/tail only.
+def call_symbol : Operand<iPTR> {
+  let ParserMatchClass = ExternalSymbol;
+}
+
+def  subroutine_symbol : Operand<iPTR> {
+  let PrintMethod = "printSymbol";
+  let EncoderMethod = "getBranchTargetEncoding";
+  let DecoderMethod = "decodeCallSymbol";
+  let ParserMatchClass = ExternalSymbol;
+}
+
+def  external_symbol : Operand<iPTR> {
+  let PrintMethod = "printSymbol";
+  let EncoderMethod = "getExternalSymbolEncoding";
+  let DecoderMethod = "decodeCallSymbol";
+  let ParserMatchClass = ExternalSymbol;
+}
+
 def to_tframeindex : SDNodeXForm<frameindex, [{
   return CurDAG->getTargetFrameIndex(N->getIndex(), N->getValueType(0));
 }]>;
 
-// A bare symbol used in call/tail only.
-def call_symbol : Operand<iPTR> {
-  let ParserMatchClass = CallSymbol;
-}
 
 def GetWordsIndex : SDNodeXForm<imm, [{
 	return CurDAG->getTargetConstant((N->getZExtValue() / 4), SDLoc(N),
@@ -265,10 +280,9 @@ class ORISCInstrReg0PguE<string opcodestr, bits<3> g3, string argstr = "$px = $d
 	let z = dz;
 }
 
-class ORISCInstrReg0PguE2<string opcodestr>
-		: ORISCInstrReg0<opcodestr, (outs), (ins PR:$px), 14, 4, "$px"> {
-	bits<5> px;
-	let x = px;
+class ORISCInstrGCP<string opcodestr>
+		: ORISCInstrReg0<opcodestr, (outs PR:$py), (ins), 14, 4, "ctxt"> {
+	let x = 29;
 	let y = 0;
 	let z = 0;
 }
@@ -502,14 +516,12 @@ class ORISCInstrLsuB3<string opcodestr, bits<3> g3>
 	let Inst{2-0} = g3;
 }
 
-class ORISCInstrLsuB4<string opcodestr, bits<3> g3>
-		: ORISCInstr<opcodestr, (outs), (ins PR:$py), "$py", FormatLSUB> {
-	bits<5> py;
-
+class ORISCInstrSVRSTRPC<string opcodestr, bits<3> g3>
+		: ORISCInstr<opcodestr, (outs), (ins), "rpc", FormatLSUB> {
 	let Inst{28-25} = 11;
 	let Inst{24-20} = 30;
 	let Inst{19-8} = 0;
-	let Inst{7-3} = py;
+	let Inst{7-3} = 31;
 	let Inst{2-0} = g3;
 }
 
@@ -554,7 +566,7 @@ class ORISCInstrBpuD<string opcodestr>
 }
 
 class ORISCInstrBpuE<string opcodestr>
-		: ORISCInstr<opcodestr, (outs), (ins call_symbol:$sd25), "$sd25", FormatBPUD> {
+		: ORISCInstr<opcodestr, (outs), (ins subroutine_symbol:$sd25), "$sd25", FormatBPUD> {
 	bits<25> sd25;
 
 	let isBarrier = true;
@@ -564,13 +576,13 @@ class ORISCInstrBpuE<string opcodestr>
 }
 
 class ORISCInstrBpuF<string opcodestr>
-		: ORISCInstr<opcodestr, (outs), (ins PR:$px, uimm20:$ix20), "$px, $ix20", FormatBPUF> {
-	bits<25> ix20;
+		: ORISCInstr<opcodestr, (outs), (ins PR:$px, external_symbol:$symbol), "$px, $symbol", FormatBPUF> {
+	bits<25> symbol;
 
 	let isBarrier = true;
 	let isCall = true;
 	let Inst{28-25} = 15;
-	let Inst{24-0} = ix20;
+	let Inst{24-0} = symbol;
 }
 
 
@@ -618,7 +630,6 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 	def QDTD:	ORISCInstrReg0AtuB<"qdtd", 7>;
 
 	def	CPP:	ORISCInstrReg0PguD<"cpp", 0>;
-	def	GCP:	ORISCInstrReg0PguE2<"gcp">;
 
 	def ADDI:	ORISCInstrAlu12U<"addi",  1, 0>;
 	def SUBI:	ORISCInstrAlu12U<"subi",  1, 1>;
@@ -632,6 +643,10 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 	def MULIS:	ORISCInstrAlu12S<"mulis", 2, 5>;
 
 	def LUI:	ORISCInstrAlu3<"lui">;
+}
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Defs = [P29] in {
+	def	GCP:	ORISCInstrGCP<"gcp">;
 }
 
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
@@ -654,10 +669,10 @@ let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
 	def	ALC_PD:	ORISCInstrPgu6<"alc">;
 }
 
-let hasSideEffects = 1, mayLoad = 0, mayStore = 1, Uses = [P31] in
-	def	SVRPC:	ORISCInstrLsuB4<"sv", 4>;
-let hasSideEffects = 1, mayLoad = 1, mayStore = 0, Defs = [P31] in
-	def	RSTRPC:	ORISCInstrLsuB4<"rst", 6>;
+let hasSideEffects = 1, mayLoad = 0, mayStore = 1, Uses = [P30, P31] in
+	def	SVRPC:	ORISCInstrSVRSTRPC<"sv", 4>;
+let hasSideEffects = 1, mayLoad = 1, mayStore = 0, Uses = [P30], Defs = [P31] in
+	def	RSTRPC:	ORISCInstrSVRSTRPC<"rst", 6>;
 
 // Load/Store Instructions
 let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {

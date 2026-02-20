@@ -187,6 +187,8 @@ const char *ORISCTargetLowering::getTargetNodeName(unsigned Opcode) const {
       return "ORISCISD::BUILD_PTRARG";
     case ORISCISD::GET_CAPABILITY:
       return "ORISCISD::GET_CAPABILITY";
+    case ORISCISD::GET_CONTEXT:
+      return "ORISCISD::GET_CONTEXT";
     case ORISCISD::LIBRARY_CALL:
         return "ORISCISD::LIBRARY_CALL";
     case ORISCISD::LOCAL_CALL:
@@ -667,7 +669,7 @@ ORISCTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     for (unsigned I = 0, ArgIdx = 0, J = 0, E = ArgLocs.size(); I != E; ++I, ++ArgIdx) {
         CCValAssign &VA = ArgLocs[I];
         SDValue Arg = OutVals[ArgIdx];
-        ISD::ArgFlagsTy Flags = Outs[ArgIdx].Flags;
+        //ISD::ArgFlagsTy Flags = Outs[ArgIdx].Flags;
 
         if (VA.isRegLoc()) {
             // Put argument in a physical register.
@@ -697,7 +699,7 @@ ORISCTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
         InGlue = Chain.getValue(1);
     }
 
-    SDValue GetCap;
+    SDValue GetCap, GetCtxt;
     if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
         const GlobalValue *GV = S->getGlobal();
         if (GV->isDeclaration()) {
@@ -713,8 +715,12 @@ ORISCTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                 ClassName->append(N.str());
               }
               ClassName->append("E");
+              if (!GetCtxt) {
+                SDVTList VTs = DAG.getVTList(MVT::pointer, MVT::Other);
+                GetCtxt = DAG.getNode(ORISCISD::GET_CONTEXT, DL, VTs, DAG.getEntryNode());
+              }
               GetCap = DAG.getTargetExternalSymbol(ClassName->c_str(), MVT::i32, 0);
-              GetCap = DAG.getNode(ORISCISD::GET_CAPABILITY, DL, MVT::pointer, GetCap);
+              GetCap = DAG.getNode(ORISCISD::GET_CAPABILITY, DL, MVT::pointer, GetCtxt.getValue(1), GetCap);
             }
           }
         } else {

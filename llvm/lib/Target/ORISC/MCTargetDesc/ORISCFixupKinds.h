@@ -17,6 +17,8 @@ namespace llvm {
 namespace ORISC {
 enum FixupKind {
   fixup_orisc_ctxt_idx = FirstTargetFixupKind,
+  fixup_orisc_branch_12,
+  fixup_orisc_branch_25,
   fixup_orisc_jlib_idx,
   fixup_orisc_invalid,
   LastTargetFixupKind,

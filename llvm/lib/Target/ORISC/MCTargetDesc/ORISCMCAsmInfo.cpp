@@ -34,7 +34,7 @@ ORISCMCAsmInfo::ORISCMCAsmInfo(const Triple &TT) {
   HasSingleParameterDotFile = false;
   UseMotorolaIntegers = true;
   CommentString = ";";
-  SupportsDebugInformation = true;
-  DwarfRegNumForCFI = true;
-  ExceptionsType = ExceptionHandling::DwarfCFI;
+  SupportsDebugInformation = false;
+  //DwarfRegNumForCFI = true;
+  //ExceptionsType = ExceptionHandling::DwarfCFI;
 }

@@ -37,8 +37,8 @@ public:
 
   // Print the given operand.
   void printOperand(const MCOperand &MO, raw_ostream &O);
-  void printBranchTarget(const MCInst *MI, int OpNo, raw_ostream &OS);
-  void printImmBitmap(const MCInst *MI, int OpNo, raw_ostream &OS);
+  void printSymbol(const MCInst *MI, unsigned OpNo, raw_ostream &OS);
+  void printImmBitmap(const MCInst *MI, unsigned OpNo, raw_ostream &OS);
   static const char *getRegisterName(MCRegister Reg);
 
   // Override MCInstPrinter.

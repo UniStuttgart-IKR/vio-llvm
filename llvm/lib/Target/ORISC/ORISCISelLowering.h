@@ -30,6 +30,7 @@ enum NodeType : unsigned  {
   BOX,
   BUILD_PTRARG,
   GET_CAPABILITY,
+  GET_CONTEXT,
   LOCAL_CALL,
   LIBRARY_CALL,
   LOAD_CONST,

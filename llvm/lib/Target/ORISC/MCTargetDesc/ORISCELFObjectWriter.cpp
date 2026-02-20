@@ -9,6 +9,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MCTargetDesc/ORISCMCTargetDesc.h"
+#include "ORISCFixupKinds.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCELFObjectWriter.h"
@@ -46,7 +47,19 @@ ORISCObjectWriter::~ORISCObjectWriter() {}
 unsigned ORISCObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
                                           const MCFixup &Fixup,
                                           bool IsPCRel) const {
-  return ELF::EM_NONE;
+  switch (Fixup.getTargetKind()) {
+    default:
+      return ELF::R_ORISC_NONE;
+    case ORISC::fixup_orisc_ctxt_idx:
+      return ELF::R_ORISC_CTXT_IDX;
+    case ORISC::fixup_orisc_jlib_idx:
+      return ELF::R_ORISC_JLIB_IDX;
+    case ORISC::fixup_orisc_branch_25:
+      return ELF::R_ORISC_BRANCH_25;
+    case ORISC::fixup_orisc_branch_12:
+      return ELF::R_ORISC_BRANCH_12;
+  }
+  return ELF::EM_ORISC;
 }
 
 std::unique_ptr<MCObjectTargetWriter>

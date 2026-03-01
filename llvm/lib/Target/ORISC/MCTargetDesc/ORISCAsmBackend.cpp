@@ -34,7 +34,7 @@ class ORISCMCAsmBackend : public MCAsmBackend {
 
 public:
     ORISCMCAsmBackend(const MCSubtargetInfo &STI, uint8_t OSABI)
-        : MCAsmBackend(llvm::endianness::little), OSABI(OSABI),
+        : MCAsmBackend(llvm::endianness::big), OSABI(OSABI),
             STI(STI) {}
 
     const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const override;

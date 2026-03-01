@@ -72,7 +72,6 @@ def simm25 : ORISCSImmLeafOp<25>;
 
 def scimm3 : ORISCScaleImmLeafOp<3>;
 
-
 def ORISCBRTargetAsmOperand : AsmOperandClass {
   let Name = "BRTarget";
   let ParserMethod = "parseBRTarget";
@@ -83,7 +82,7 @@ def ORISCBRTargetAsmOperand : AsmOperandClass {
 def brtarget : Operand<OtherVT> {
   let PrintMethod = "printSymbol";
   let EncoderMethod = "getBranchTargetEncoding";
-  let DecoderMethod = "decodeBranchOperand";
+  let DecoderMethod = "decodeBranch12Operand";
   let ParserMatchClass = ORISCBRTargetAsmOperand;
 }
 
@@ -92,7 +91,6 @@ def ExternalSymbol : AsmOperandClass {
   let RenderMethod = "addImmOperands";
   let DiagnosticType = "InvalidCallSymbol";
   let DiagnosticString = "operand must be a bare symbol name";
-  let ParserMethod = "decodeCallSymbol";
 }
 
 // A bare symbol used in call/tail only.
@@ -103,14 +101,14 @@ def call_symbol : Operand<iPTR> {
 def  subroutine_symbol : Operand<iPTR> {
   let PrintMethod = "printSymbol";
   let EncoderMethod = "getBranchTargetEncoding";
-  let DecoderMethod = "decodeCallSymbol";
+  let DecoderMethod = "decodeBranch25Operand";
   let ParserMatchClass = ExternalSymbol;
 }
 
 def  external_symbol : Operand<iPTR> {
   let PrintMethod = "printSymbol";
   let EncoderMethod = "getExternalSymbolEncoding";
-  let DecoderMethod = "decodeCallSymbol";
+  let DecoderMethod = "decodeJlibIndexOperand";
   let ParserMatchClass = ExternalSymbol;
 }
 
@@ -378,12 +376,11 @@ class ORISCInstrPgu51<string opcodestr>
 
 class ORISCInstrPgu52<string opcodestr>
 		: ORISCInstr<opcodestr, (outs PR:$px), (ins uimm9:$pi9, uimm11:$delta11), "$px = $pi9, $delta11", FormatPGU5> {
-	bits<5> px;
 	bits<9> pi9;
 	bits<11> delta11;
 
 	let Inst{28-25} = 5;
-	let Inst{24-20} = px;
+	let Inst{24-20} = 30;
 	let Inst{19-11} = pi9;
 	let Inst{10-0} = delta11;
 }
@@ -396,6 +393,16 @@ class ORISCInstrPgu6<string opcodestr>
 
 	let Inst{28-25} = 6;
 	let Inst{24-20} = px;
+	let Inst{19-11} = pi9;
+	let Inst{10-0} = delta11;
+}
+class ORISCInstrPgu62<string opcodestr>
+		: ORISCInstr<opcodestr, (outs PR:$px), (ins uimm9:$pi9, uimm11:$delta11), "$px = $pi9, $delta11", FormatPGU5> {
+	bits<9> pi9;
+	bits<11> delta11;
+
+	let Inst{28-25} = 6;
+	let Inst{24-20} = 30;
 	let Inst{19-11} = pi9;
 	let Inst{10-0} = delta11;
 }
@@ -654,7 +661,7 @@ let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
 
 // Stack Instructions
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Defs = [P30] in {
-	def	PUSH:	ORISCInstrPgu6<"push">;
+	def	PUSH:	ORISCInstrPgu62<"push">;
 	def	PUSHT:	ORISCInstrPgu52<"pusht">;
 }
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Uses = [P30] in {

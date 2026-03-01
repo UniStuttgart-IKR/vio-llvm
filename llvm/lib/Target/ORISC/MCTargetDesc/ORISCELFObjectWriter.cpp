@@ -40,7 +40,7 @@ protected:
 
 ORISCObjectWriter::ORISCObjectWriter(uint8_t OSABI)
     : MCELFObjectTargetWriter(false, OSABI, ELF::EM_ORISC,
-                              /*HasRelocationAddend=*/true) {}
+                              /*HasRelocationAddend=*/false) {}
 
 ORISCObjectWriter::~ORISCObjectWriter() {}
 

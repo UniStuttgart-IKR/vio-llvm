@@ -28,10 +28,6 @@ using namespace llvm;
 #define DEBUG_TYPE "asm-printer"
 #include "ORISCGenAsmWriter.inc"
 
-static void printExpr(const MCExpr *Expr, raw_ostream &OS) {
-    
-}
-
 bool ORISCInstPrinter::applyTargetSpecificCLOption(StringRef Opt) {
   return false;
 }
@@ -50,8 +46,8 @@ void ORISCInstPrinter::printOperand(const MCOperand &MC, raw_ostream &O) {
 void ORISCInstPrinter::printInst(const MCInst *MI, uint64_t Address,
                                   StringRef Annot, const MCSubtargetInfo &STI,
                                   raw_ostream &O) {
-                                    
-  O << "\t";
+  //if (getOpcodeName(MI->getOpcode()).size() < 3)
+  //  O << "\t";
   printInstruction(MI, Address, O);
   printAnnotation(O, Annot);
 }
@@ -73,8 +69,12 @@ void ORISCInstPrinter::printSymbol(const MCInst *MI, unsigned OpNo,
   const MCOperand &MC = MI->getOperand(OpNo);
   if (MC.isExpr())
     MC.getExpr()->print(O, &MAI);
-  else
+  else if (MC.isImm())
+    O << MC.getImm();
+  else {
+    MI->dump();
     llvm_unreachable("Invalid Branch Operand");
+  }
 }
 
 void ORISCInstPrinter::printImmBitmap(const MCInst *MI, unsigned OpNo,

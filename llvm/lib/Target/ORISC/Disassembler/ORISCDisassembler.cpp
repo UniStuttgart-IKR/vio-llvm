@@ -17,11 +17,13 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDecoderOps.h"
 #include "llvm/MC/MCDisassembler/MCDisassembler.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Endian.h"
+#include <cstdint>
 
 using namespace llvm;
 
@@ -63,6 +65,24 @@ static DecodeStatus DecodePRRegisterClass(MCInst &Inst, uint64_t RegNo,
   MCPhysReg Reg = ORISC::P0 + RegNo;
   Inst.addOperand(MCOperand::createReg(Reg));
   return MCDisassembler::Success;
+}
+
+static DecodeStatus DecodePRFRegisterClass(MCInst &Inst, uint64_t RegNo,
+                                          uint64_t Address,
+                                          const void *Decoder) {
+  if (ORISC::P0 + RegNo == ORISC::P30)
+    return MCDisassembler::Fail;
+
+  return DecodePRRegisterClass(Inst, RegNo, Address, Decoder);
+}
+
+static DecodeStatus DecodePRFNRegisterClass(MCInst &Inst, uint64_t RegNo,
+                                          uint64_t Address,
+                                          const void *Decoder) {
+  if (ORISC::P0 + RegNo == ORISC::P0)
+    return MCDisassembler::Fail;
+
+  return DecodePRFRegisterClass(Inst, RegNo, Address, Decoder);
 }
 
 static DecodeStatus DecodeDRRegisterClass(MCInst &Inst, uint64_t RegNo,
@@ -120,16 +140,36 @@ static DecodeStatus decodeJlibIndexOperand(MCInst &Inst, uint64_t Imm,
 static DecodeStatus readInstruction32(ArrayRef<uint8_t> Bytes, uint64_t Address,
                                       uint64_t &Size, uint64_t &Insn) {
   // We want to read exactly 2 Bytes of data.
-  if (Bytes.size() != 4) {
+  if (Bytes.size() < 4) {
     Size = 0;
     return MCDisassembler::Fail;
   }
-  Insn = (Bytes[0] << 24) | (Bytes[1] << 16) | (Bytes[2] << 8) | Bytes[3];
 
+  Size = 4;
+  Insn = (Bytes[0] << 24) | (Bytes[1] << 16) | (Bytes[2] << 8) | Bytes[3];
   return MCDisassembler::Success;
 }
 
+static DecodeStatus DecodePush(MCInst &Inst, uint32_t insn,
+                                             uint64_t Address,
+                                             const MCDisassembler *Decoder);
+
 #include "ORISCGenDisassemblerTables.inc"
+
+//All Pointer Regs Except Frame
+static DecodeStatus DecodePush(MCInst &Inst, uint32_t insn, uint64_t Addr,
+                                     const MCDisassembler *Decoder) {
+  uint64_t FrameReg = fieldFromInstruction(insn, 20, 5);
+  if (FrameReg != 30)
+    return MCDisassembler::Fail;
+
+  uint64_t Pi = fieldFromInstruction(insn, 11, 9);
+  uint64_t Delta = fieldFromInstruction(insn, 0, 11);
+  Inst.addOperand(MCOperand::createReg(ORISC::P30));
+  Inst.addOperand(MCOperand::createImm(Pi));
+  Inst.addOperand(MCOperand::createImm(Delta));
+  return MCDisassembler::Success;
+}
 
 DecodeStatus ORISCDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
                                                 ArrayRef<uint8_t> Bytes,
@@ -140,13 +180,11 @@ DecodeStatus ORISCDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
 
   // Parse 32-bit instructions
   Result = readInstruction32(Bytes, Address, Size, Insn);
-  if (Result == MCDisassembler::Fail)
-    return MCDisassembler::Fail;
-  LLVM_DEBUG(dbgs() << "Trying ORISC 32-bit instruction table :\n");
-  Result = decodeInstruction(DecoderTable32, MI, Insn, Address, this, STI);
   if (Result != MCDisassembler::Fail) {
-    Size = 4;
-    return Result;
+    Result = decodeInstruction(DecoderTable32, MI, Insn, Address, this, STI);
+    if (Result != MCDisassembler::Fail)
+      return Result;
   }
-  return Result;
+
+  return MCDisassembler::Fail;
 }

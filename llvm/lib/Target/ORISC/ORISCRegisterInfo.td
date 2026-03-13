@@ -96,3 +96,6 @@ def DR : RegisterClass<"ORISC", [i32], 32, (add (sequence "D%u", 0, 31))>;
 
 let Size = 32 in
 def PR : RegisterClass<"ORISC", [iPTR, pointer], 32, (add (sequence "P%u", 0, 31))>;
+def PRF : RegisterClass<"ORISC", [iPTR, pointer], 32, (add (sequence "P%u", 0, 29), P31)>;
+def PRFN : RegisterClass<"ORISC", [iPTR, pointer], 32, (add (sequence "P%u", 1, 29), P31)>;
+def F : RegisterClass<"ORISC", [iPTR, pointer], 32, (add P30)>;

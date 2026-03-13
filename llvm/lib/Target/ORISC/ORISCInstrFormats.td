@@ -362,7 +362,7 @@ class ORISCInstrPgu4<string opcodestr>
 }
 
 class ORISCInstrPgu51<string opcodestr>
-		: ORISCInstr<opcodestr, (outs PR:$px), (ins uimm15:$pi15, DR:$dz), "$px = $pi15, $dz", FormatPGU5> {
+		: ORISCInstr<opcodestr, (outs PRF:$px), (ins uimm15:$pi15, DR:$dz), "$px = $pi15, $dz", FormatPGU5> {
 	bits<5> px;
 	bits<5> dz;
 	bits<15> pi15;
@@ -375,9 +375,10 @@ class ORISCInstrPgu51<string opcodestr>
 }
 
 class ORISCInstrPgu52<string opcodestr>
-		: ORISCInstr<opcodestr, (outs PR:$px), (ins uimm9:$pi9, uimm11:$delta11), "$px = $pi9, $delta11", FormatPGU5> {
+		: ORISCInstr<opcodestr, (outs F:$px), (ins uimm9:$pi9, uimm11:$delta11), "$px = $pi9, $delta11", FormatPGU5> {
 	bits<9> pi9;
 	bits<11> delta11;
+	let DecoderMethod = "DecodePush";
 
 	let Inst{28-25} = 5;
 	let Inst{24-20} = 30;
@@ -385,8 +386,8 @@ class ORISCInstrPgu52<string opcodestr>
 	let Inst{10-0} = delta11;
 }
 
-class ORISCInstrPgu6<string opcodestr>
-		: ORISCInstr<opcodestr, (outs PR:$px), (ins uimm9:$pi9, uimm11:$delta11), "$px = $pi9, $delta11", FormatPGU5> {
+class ORISCInstrPgu61<string opcodestr>
+		: ORISCInstr<opcodestr, (outs PRF:$px), (ins uimm9:$pi9, uimm11:$delta11), "$px = $pi9, $delta11", FormatPGU5> {
 	bits<5> px;
 	bits<9> pi9;
 	bits<11> delta11;
@@ -396,10 +397,12 @@ class ORISCInstrPgu6<string opcodestr>
 	let Inst{19-11} = pi9;
 	let Inst{10-0} = delta11;
 }
+
 class ORISCInstrPgu62<string opcodestr>
-		: ORISCInstr<opcodestr, (outs PR:$px), (ins uimm9:$pi9, uimm11:$delta11), "$px = $pi9, $delta11", FormatPGU5> {
+		: ORISCInstr<opcodestr, (outs F:$px), (ins uimm9:$pi9, uimm11:$delta11), "$px = $pi9, $delta11", FormatPGU5> {
 	bits<9> pi9;
 	bits<11> delta11;
+	let DecoderMethod = "DecodePush";
 
 	let Inst{28-25} = 6;
 	let Inst{24-20} = 30;
@@ -583,13 +586,15 @@ class ORISCInstrBpuE<string opcodestr>
 }
 
 class ORISCInstrBpuF<string opcodestr>
-		: ORISCInstr<opcodestr, (outs), (ins PR:$px, external_symbol:$symbol), "$px, $symbol", FormatBPUF> {
-	bits<25> symbol;
+		: ORISCInstr<opcodestr, (outs), (ins PRFN:$px, external_symbol:$symbol), "$px, $symbol", FormatBPUF> {
+	bits<5> px;
+	bits<20> symbol;
 
 	let isBarrier = true;
 	let isCall = true;
 	let Inst{28-25} = 15;
-	let Inst{24-0} = symbol;
+	let Inst{24-20} = px;
+	let Inst{19-0} = symbol;
 }
 
 
@@ -660,7 +665,7 @@ let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
 	def NCHK:		ORISCInstrReg0AtuC<"nchk", 0>;
 
 // Stack Instructions
-let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Defs = [P30] in {
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
 	def	PUSH:	ORISCInstrPgu62<"push">;
 	def	PUSHT:	ORISCInstrPgu52<"pusht">;
 }
@@ -673,7 +678,7 @@ let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
 	def	ALC:	ORISCInstrReg0PguE<"alc", 0>;
 	def	ALC_D:	ORISCInstrPgu4<"alc">;
 	def	ALC_P:	ORISCInstrPgu51<"alc">;
-	def	ALC_PD:	ORISCInstrPgu6<"alc">;
+	def	ALC_PD:	ORISCInstrPgu61<"alc">;
 }
 
 let hasSideEffects = 1, mayLoad = 0, mayStore = 1, Uses = [P30, P31] in

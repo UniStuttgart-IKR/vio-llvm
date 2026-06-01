@@ -94,9 +94,9 @@ def : PatD<ctlz, CLZ>;
 
 //Conditional Branches
 class BranchDPat<CondCode Cond, ORISCInstr Inst>
-		: Pat<(brcc Cond, DR:$dy, DR:$dz, bb:$sd12), (Inst DR:$dy, DR:$dz, brtarget:$sd12)>;
+		: Pat<(brcc Cond, DR:$dy, DR:$dz, bb:$sd12), (Inst DR:$dy, DR:$dz, brtarget12:$sd12)>;
 class BranchPPat<CondCode Cond, ORISCInstr Inst>
-		: Pat<(brcc Cond, (pointer PR:$py), (pointer PR:$pz), bb:$sd12), (Inst PR:$py, PR:$pz, brtarget:$sd12)>;
+		: Pat<(brcc Cond, (pointer PR:$py), (pointer PR:$pz), bb:$sd12), (Inst PR:$py, PR:$pz, brtarget12:$sd12)>;
 
 def : BranchDPat<SETEQ,  BEQ>;
 def : BranchDPat<SETNE,  BNE>;
@@ -110,7 +110,7 @@ def : BranchPPat<SETNE, BNEP>;
 
 //Inversed Branch Conditions
 class InverseBranchPat<CondCode Cond, ORISCInstr Inst>
-		: Pat<(brcc Cond, DR:$dy, DR:$dz, bb:$sd12), (Inst DR:$dz, DR:$dy, brtarget:$sd12)>;
+		: Pat<(brcc Cond, DR:$dy, DR:$dz, bb:$sd12), (Inst DR:$dz, DR:$dy, brtarget12:$sd12)>;
 
 def : InverseBranchPat<SETUGT, BLTU>;
 def : InverseBranchPat<SETGT,  BLTS>;
@@ -118,7 +118,7 @@ def : InverseBranchPat<SETULE, BGEU>;
 def : InverseBranchPat<SETLE,  BGES>;
 
 //Unconditional Branch
-def : Pat<(br bb:$sd25), (BRA brtarget:$sd25)>;
+//def : Pat<(br bb:$sd25), (BRA brtarget25:$sd25)>;
 
 //				------ CALLS ------
 def : Pat<(orisc_local_call tglobaladdr:$symbol), (BSR subroutine_symbol:$symbol)>;

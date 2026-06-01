@@ -58,10 +58,10 @@ public:
 const MCFixupKindInfo &
 ORISCMCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
   const static MCFixupKindInfo Infos[ORISC::NumTargetFixupKinds] = {
-        {"fixup_orisc_ctxt_idx", 0, 32, 0},
+        {"fixup_orisc_ctxt_idx", 8, 12, 0},
         {"fixup_orisc_branch_12", 13, 12, MCFixupKindInfo::FKF_IsPCRel},
         {"fixup_orisc_branch_25", 0, 25, MCFixupKindInfo::FKF_IsPCRel},
-        {"fixup_orisc_jlib_idx", 0, 32, 0}};
+        {"fixup_orisc_jlib_idx", 0, 20, 0}};
 
     if (Kind < FirstTargetFixupKind)
         return MCAsmBackend::getFixupKindInfo(Kind);

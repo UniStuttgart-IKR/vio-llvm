@@ -47,6 +47,13 @@ uint32_t ORISCMCCodeEmitter::getBranchTargetEncoding(
     const MCOperand &MO = MI.getOperand(OpNum);
     if (MO.isImm())
         return static_cast<uint32_t>(MO.getImm());
+    if (MO.isExpr()) {
+        int64_t Res;
+        // This checks if the expression can be resolved to a number right now
+        if (MO.getExpr()->evaluateAsAbsolute(Res)) {
+            return static_cast<uint32_t>(Res);
+        }
+    }
     
     switch (MI.getOpcode()) {
         case ORISC::BRA:

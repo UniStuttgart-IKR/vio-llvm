@@ -79,11 +79,16 @@ def ORISCBRTargetAsmOperand : AsmOperandClass {
   let RenderMethod = "addImmOperands";
 }
 
-def brtarget : Operand<OtherVT> {
+def brtarget12 : Operand<OtherVT> {
   let PrintMethod = "printSymbol";
   let EncoderMethod = "getBranchTargetEncoding";
   let DecoderMethod = "decodeBranch12Operand";
-  let ParserMatchClass = ORISCBRTargetAsmOperand;
+}
+
+def brtarget25 : Operand<OtherVT> {
+  let PrintMethod = "printSymbol";
+  let EncoderMethod = "getBranchTargetEncoding";
+  let DecoderMethod = "decodeBranch25Operand";
 }
 
 def ExternalSymbol : AsmOperandClass {
@@ -539,7 +544,7 @@ class ORISCInstrSVRSTRPC<string opcodestr, bits<3> g3>
 // Branch Instructions
 
 class ORISCInstrBpuC1<string opcodestr, bits<3> g3>
-		: ORISCInstr<opcodestr, (outs), (ins PR:$px, PR:$py, brtarget:$sd12), "$px, $py, $sd12", FormatBPUC> {
+		: ORISCInstr<opcodestr, (outs), (ins PR:$px, PR:$py, brtarget12:$sd12), "$px, $py, $sd12", FormatBPUC> {
 	bits<5> px;
 	bits<5> py;
 	bits<12> sd12;
@@ -552,7 +557,7 @@ class ORISCInstrBpuC1<string opcodestr, bits<3> g3>
 }
 
 class ORISCInstrBpuC2<string opcodestr, bits<3> g3>
-		: ORISCInstr<opcodestr, (outs), (ins DR:$dy, DR:$dz, brtarget:$sd12), "$dy, $dz, $sd12", FormatBPUC> {
+		: ORISCInstr<opcodestr, (outs), (ins DR:$dy, DR:$dz, brtarget12:$sd12), "$dy, $dz, $sd12", FormatBPUC> {
 	bits<5> dy;
 	bits<5> dz;
 	bits<12> sd12;
@@ -567,9 +572,10 @@ class ORISCInstrBpuC2<string opcodestr, bits<3> g3>
 
 
 class ORISCInstrBpuD<string opcodestr>
-		: ORISCInstr<opcodestr, (outs), (ins brtarget:$sd25), "$sd25", FormatBPUD> {
+		: ORISCInstr<opcodestr, (outs), (ins brtarget25:$sd25), "$sd25", FormatBPUD> {
 	bits<25> sd25;
 
+	let Pattern = [(br bb:$sd25)];
 	let isBarrier = true;
 	let Inst{28-25} = 13;
 	let Inst{24-0} = sd25;
@@ -740,9 +746,11 @@ let mayLoad = 0, mayStore = 0, hasSideEffects = 0, isBranch = 1, isTerminator = 
 	def	BGES:		ORISCInstrBpuC2<"bges", 5>;
 	def	BLTU:		ORISCInstrBpuC2<"bltu", 6>;
 	def	BLTS:		ORISCInstrBpuC2<"blts", 7>;
+
+	let isBarrier = 1 in
 	def BRA:		ORISCInstrBpuD<"bra">;
 
-	let Defs = [P31] in
+	let isBarrier = 1, Defs = [P31] in
 	def BSR:		ORISCInstrBpuE<"bsr">;
 }
 
@@ -769,19 +777,19 @@ def RST_D:	InstAlias<"rst\t$dy, $ui12",		(LW_I DR:$dx, P30, uimm12:$ui12)>;
 def RST_P:	InstAlias<"rst\t$py, $ui12",		(LP_I PR:$px, P30, uimm12:$ui12)>;
 
 def MULHUS:	InstAlias<"mulhsu\t$dx = $dy, $dz", (MULHSU DR:$dx, DR:$dz, DR:$dy)>;
-def BGTS:	InstAlias<"bgts\t$dy, $dz, $sd12", 	(BLTS DR:$dz, DR:$dy, brtarget:$sd12)>;
-def BLES:	InstAlias<"bles\t$dy, $dz, $sd12", 	(BGES DR:$dz, DR:$dy, brtarget:$sd12)>;
-def BGTU:	InstAlias<"bgtu\t$dy, $dz, $sd12", 	(BLTU DR:$dz, DR:$dy, brtarget:$sd12)>;
-def BLEU:	InstAlias<"bleu\t$dy, $dz, $sd12", 	(BGEU DR:$dz, DR:$dy, brtarget:$sd12)>;
+def BGTS:	InstAlias<"bgts\t$dy, $dz, $sd12", 	(BLTS DR:$dz, DR:$dy, brtarget12:$sd12)>;
+def BLES:	InstAlias<"bles\t$dy, $dz, $sd12", 	(BGES DR:$dz, DR:$dy, brtarget12:$sd12)>;
+def BGTU:	InstAlias<"bgtu\t$dy, $dz, $sd12", 	(BLTU DR:$dz, DR:$dy, brtarget12:$sd12)>;
+def BLEU:	InstAlias<"bleu\t$dy, $dz, $sd12", 	(BGEU DR:$dz, DR:$dy, brtarget12:$sd12)>;
 
-def BEQP_1:	InstAlias<"beqp\t$px, $sd12",		(BEQP PR:$px, P0, brtarget:$sd12)>;
-def BNEP_1:	InstAlias<"bnep\t$px, $sd12",		(BNEP PR:$px, P0, brtarget:$sd12)>;
-def BEQ_1:	InstAlias<"beq\t$dx, $sd12",		(BEQ  DR:$dx, D0, brtarget:$sd12)>;
-def BNE_1:	InstAlias<"bne\t$dx, $sd12",		(BNE  DR:$dx, D0, brtarget:$sd12)>;
-def BLE_1:	InstAlias<"ble\t$dx, $sd12",		(BGES D0, DR:$dx, brtarget:$sd12)>;
-def BGE_1:	InstAlias<"bge\t$dx, $sd12",		(BGES DR:$dx, D0, brtarget:$sd12)>;
-def BLT_1:	InstAlias<"blt\t$dx, $sd12",		(BLTS D0, DR:$dx, brtarget:$sd12)>;
-def BGT_1:	InstAlias<"bgt\t$dx, $sd12",		(BLTS DR:$dx, D0, brtarget:$sd12)>;
+def BEQP_1:	InstAlias<"beqp\t$px, $sd12",		(BEQP PR:$px, P0, brtarget12:$sd12)>;
+def BNEP_1:	InstAlias<"bnep\t$px, $sd12",		(BNEP PR:$px, P0, brtarget12:$sd12)>;
+def BEQ_1:	InstAlias<"beq\t$dx, $sd12",		(BEQ  DR:$dx, D0, brtarget12:$sd12)>;
+def BNE_1:	InstAlias<"bne\t$dx, $sd12",		(BNE  DR:$dx, D0, brtarget12:$sd12)>;
+def BLE_1:	InstAlias<"ble\t$dx, $sd12",		(BGES D0, DR:$dx, brtarget12:$sd12)>;
+def BGE_1:	InstAlias<"bge\t$dx, $sd12",		(BGES DR:$dx, D0, brtarget12:$sd12)>;
+def BLT_1:	InstAlias<"blt\t$dx, $sd12",		(BLTS D0, DR:$dx, brtarget12:$sd12)>;
+def BGT_1:	InstAlias<"bgt\t$dx, $sd12",		(BLTS DR:$dx, D0, brtarget12:$sd12)>;
 
 // TODO: multiclass benutzen?
 def	ADDI_1:	InstAlias<"addi\t$dx = $ui12",		(ADDI  DR:$dx, DR:$dx, uimm12:$ui12)>;

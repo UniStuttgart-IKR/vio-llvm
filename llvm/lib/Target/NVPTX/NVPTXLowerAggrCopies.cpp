@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "NVPTXLowerAggrCopies.h"
+#include "NVPTX.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/StackProtector.h"
 #include "llvm/IR/Constants.h"
@@ -122,24 +123,22 @@ bool NVPTXLowerAggrCopies::runOnFunction(Function &F) {
 
   // Transform mem* intrinsic calls.
   for (MemIntrinsic *MemCall : MemCalls) {
+    bool Expanded = true;
     if (MemCpyInst *Memcpy = dyn_cast<MemCpyInst>(MemCall)) {
       expandMemCpyAsLoop(Memcpy, TTI);
     } else if (MemMoveInst *Memmove = dyn_cast<MemMoveInst>(MemCall)) {
-      expandMemMoveAsLoop(Memmove, TTI);
+      Expanded = expandMemMoveAsLoop(Memmove, TTI);
     } else if (MemSetInst *Memset = dyn_cast<MemSetInst>(MemCall)) {
-      expandMemSetAsLoop(Memset);
+      expandMemSetAsLoop(Memset, TTI);
     }
-    MemCall->eraseFromParent();
+    if (Expanded)
+      MemCall->eraseFromParent();
   }
 
   return true;
 }
 
 } // namespace
-
-namespace llvm {
-void initializeNVPTXLowerAggrCopiesPass(PassRegistry &);
-}
 
 INITIALIZE_PASS(NVPTXLowerAggrCopies, "nvptx-lower-aggr-copies",
                 "Lower aggregate copies, and llvm.mem* intrinsics into loops",

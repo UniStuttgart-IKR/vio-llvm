@@ -18,6 +18,10 @@ using namespace mlir;
 // Common utility functions
 //===----------------------------------------------------------------------===//
 
+static bool isCoreFloat(Type type) {
+  return isa<Float16Type, Float32Type, Float64Type>(type);
+}
+
 // TODO: In the future we should model image operands better, so we can move
 // some verification into ODS.
 static LogicalResult verifyImageOperands(Operation *imageOp,
@@ -42,6 +46,36 @@ static LogicalResult verifyImageOperands(Operation *imageOp,
   // The order we process operands is important. In case of multiple argument
   // taking operands, the arguments are ordered starting with operands having
   // smaller-numbered bits first.
+  if (spirv::bitEnumContainsAny(attr.getValue(), spirv::ImageOperands::Bias)) {
+    if (!isa<spirv::ImplicitLodOpInterface>(imageOp))
+      return imageOp->emitError(
+          "Bias is only valid with implicit-lod instructions");
+
+    if (index + 1 > operands.size())
+      return imageOp->emitError("Bias operand requires 1 argument");
+
+    if (!isCoreFloat(operands[index].getType()))
+      return imageOp->emitError("Bias must be a floating-point type scalar");
+
+    auto samplingOp = cast<spirv::SamplingOpInterface>(imageOp);
+    auto sampledImageType =
+        cast<spirv::SampledImageType>(samplingOp.getSampledImage().getType());
+    auto imageType = cast<spirv::ImageType>(sampledImageType.getImageType());
+
+    if (!llvm::is_contained({spirv::Dim::Dim1D, spirv::Dim::Dim2D,
+                             spirv::Dim::Dim3D, spirv::Dim::Cube},
+                            imageType.getDim()))
+      return imageOp->emitError(
+          "Bias must only be used with an image type that has "
+          "a dim operand of 1D, 2D, 3D, or Cube");
+
+    if (imageType.getSamplingInfo() != spirv::ImageSamplingInfo::SingleSampled)
+      return imageOp->emitError("Bias must only be used with an image type "
+                                "that has a MS operand of 0");
+
+    ++index;
+  }
+
   if (spirv::bitEnumContainsAny(attr.getValue(), spirv::ImageOperands::Lod)) {
     if (!isa<spirv::ExplicitLodOpInterface>(imageOp) &&
         !isa<spirv::FetchOpInterface>(imageOp))
@@ -54,13 +88,13 @@ static LogicalResult verifyImageOperands(Operation *imageOp,
     spirv::ImageType imageType;
 
     if (isa<spirv::SamplingOpInterface>(imageOp)) {
-      if (!isa<mlir::FloatType>(operands[index].getType()))
+      if (!isCoreFloat(operands[index].getType()))
         return imageOp->emitError("for sampling operations, Lod must be a "
                                   "floating-point type scalar");
 
       auto samplingOp = cast<spirv::SamplingOpInterface>(imageOp);
-      auto sampledImageType = llvm::cast<spirv::SampledImageType>(
-          samplingOp.getSampledImage().getType());
+      auto sampledImageType =
+          cast<spirv::SampledImageType>(samplingOp.getSampledImage().getType());
       imageType = cast<spirv::ImageType>(sampledImageType.getImageType());
     } else {
       if (!isa<mlir::IntegerType>(operands[index].getType()))
@@ -74,12 +108,13 @@ static LogicalResult verifyImageOperands(Operation *imageOp,
     if (!llvm::is_contained({spirv::Dim::Dim1D, spirv::Dim::Dim2D,
                              spirv::Dim::Dim3D, spirv::Dim::Cube},
                             imageType.getDim()))
-      return imageOp->emitError("Lod only be used with an image type that has "
-                                "a dim operand of 1D, 2D, 3D, or Cube");
+      return imageOp->emitError(
+          "Lod must only be used with an image type that has "
+          "a dim operand of 1D, 2D, 3D, or Cube");
 
     if (imageType.getSamplingInfo() != spirv::ImageSamplingInfo::SingleSampled)
-      return imageOp->emitError(
-          "Lod only be used with an image type that has a MS operand of 0");
+      return imageOp->emitError("Lod must only be used with an image type that "
+                                "has a MS operand of 0");
 
     ++index;
   }
@@ -99,8 +134,8 @@ static LogicalResult verifyImageOperands(Operation *imageOp,
     auto imageType = cast<spirv::ImageType>(sampledImageType.getImageType());
 
     if (imageType.getSamplingInfo() != spirv::ImageSamplingInfo::SingleSampled)
-      return imageOp->emitError(
-          "Grad only be used with an image type that has a MS operand of 0");
+      return imageOp->emitError("Grad must only be used with an image type "
+                                "that has a MS operand of 0");
 
     int64_t numberOfComponents = 0;
 
@@ -126,12 +161,12 @@ static LogicalResult verifyImageOperands(Operation *imageOp,
             "of components in coordinate, minus the array layer component, if "
             "present");
 
-      if (!isa<mlir::FloatType>(dXVector.getElementType()) ||
-          !isa<mlir::FloatType>(dYVector.getElementType()))
+      if (!isCoreFloat(dXVector.getElementType()) ||
+          !isCoreFloat(dYVector.getElementType()))
         return imageOp->emitError(
             "Grad arguments must be a vector of floating-point type");
-    } else if (isa<mlir::FloatType>(operands[index].getType()) &&
-               isa<mlir::FloatType>(operands[index + 1].getType())) {
+    } else if (isCoreFloat(operands[index].getType()) &&
+               isCoreFloat(operands[index + 1].getType())) {
       if (numberOfComponents != 1)
         return imageOp->emitError(
             "number of components of each Grad argument must equal the number "
@@ -147,10 +182,9 @@ static LogicalResult verifyImageOperands(Operation *imageOp,
 
   // TODO: Add the validation rules for the following Image Operands.
   spirv::ImageOperands noSupportOperands =
-      spirv::ImageOperands::Bias | spirv::ImageOperands::ConstOffset |
-      spirv::ImageOperands::Offset | spirv::ImageOperands::ConstOffsets |
-      spirv::ImageOperands::Sample | spirv::ImageOperands::MinLod |
-      spirv::ImageOperands::MakeTexelAvailable |
+      spirv::ImageOperands::ConstOffset | spirv::ImageOperands::Offset |
+      spirv::ImageOperands::ConstOffsets | spirv::ImageOperands::Sample |
+      spirv::ImageOperands::MinLod | spirv::ImageOperands::MakeTexelAvailable |
       spirv::ImageOperands::MakeTexelVisible |
       spirv::ImageOperands::SignExtend | spirv::ImageOperands::ZeroExtend;
 
@@ -170,6 +204,23 @@ static LogicalResult verifyImageOperands(Operation *imageOp,
 //===----------------------------------------------------------------------===//
 
 LogicalResult spirv::ImageDrefGatherOp::verify() {
+  return verifyImageOperands(getOperation(), getImageOperandsAttr(),
+                             getOperandArguments());
+}
+
+//===----------------------------------------------------------------------===//
+// spirv.ImageReadOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult spirv::ImageReadOp::verify() {
+  // TODO: Do we need check for: "If the Arrayed operand is 1, then additional
+  // capabilities may be required; e.g., ImageCubeArray, or ImageMSArray."?
+
+  // TODO: Ideally it should be somewhere verified that "If the Image Dim
+  // operand is not SubpassData, the Image Format must not be Unknown, unless
+  // the StorageImageReadWithoutFormat Capability was declared." This function
+  // however may not be the suitable place for such verification.
+
   return verifyImageOperands(getOperation(), getImageOperandsAttr(),
                              getOperandArguments());
 }
@@ -196,8 +247,7 @@ LogicalResult spirv::ImageWriteOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult spirv::ImageQuerySizeOp::verify() {
-  spirv::ImageType imageType =
-      llvm::cast<spirv::ImageType>(getImage().getType());
+  spirv::ImageType imageType = cast<spirv::ImageType>(getImage().getType());
   Type resultType = getResult().getType();
 
   spirv::Dim dim = imageType.getDim();
@@ -245,7 +295,7 @@ LogicalResult spirv::ImageQuerySizeOp::verify() {
     componentNumber += 1;
 
   unsigned resultComponentNumber = 1;
-  if (auto resultVectorType = llvm::dyn_cast<VectorType>(resultType))
+  if (auto resultVectorType = dyn_cast<VectorType>(resultType))
     resultComponentNumber = resultVectorType.getNumElements();
 
   if (componentNumber != resultComponentNumber)
@@ -282,6 +332,15 @@ LogicalResult spirv::ImageSampleExplicitLodOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult spirv::ImageSampleProjDrefImplicitLodOp::verify() {
+  return verifyImageOperands(getOperation(), getImageOperandsAttr(),
+                             getOperandArguments());
+}
+
+//===----------------------------------------------------------------------===//
+// spirv.ImageFetchOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult spirv::ImageFetchOp::verify() {
   return verifyImageOperands(getOperation(), getImageOperandsAttr(),
                              getOperandArguments());
 }

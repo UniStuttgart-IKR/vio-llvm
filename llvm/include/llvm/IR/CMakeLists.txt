@@ -1,6 +1,9 @@
 set(LLVM_TARGET_DEFINITIONS Attributes.td)
 tablegen(LLVM Attributes.inc -gen-attrs)
 
+set(LLVM_TARGET_DEFINITIONS RuntimeLibcalls.td)
+tablegen(LLVM RuntimeLibcalls.inc -gen-runtime-libcalls)
+
 set(LLVM_TARGET_DEFINITIONS Intrinsics.td)
 tablegen(LLVM IntrinsicImpl.inc -gen-intrinsic-impl)
 tablegen(LLVM IntrinsicEnums.inc -gen-intrinsic-enums)
@@ -13,6 +16,7 @@ tablegen(LLVM IntrinsicsHexagon.h -gen-intrinsic-enums -intrinsic-prefix=hexagon
 tablegen(LLVM IntrinsicsLoongArch.h -gen-intrinsic-enums -intrinsic-prefix=loongarch)
 tablegen(LLVM IntrinsicsMips.h -gen-intrinsic-enums -intrinsic-prefix=mips)
 tablegen(LLVM IntrinsicsNVPTX.h -gen-intrinsic-enums -intrinsic-prefix=nvvm)
+tablegen(LLVM IntrinsicsORISC.h -gen-intrinsic-enums -intrinsic-prefix=orisc)
 tablegen(LLVM IntrinsicsPowerPC.h -gen-intrinsic-enums -intrinsic-prefix=ppc)
 tablegen(LLVM IntrinsicsR600.h -gen-intrinsic-enums -intrinsic-prefix=r600)
 tablegen(LLVM IntrinsicsRISCV.h -gen-intrinsic-enums -intrinsic-prefix=riscv)

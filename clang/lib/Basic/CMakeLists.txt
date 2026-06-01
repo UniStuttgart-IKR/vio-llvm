@@ -76,6 +76,7 @@ add_clang_library(clangBasic
   MakeSupport.cpp
   Module.cpp
   ObjCRuntime.cpp
+  OffloadArch.cpp
   OpenCLOptions.cpp
   OpenMPKinds.cpp
   OperatorPrecedence.cpp
@@ -85,6 +86,7 @@ add_clang_library(clangBasic
   SanitizerSpecialCaseList.cpp
   Sanitizers.cpp
   Sarif.cpp
+  SimpleTypoCorrection.cpp
   SourceLocation.cpp
   SourceManager.cpp
   SourceMgrAdapter.cpp
@@ -102,6 +104,7 @@ add_clang_library(clangBasic
   Targets/CSKY.cpp
   Targets/DirectX.cpp
   Targets/Hexagon.cpp
+  Targets/IKRRISC2.cpp
   Targets/Lanai.cpp
   Targets/LoongArch.cpp
   Targets/M68k.cpp
@@ -109,6 +112,7 @@ add_clang_library(clangBasic
   Targets/Mips.cpp
   Targets/NVPTX.cpp
   Targets/OSTargets.cpp
+  Targets/ORISC.cpp
   Targets/PNaCl.cpp
   Targets/PPC.cpp
   Targets/RISCV.cpp
@@ -133,8 +137,7 @@ add_clang_library(clangBasic
   omp_gen
   ClangDriverOptions
   # These generated headers are included transitively.
-  ARMTargetParserTableGen
-  AArch64TargetParserTableGen
+  target_parser_gen
   )
 
 target_link_libraries(clangBasic

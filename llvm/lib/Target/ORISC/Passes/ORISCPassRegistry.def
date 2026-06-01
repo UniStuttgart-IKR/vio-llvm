@@ -1,0 +1,34 @@
+//===- ORISCPassRegistry.def - Registry of ORISC passes ---------*- C++ -*-===//
+//
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+//===----------------------------------------------------------------------===//
+//
+// This file is used as the registry of passes that are part of the
+// ORISC backend.
+//
+//===----------------------------------------------------------------------===//
+
+// NOTE: NO INCLUDE GUARD DESIRED!
+
+#ifndef MODULE_PASS
+#define MODULE_PASS(NAME, CREATE_PASS)
+#endif
+MODULE_PASS("orisc-promote-inner-structs", PromoteInnerStructsPass())
+MODULE_PASS("orisc-split-mixed-structs", SplitMixedStructsPass())
+MODULE_PASS("orisc-escape-outgoing-local-pointers", EscapeOutgoingLocalPointersPass())
+MODULE_PASS("orisc-escape-allocas", EscapeAllocaPass())
+MODULE_PASS("orisc-box-unbox-pointers", BoxUnboxPointersPass())
+MODULE_PASS("orisc-replace-null-pointers", ReplaceNullPointersPass())
+#undef MODULE_PASS
+
+#ifndef FUNCTION_PASS
+#define FUNCTION_PASS(NAME, CREATE_PASS)
+#endif
+FUNCTION_PASS("orisc-replace-de-alloc-lib-calls", ReplaceDeAllocLibCallsPass())
+FUNCTION_PASS("orisc-reject-unsupported-ir", RejectUnsupportedIRPass())
+//FUNCTION_PASS("orisc-transform-load-store-prim", TransformLoadStorePrimPass())
+//FUNCTION_PASS("orisc-transform-geps", TransformGEPsPass())
+#undef FUNCTION_PASS

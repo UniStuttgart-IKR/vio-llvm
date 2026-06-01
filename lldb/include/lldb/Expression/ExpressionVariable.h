@@ -33,7 +33,7 @@ public:
 
   virtual ~ExpressionVariable() = default;
 
-  std::optional<uint64_t> GetByteSize() { return m_frozen_sp->GetByteSize(); }
+  llvm::Expected<uint64_t> GetByteSize() { return m_frozen_sp->GetByteSize(); }
 
   ConstString GetName() { return m_frozen_sp->GetName(); }
 
@@ -58,7 +58,7 @@ public:
     m_frozen_sp->GetValue().SetCompilerType(compiler_type);
   }
 
-  void SetName(ConstString name) { m_frozen_sp->SetName(name); }
+  void SetName(llvm::StringRef name) { m_frozen_sp->SetName(name); }
 
   // this function is used to copy the address-of m_live_sp into m_frozen_sp
   // this is necessary because the results of certain cast and pointer-

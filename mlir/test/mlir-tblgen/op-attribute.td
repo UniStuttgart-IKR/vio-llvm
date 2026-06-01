@@ -69,19 +69,19 @@ def AOp : NS_Op<"a_op", []> {
 
 // DEF:      ::llvm::LogicalResult AOpAdaptor::verify
 // DEF-NEXT: auto tblgen_aAttr = getProperties().aAttr; (void)tblgen_aAttr;
-// DEF-NEXT: if (!tblgen_aAttr) return emitError(loc, "'test.a_op' op ""requires attribute 'aAttr'");
+// DEF-NEXT: if (!tblgen_aAttr) return emitError(loc, "'test.a_op' op requires attribute 'aAttr'");
 // DEF-NEXT: auto tblgen_bAttr = getProperties().bAttr; (void)tblgen_bAttr;
 // DEF-NEXT: auto tblgen_cAttr = getProperties().cAttr; (void)tblgen_cAttr;
 // DEF-NEXT: auto tblgen_dAttr = getProperties().dAttr; (void)tblgen_dAttr;
 
 // DEF:      if (tblgen_aAttr && !((some-condition)))
-// DEF-NEXT:   return emitError(loc, "'test.a_op' op ""attribute 'aAttr' failed to satisfy constraint: some attribute kind");
+// DEF-NEXT:   return emitError(loc, "'test.a_op' op attribute 'aAttr' failed to satisfy constraint: some attribute kind");
 // DEF:      if (tblgen_bAttr && !((some-condition)))
-// DEF-NEXT:   return emitError(loc, "'test.a_op' op ""attribute 'bAttr' failed to satisfy constraint: some attribute kind");
+// DEF-NEXT:   return emitError(loc, "'test.a_op' op attribute 'bAttr' failed to satisfy constraint: some attribute kind");
 // DEF:      if (tblgen_cAttr && !((some-condition)))
-// DEF-NEXT:   return emitError(loc, "'test.a_op' op ""attribute 'cAttr' failed to satisfy constraint: some attribute kind");
+// DEF-NEXT:   return emitError(loc, "'test.a_op' op attribute 'cAttr' failed to satisfy constraint: some attribute kind");
 // DEF:      if (tblgen_dAttr && !((some-condition)))
-// DEF-NEXT:   return emitError(loc, "'test.a_op' op ""attribute 'dAttr' failed to satisfy constraint: some attribute kind");
+// DEF-NEXT:   return emitError(loc, "'test.a_op' op attribute 'dAttr' failed to satisfy constraint: some attribute kind");
 
 // Test getter methods
 // ---
@@ -165,6 +165,12 @@ def AOp : NS_Op<"a_op", []> {
 // DEF:        ::llvm::ArrayRef<::mlir::NamedAttribute> attributes
 // DEF:      odsState.addAttributes(attributes);
 
+// DEF:      void AOp::build(
+// DEF-SAME:   const Properties &properties,
+// DEF-SAME:   ::llvm::ArrayRef<::mlir::NamedAttribute> discardableAttributes
+// DEF:      odsState.useProperties(const_cast<Properties&>(properties));
+// DEF:      odsState.addAttributes(discardableAttributes);
+
 // DEF:      void AOp::populateDefaultProperties
 
 // Test the above but with prefix.
@@ -213,13 +219,13 @@ def AgetOp : Op<Test2_Dialect, "a_get_op", []> {
 
 // DEF:      ::llvm::LogicalResult AgetOpAdaptor::verify
 // DEF: auto tblgen_aAttr = getProperties().aAttr; (void)tblgen_aAttr;
-// DEF: if (!tblgen_aAttr) return emitError(loc, "'test2.a_get_op' op ""requires attribute 'aAttr'");
+// DEF: if (!tblgen_aAttr) return emitError(loc, "'test2.a_get_op' op requires attribute 'aAttr'");
 // DEF: auto tblgen_bAttr = getProperties().bAttr; (void)tblgen_bAttr;
 // DEF: auto tblgen_cAttr = getProperties().cAttr; (void)tblgen_cAttr;
 // DEF:      if (tblgen_bAttr && !((some-condition)))
-// DEF-NEXT:   return emitError(loc, "'test2.a_get_op' op ""attribute 'bAttr' failed to satisfy constraint: some attribute kind");
+// DEF-NEXT:   return emitError(loc, "'test2.a_get_op' op attribute 'bAttr' failed to satisfy constraint: some attribute kind");
 // DEF:      if (tblgen_cAttr && !((some-condition)))
-// DEF-NEXT:   return emitError(loc, "'test2.a_get_op' op ""attribute 'cAttr' failed to satisfy constraint: some attribute kind");
+// DEF-NEXT:   return emitError(loc, "'test2.a_get_op' op attribute 'cAttr' failed to satisfy constraint: some attribute kind");
 
 // Test getter methods
 // ---
@@ -278,6 +284,12 @@ def AgetOp : Op<Test2_Dialect, "a_get_op", []> {
 // DEF:      void AgetOp::build(
 // DEF:        ::llvm::ArrayRef<::mlir::NamedAttribute> attributes
 // DEF:      odsState.addAttributes(attributes);
+
+// DEF:      void AgetOp::build(
+// DEF-SAME:   const Properties &properties
+// DEF-SAME:   ::llvm::ArrayRef<::mlir::NamedAttribute> discardableAttributes
+// DEF:      odsState.useProperties(const_cast<Properties&>(properties));
+// DEF:      odsState.addAttributes(discardableAttributes);
 
 // Test the above but using properties.
 def ApropOp : NS_Op<"a_prop_op", []> {
@@ -456,7 +468,6 @@ def EOp : NS_Op<"e_op", []> {
 
 // DECL-LABEL: EOp declarations
 // DECL: static void build({{.*}}, uint32_t i32_attr, uint32_t dv_i32_attr, ::llvm::APFloat f64_attr, ::llvm::APFloat dv_f64_attr, ::llvm::StringRef str_attr, ::llvm::StringRef dv_str_attr, bool bool_attr, bool dv_bool_attr, ::SomeI32Enum enum_attr, ::SomeI32Enum dv_enum_attr = ::SomeI32Enum::case5)
-
 
 // Test proper namespacing for AttrDef
 // ---

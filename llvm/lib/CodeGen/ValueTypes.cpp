@@ -176,7 +176,10 @@ std::string EVT::getEVTString() const {
       return "i" + utostr(getSizeInBits());
     if (isFloatingPoint())
       return "f" + utostr(getSizeInBits());
+    if (isCheriCapability())
+      return "c" + utostr(getSizeInBits());
     llvm_unreachable("Invalid EVT!");
+  case MVT::pointer:   return "pointer";
   case MVT::bf16:      return "bf16";
   case MVT::ppcf128:   return "ppcf128";
   case MVT::isVoid:    return "isVoid";
@@ -198,6 +201,8 @@ std::string EVT::getEVTString() const {
     return "amdgpuBufferFatPointer";
   case MVT::amdgpuBufferStridedPointer:
     return "amdgpuBufferStridedPointer";
+  case MVT::aarch64mfp8:
+    return "aarch64mfp8";
   }
 }
 
@@ -221,6 +226,8 @@ Type *EVT::getTypeForEVT(LLVMContext &Context) const {
   case MVT::x86mmx:  return llvm::FixedVectorType::get(llvm::IntegerType::get(Context, 64), 1);
   case MVT::aarch64svcount:
     return TargetExtType::get(Context, "aarch64.svcount");
+  case MVT::aarch64mfp8:
+    return FixedVectorType::get(IntegerType::get(Context, 8), 1);
   case MVT::x86amx:  return Type::getX86_AMXTy(Context);
   case MVT::i64x8:   return IntegerType::get(Context, 512);
   case MVT::amdgpuBufferFatPointer:  return IntegerType::get(Context, 160);
@@ -228,6 +235,7 @@ Type *EVT::getTypeForEVT(LLVMContext &Context) const {
   case MVT::externref: return Type::getWasm_ExternrefTy(Context);
   case MVT::funcref: return Type::getWasm_FuncrefTy(Context);
   case MVT::Metadata: return Type::getMetadataTy(Context);
+  case MVT::pointer: return PointerType::get(Context, 0);
 #define GET_VT_EVT(Ty, EVT) case MVT::Ty: return EVT;
 #include "llvm/CodeGen/GenVT.inc"
 #undef GET_VT_EVT
@@ -248,6 +256,8 @@ MVT MVT::getVT(Type *Ty, bool HandleUnknown){
     llvm_unreachable("Unknown type!");
   case Type::VoidTyID:
     return MVT::isVoid;
+  case Type::ByteTyID:
+    return getIntegerVT(cast<ByteType>(Ty)->getBitWidth());
   case Type::IntegerTyID:
     return getIntegerVT(cast<IntegerType>(Ty)->getBitWidth());
   case Type::HalfTyID:      return MVT(MVT::f16);
@@ -298,6 +308,8 @@ EVT EVT::getEVT(Type *Ty, bool HandleUnknown){
     return MVT::getVT(Ty, HandleUnknown);
   case Type::TokenTyID:
     return MVT::Untyped;
+  case Type::ByteTyID:
+    return getIntegerVT(Ty->getContext(), cast<ByteType>(Ty)->getBitWidth());
   case Type::IntegerTyID:
     return getIntegerVT(Ty->getContext(), cast<IntegerType>(Ty)->getBitWidth());
   case Type::FixedVectorTyID:

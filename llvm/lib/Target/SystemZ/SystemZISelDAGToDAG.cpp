@@ -10,10 +10,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "SystemZTargetMachine.h"
 #include "SystemZISelLowering.h"
+#include "SystemZTargetMachine.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/raw_ostream.h"
@@ -369,7 +370,11 @@ public:
       if (F.hasFnAttribute("mrecord-mcount"))
         report_fatal_error("mrecord-mcount only supported with fentry-call");
     }
-
+    if (F.getParent()->getStackProtectorGuard() != "global") {
+      if (F.getParent()->hasStackProtectorGuardRecord())
+        report_fatal_error("mstack-protector-guard-record only supported with "
+                           "mstack-protector-guard=global");
+    }
     Subtarget = &MF.getSubtarget<SystemZSubtarget>();
     return SelectionDAGISel::runOnMachineFunction(MF);
   }
@@ -1204,9 +1209,10 @@ void SystemZDAGToDAGISel::loadVectorConstant(
     SDValue BitCast = CurDAG->getNode(ISD::BITCAST, DL, VT, Op);
     ReplaceNode(Node, BitCast.getNode());
     SelectCode(BitCast.getNode());
-  } else { // float or double
-    unsigned SubRegIdx =
-        (VT.getSizeInBits() == 32 ? SystemZ::subreg_h32 : SystemZ::subreg_h64);
+  } else { // half, float or double
+    unsigned SubRegIdx = (VT.getSizeInBits() == 16   ? SystemZ::subreg_h16
+                          : VT.getSizeInBits() == 32 ? SystemZ::subreg_h32
+                                                     : SystemZ::subreg_h64);
     ReplaceNode(
         Node, CurDAG->getTargetExtractSubreg(SubRegIdx, DL, VT, Op).getNode());
   }
@@ -1850,7 +1856,7 @@ bool SystemZDAGToDAGISel::SelectInlineAsmMemoryOperand(
 
   if (selectBDXAddr(Form, DispRange, Op, Base, Disp, Index)) {
     const TargetRegisterClass *TRC =
-      Subtarget->getRegisterInfo()->getPointerRegClass(*MF);
+        Subtarget->getRegisterInfo()->getPointerRegClass();
     SDLoc DL(Base);
     SDValue RC = CurDAG->getTargetConstant(TRC->getID(), DL, MVT::i32);
 

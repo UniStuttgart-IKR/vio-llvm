@@ -18,20 +18,18 @@
 
 using namespace llvm;
 
-const MCAsmInfo::VariantKindDesc variantKindDescs[] = {
-    {MCSymbolRefExpr::VK_GOTOFF, "GOTOFF"},
-    {MCSymbolRefExpr::VK_GOTPCREL, "GOTPCREL"},
-    {MCSymbolRefExpr::VK_GOTTPOFF, "GOTTPOFF"},
-    {MCSymbolRefExpr::VK_PLT, "PLT"},
-    {MCSymbolRefExpr::VK_TLSGD, "TLSGD"},
-    {MCSymbolRefExpr::VK_TLSLD, "TLSLD"},
-    {MCSymbolRefExpr::VK_TLSLDM, "TLSLDM"},
-    {MCSymbolRefExpr::VK_TPOFF, "TPOFF"},
+const MCAsmInfo::AtSpecifier atSpecifiers[] = {
+    {M68k::S_GOTOFF, "GOTOFF"},     {M68k::S_GOTPCREL, "GOTPCREL"},
+    {M68k::S_GOTTPOFF, "GOTTPOFF"}, {M68k::S_PLT, "PLT"},
+    {M68k::S_TLSGD, "TLSGD"},       {M68k::S_TLSLD, "TLSLD"},
+    {M68k::S_TLSLDM, "TLSLDM"},     {M68k::S_TPOFF, "TPOFF"},
 };
 
 void M68kELFMCAsmInfo::anchor() {}
 
-M68kELFMCAsmInfo::M68kELFMCAsmInfo(const Triple &T) {
+M68kELFMCAsmInfo::M68kELFMCAsmInfo(const Triple &T,
+                                   const MCTargetOptions &Options)
+    : MCAsmInfoELF(Options) {
   CodePointerSize = 4;
   CalleeSaveStackSlotSize = 4;
 
@@ -46,5 +44,5 @@ M68kELFMCAsmInfo::M68kELFMCAsmInfo(const Triple &T) {
   UseMotorolaIntegers = true;
   CommentString = ";";
 
-  initializeVariantKinds(variantKindDescs);
+  initializeAtSpecifiers(atSpecifiers);
 }

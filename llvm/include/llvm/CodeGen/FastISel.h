@@ -63,7 +63,7 @@ class Value;
 /// This is a fast-path instruction selection class that generates poor
 /// code and doesn't support illegal types or non-trivial lowering, but runs
 /// quickly.
-class FastISel {
+class LLVM_ABI FastISel {
 public:
   using ArgListEntry = TargetLoweringBase::ArgListEntry;
   using ArgListTy = TargetLoweringBase::ArgListTy;
@@ -158,10 +158,10 @@ public:
       return *this;
     }
 
-    CallLoweringInfo &setCallee(const DataLayout &DL, MCContext &Ctx,
-                                CallingConv::ID CC, Type *ResultTy,
-                                StringRef Target, ArgListTy &&ArgsList,
-                                unsigned FixedArgs = ~0U);
+    LLVM_ABI CallLoweringInfo &setCallee(const DataLayout &DL, MCContext &Ctx,
+                                         CallingConv::ID CC, Type *ResultTy,
+                                         StringRef Target, ArgListTy &&ArgsList,
+                                         unsigned FixedArgs = ~0U);
 
     CallLoweringInfo &setCallee(CallingConv::ID CC, Type *ResultTy,
                                 MCSymbol *Target, ArgListTy &&ArgsList,
@@ -212,6 +212,7 @@ protected:
   const TargetLowering &TLI;
   const TargetRegisterInfo &TRI;
   const TargetLibraryInfo *LibInfo;
+  const LibcallLoweringInfo *LibcallLowering;
   bool SkipTargetIndependentISel;
 
   /// The position of the last instruction for materializing constants
@@ -326,6 +327,7 @@ public:
 protected:
   explicit FastISel(FunctionLoweringInfo &FuncInfo,
                     const TargetLibraryInfo *LibInfo,
+                    const LibcallLoweringInfo *LibcallLowering,
                     bool SkipTargetIndependentISel = false);
 
   /// This method is called by target-independent code when the normal
@@ -348,21 +350,21 @@ protected:
 
   /// This method is called by target-independent code to request that an
   /// instruction with the given type and opcode be emitted.
-  virtual unsigned fastEmit_(MVT VT, MVT RetVT, unsigned Opcode);
+  virtual Register fastEmit_(MVT VT, MVT RetVT, unsigned Opcode);
 
   /// This method is called by target-independent code to request that an
   /// instruction with the given type, opcode, and register operand be emitted.
-  virtual unsigned fastEmit_r(MVT VT, MVT RetVT, unsigned Opcode, Register Op0);
+  virtual Register fastEmit_r(MVT VT, MVT RetVT, unsigned Opcode, Register Op0);
 
   /// This method is called by target-independent code to request that an
   /// instruction with the given type, opcode, and register operands be emitted.
-  virtual unsigned fastEmit_rr(MVT VT, MVT RetVT, unsigned Opcode, Register Op0,
+  virtual Register fastEmit_rr(MVT VT, MVT RetVT, unsigned Opcode, Register Op0,
                                Register Op1);
 
   /// This method is called by target-independent code to request that an
   /// instruction with the given type, opcode, and register and immediate
   /// operands be emitted.
-  virtual unsigned fastEmit_ri(MVT VT, MVT RetVT, unsigned Opcode, Register Op0,
+  virtual Register fastEmit_ri(MVT VT, MVT RetVT, unsigned Opcode, Register Op0,
                                uint64_t Imm);
 
   /// This method is a wrapper of fastEmit_ri.
@@ -375,12 +377,12 @@ protected:
 
   /// This method is called by target-independent code to request that an
   /// instruction with the given type, opcode, and immediate operand be emitted.
-  virtual unsigned fastEmit_i(MVT VT, MVT RetVT, unsigned Opcode, uint64_t Imm);
+  virtual Register fastEmit_i(MVT VT, MVT RetVT, unsigned Opcode, uint64_t Imm);
 
   /// This method is called by target-independent code to request that an
   /// instruction with the given type, opcode, and floating-point immediate
   /// operand be emitted.
-  virtual unsigned fastEmit_f(MVT VT, MVT RetVT, unsigned Opcode,
+  virtual Register fastEmit_f(MVT VT, MVT RetVT, unsigned Opcode,
                               const ConstantFP *FPImm);
 
   /// Emit a MachineInstr with no operands and a result register in the
@@ -470,15 +472,19 @@ protected:
 
   /// Emit a constant in a register using target-specific logic, such as
   /// constant pool loads.
-  virtual unsigned fastMaterializeConstant(const Constant *C) { return 0; }
+  virtual Register fastMaterializeConstant(const Constant *C) {
+    return Register();
+  }
 
   /// Emit an alloca address in a register using target-specific logic.
-  virtual unsigned fastMaterializeAlloca(const AllocaInst *C) { return 0; }
+  virtual Register fastMaterializeAlloca(const AllocaInst *C) {
+    return Register();
+  }
 
   /// Emit the floating-point constant +0.0 in a register using target-
   /// specific logic.
-  virtual unsigned fastMaterializeFloatZero(const ConstantFP *CF) {
-    return 0;
+  virtual Register fastMaterializeFloatZero(const ConstantFP *CF) {
+    return Register();
   }
 
   /// Check if \c Add is an add that can be safely folded into \c GEP.

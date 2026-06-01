@@ -19,7 +19,8 @@ using namespace llvm;
 
 void ORISCMCAsmInfo::anchor() {}
 
-ORISCMCAsmInfo::ORISCMCAsmInfo(const Triple &TT) {
+ORISCMCAsmInfo::ORISCMCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
+    : MCAsmInfoELF(Options) {
   CodePointerSize = CalleeSaveStackSlotSize = 4;
   AlignmentIsInBytes = false;
   Data8bitsDirective = "\t.byte\t";

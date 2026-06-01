@@ -185,7 +185,7 @@ bool PromoteInnerStructsPass::visitGEPInst(GetElementPtrInst *GEP) {
     if (NewResTy != OldResTy) {
         GEP->setResultElementType(NewResTy);
         if (!containsGEP(GepBuffer, GEP) && NewResTy->isPointerTy()) { //We changed a ResTy that was not a Ptr to a Ptr, so we have to load whats at that position
-            IRBuilder<> Builder(GEP->getNextNonDebugInstruction()); //GEP is never last instruction of a basic block
+            IRBuilder<> Builder(GEP->getNextNode()); //GEP is never last instruction of a basic block
             LoadInst *LI = Builder.CreateLoad(PtrTy, GEP);
             GEP->replaceAllUsesWith(LI);
             LI->setOperand(0, GEP);

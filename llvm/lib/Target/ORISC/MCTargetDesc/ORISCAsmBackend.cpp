@@ -14,7 +14,6 @@
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCELFObjectWriter.h"
-#include "llvm/MC/MCFixupKindInfo.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSubtargetInfo.h"
@@ -37,13 +36,12 @@ public:
         : MCAsmBackend(llvm::endianness::big), OSABI(OSABI),
             STI(STI) {}
 
-    const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const override;
-    void applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
-                    const MCValue &Target, MutableArrayRef<char> Data,
-                    uint64_t Value, bool IsResolved,
-                    const MCSubtargetInfo *STI) const override;
-    bool mayNeedRelaxation(const MCInst &Inst,
-                            const MCSubtargetInfo &STI) const override;
+    MCFixupKindInfo getFixupKindInfo(MCFixupKind Kind) const override;
+    void applyFixup(const MCFragment &Fragment, const MCFixup &Fixup,
+                          const MCValue &Target, uint8_t *Data, uint64_t Value,
+                          bool IsResolved) override;
+    bool mayNeedRelaxation(unsigned Opcode, ArrayRef<MCOperand> Operands,
+                                 const MCSubtargetInfo &STI) const override;
     void relaxInstruction(MCInst &Inst,
                             const MCSubtargetInfo &STI) const override;
     bool writeNopData(raw_ostream &OS, uint64_t Count,
@@ -55,12 +53,12 @@ public:
 };
 } // namespace llvm
 
-const MCFixupKindInfo &
+MCFixupKindInfo 
 ORISCMCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
   const static MCFixupKindInfo Infos[ORISC::NumTargetFixupKinds] = {
         {"fixup_orisc_ctxt_idx", 8, 12, 0},
-        {"fixup_orisc_branch_12", 13, 12, MCFixupKindInfo::FKF_IsPCRel},
-        {"fixup_orisc_branch_25", 0, 25, MCFixupKindInfo::FKF_IsPCRel},
+        {"fixup_orisc_branch_12", 13, 12, 0},
+        {"fixup_orisc_branch_25", 0, 25, 0},
         {"fixup_orisc_jlib_idx", 0, 20, 0}};
 
     if (Kind < FirstTargetFixupKind)
@@ -72,9 +70,9 @@ ORISCMCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
 
 static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
                                  MCContext &Ctx) {
-    switch (Fixup.getTargetKind()) {
+    switch (Fixup.getKind()) {
         default:
-            LLVM_DEBUG(dbgs() << "Number: " << Fixup.getTargetKind() << "\n");
+            LLVM_DEBUG(dbgs() << "Number: " << Fixup.getKind() << "\n");
             llvm_unreachable("Unknown fixup kind!");
             return 0;
         case ORISC::fixup_orisc_branch_25:
@@ -91,15 +89,13 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     }
 }
 
-void ORISCMCAsmBackend::applyFixup(const MCAssembler &Asm,
-                                    const MCFixup &Fixup, const MCValue &Target,
-                                    MutableArrayRef<char> Data, uint64_t Value,
-                                    bool IsResolved,
-                                    const MCSubtargetInfo *STI) const {
+void ORISCMCAsmBackend::applyFixup(const MCFragment &Fragment, const MCFixup &Fixup,
+                                    const MCValue &Target, uint8_t *Data, uint64_t Value,
+                                    bool IsResolved)  {
     MCFixupKind Kind = Fixup.getKind();
     if (Kind >= FirstLiteralRelocationKind)
         return;
-    MCContext &Ctx = Asm.getContext();
+    MCContext &Ctx = getContext();
     MCFixupKindInfo Info = getFixupKindInfo(Kind);
     if (!Value)
         return; // Doesn't change encoding.
@@ -112,7 +108,7 @@ void ORISCMCAsmBackend::applyFixup(const MCAssembler &Asm,
     unsigned Offset = Fixup.getOffset();
     unsigned NumBytes = alignTo(Info.TargetSize + Info.TargetOffset, 8) / 8;
 
-    assert(Offset + NumBytes <= Data.size() && "Invalid fixup offset!");
+    //assert(Offset + NumBytes <= Data.size() && "Invalid fixup offset!");
 
     // For each byte of the fragment that the fixup touches, mask in the
     // bits from the fixup value.
@@ -121,8 +117,8 @@ void ORISCMCAsmBackend::applyFixup(const MCAssembler &Asm,
     }
 }
 
-bool ORISCMCAsmBackend::mayNeedRelaxation(const MCInst &Inst,
-                                           const MCSubtargetInfo &STI) const {
+bool ORISCMCAsmBackend::mayNeedRelaxation(unsigned Opcode, ArrayRef<MCOperand> Operands,
+                                 const MCSubtargetInfo &STI) const {
   return false;
 }
 

@@ -60,7 +60,7 @@ using namespace llvm;
 
 ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
                                            const ORISCSubtarget &STI)
-    : TargetLowering(TM), Subtarget(STI) {
+    : TargetLowering(TM, STI), Subtarget(STI) {
   MVT PtrVT = MVT::i32;
   // Set up the register classes.
   
@@ -147,8 +147,6 @@ ORISCTargetLowering::ORISCTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::CTPOP, MVT::i32, Expand);
   setOperationAction(ISD::CTTZ, MVT::i32, Expand);
   setOperationAction(ISD::CTLZ, MVT::i32, Legal);
-  setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Expand);
-  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Expand);
 
   // Implement custom stack allocations
   setOperationAction(ISD::DYNAMIC_STACKALLOC, PtrVT, Expand);
@@ -441,7 +439,7 @@ SDValue ORISCTargetLowering::
 
     return DAG.getExtLoad(ISD::LoadExtType::EXTLOAD, DL, MVT::i32, OrigLoad->getChain(), GEP, 
                           MMO->getPointerInfo(), MemVT, 
-                          OrigLoad->getOriginalAlign(), MMO->getFlags());
+                          OrigLoad->getAlign(), MMO->getFlags());
 }
 
 SDValue ORISCTargetLowering::
@@ -465,8 +463,6 @@ SDValue ORISCTargetLowering::
   lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const {
     SDLoc DL(Op);
     GlobalAddressSDNode *GA = cast<GlobalAddressSDNode>(Op);
-    dbgs() << GA->getGlobal()->getGlobalIdentifier() << "\n";
-    GA->dump();
     SDValue Addr = DAG.getTargetGlobalAddress(GA->getGlobal(), DL, Op.getValueType());
     return DAG.getNode(ORISCISD::LOAD_CONST, DL, MVT::pointer, Addr);
   }
@@ -555,14 +551,13 @@ SDValue ORISCTargetLowering::
     }
 
 
-bool ORISCTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
-                                              const CallInst &I,
-                                              MachineFunction &MF,
-                                              unsigned Intrinsic) const {
+void ORISCTargetLowering::getTgtMemIntrinsic(SmallVectorImpl<IntrinsicInfo> &Infos,
+                                  const CallBase &I, MachineFunction &MF,
+                                  unsigned Intrinsic) const {
 
   switch(Intrinsic) {
     default:
-      return false;
+      return;
   }
 }
 

@@ -22,15 +22,14 @@ using namespace llvm;
 PreservedAnalyses ReplaceDeAllocLibCallsPass::run(Function &F, FunctionAnalysisManager &AM){
     bool Changed = false;
 
-    const TargetLibraryInfo &TLI =
-        AM.getResult<TargetLibraryAnalysis>(F);
+    //TargetLibraryInfo &TLI = AM.getResult<TargetLibraryAnalysis>(F);
 
     for (BasicBlock &BB : F) 
         for (Instruction &I : BB)
             if (CallInst *CI = dyn_cast<CallInst>(&I)) {
                 LibFunc LF;
-                if (TLI.getLibFunc(*CI->getCalledFunction(), LF))
-                    CI->getCalledFunction()->dump();
+                //if (TLI.getLibFunc(*CI->getCalledFunction(), LF))
+                //    CI->getCalledFunction()->dump();
             }
 
     return Changed ? PreservedAnalyses::all() : PreservedAnalyses::none();

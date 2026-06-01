@@ -16,6 +16,8 @@ include "IKRRISC2RegisterInfo.td"
 include "IKRRISC2CallingConv.td"
 include "IKRRISC2InstrInfo.td"
 
+defm : RemapAllTargetPseudoPointerOperands<GPR>;
+
 def : ProcessorModel<"generic", NoSchedModel, []>;
 
 def IKRRISC2InstrInfo : InstrInfo {

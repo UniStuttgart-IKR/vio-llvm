@@ -32,7 +32,7 @@ class LLVM_LIBRARY_VISIBILITY ORISCAsmPrinter : public AsmPrinter {
 public:
     explicit ORISCAsmPrinter(TargetMachine &TM,
                             std::unique_ptr<MCStreamer> Streamer)
-        : AsmPrinter(TM, std::move(Streamer)), STI(TM.getMCSubtargetInfo()) {}
+        : AsmPrinter(TM, std::move(Streamer)), STI(&TM.getMCSubtargetInfo()) {}
 
     StringRef getPassName() const override { return "ORISC Assembly Printer"; }
     

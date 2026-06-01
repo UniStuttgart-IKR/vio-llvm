@@ -18,13 +18,15 @@ include "ORISCRegisterInfo.td"
 include "ORISCCallingConv.td"
 include "ORISCInstrInfo.td"
 
+defm : RemapAllTargetPseudoPointerOperands<PR>;
+
 def : ProcessorModel<"generic", NoSchedModel, []>;
 
 def ORISCInstrInfo : InstrInfo {
   let guessInstructionProperties = 0;
 }
 
-def IRKRISC2AsmWriter : AsmWriter {
+def ORISC2AsmWriter : AsmWriter {
   string AsmWriterClassName = "InstPrinter";
   bit isMCAsmWriter = 1;
 }
@@ -32,6 +34,6 @@ def IRKRISC2AsmWriter : AsmWriter {
 def ORISC : Target {
   let InstructionSet = ORISCInstrInfo;
 //   let AssemblyParsers = [RISCVAsmParser];
-  let AssemblyWriters = [IRKRISC2AsmWriter];
+  let AssemblyWriters = [ORISC2AsmWriter];
   let AllowRegisterRenaming = 1;
 }

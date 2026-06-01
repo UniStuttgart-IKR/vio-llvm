@@ -360,10 +360,6 @@ def spirvbuiltin : ValueType<0>; // SPIR-V's builtin type
 def amdgpuBufferFatPointer : ValueType<160>;
 // AMDGPU buffer strided pointer, buffer rsrc + index + offset, doesn't reach MIR.
 // FIXME: Remove this and the getPointerType() override if MVT::i82 is added.
-<<<<<<< HEAD
-def amdgpuBufferStridedPointer : ValueType<192, 235>;
-def pointer : ValueType<0xFFFF, 236>;
-=======
 def amdgpuBufferStridedPointer : ValueType<192>;
 
 def aarch64mfp8 : ValueType<8>; // 8-bit value in FPR (AArch64)
@@ -372,7 +368,8 @@ def aarch64mfp8 : ValueType<8>; // 8-bit value in FPR (AArch64)
 // for enforcing safety guarantees on CHERI-enabled targets.
 def c64 : VTCheriCapability<64>;   // 64-bit CHERI capability value
 def c128 : VTCheriCapability<128>; // 128-bit CHERI capability value
->>>>>>> upstream/main
+
+def pointer : ValueType<236>;
 
 let isNormalValueType = false in {
 // Pseudo valuetype mapped to the current CHERI capability pointer size.

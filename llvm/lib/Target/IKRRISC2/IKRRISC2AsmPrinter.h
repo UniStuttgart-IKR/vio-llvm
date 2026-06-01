@@ -31,7 +31,7 @@ class LLVM_LIBRARY_VISIBILITY IKRRISC2AsmPrinter : public AsmPrinter {
 public:
     explicit IKRRISC2AsmPrinter(TargetMachine &TM,
                             std::unique_ptr<MCStreamer> Streamer)
-        : AsmPrinter(TM, std::move(Streamer)), STI(TM.getMCSubtargetInfo()) {}
+        : AsmPrinter(TM, std::move(Streamer)), STI(&TM.getMCSubtargetInfo()) {}
 
     StringRef getPassName() const override { return "IKRRISC2 Assembly Printer"; }
     

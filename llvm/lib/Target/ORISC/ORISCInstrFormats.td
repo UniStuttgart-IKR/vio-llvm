@@ -284,7 +284,7 @@ class ORISCInstrReg0PguE<string opcodestr, bits<3> g3, string argstr = "$px = $d
 }
 
 class ORISCInstrGCP<string opcodestr>
-		: ORISCInstrReg0<opcodestr, (outs PR:$py), (ins), 14, 4, "ctxt"> {
+		: ORISCInstrReg0<opcodestr, (outs), (ins), 14, 4, "ctxt"> {
 	let x = 29;
 	let y = 0;
 	let z = 0;

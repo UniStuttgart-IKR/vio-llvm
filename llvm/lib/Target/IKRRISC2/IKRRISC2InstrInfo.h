@@ -28,7 +28,7 @@ class IKRRISC2Subtarget;
 
 class IKRRISC2InstrInfo : public IKRRISC2GenInstrInfo {
 public:
-    explicit IKRRISC2InstrInfo(IKRRISC2Subtarget &STI);
+    explicit IKRRISC2InstrInfo(const TargetSubtargetInfo &STI, const TargetRegisterInfo &TRI);
 
     void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
                     const DebugLoc &DL, Register DestReg, Register SrcReg,

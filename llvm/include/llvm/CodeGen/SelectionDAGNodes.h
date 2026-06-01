@@ -418,10 +418,6 @@ public:
     Unpredictable = 1 << 13,
     // Compare instructions which may carry the samesign flag.
     SameSign = 1 << 14,
-<<<<<<< HEAD
-    // Allocate instructions may differ for primitve only objects
-    ElementsPrimitive = 1 << 15,
-=======
     // ISD::PTRADD operations that remain in bounds, i.e., the left operand is
     // an address in a memory object in which the result of the operation also
     // lies. WARNING: Since SDAG generally uses integers instead of pointer
@@ -434,7 +430,6 @@ public:
 
     // Call does not require convergence guarantees.
     NoConvergent = 1 << 16,
->>>>>>> upstream/main
 
     // NOTE: Please update LargestValue in LLVM_DECLARE_ENUM_AS_BITMASK below
     // the class definition when adding new flags.
@@ -494,12 +489,8 @@ public:
   bool hasAllowReassociation() const { return Flags & AllowReassociation; }
   bool hasNoFPExcept() const { return Flags & NoFPExcept; }
   bool hasUnpredictable() const { return Flags & Unpredictable; }
-<<<<<<< HEAD
-  bool hasElementsPrimitive() const { return Flags & ElementsPrimitive; }
-=======
   bool hasInBounds() const { return Flags & InBounds; }
   bool hasNoConvergent() const { return Flags & NoConvergent; }
->>>>>>> upstream/main
 
   bool operator==(const SDNodeFlags &Other) const {
     return Flags == Other.Flags;

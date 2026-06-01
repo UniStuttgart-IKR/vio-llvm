@@ -31,10 +31,9 @@ public:
   virtual ~ORISCObjectWriter();
 
 protected:
-  unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
-                        const MCFixup &Fixup, bool IsPCRel) const override;
-  bool needsRelocateWithSymbol(const MCValue &Val, const MCSymbol &Sym,
-                               unsigned Type) const override;
+  unsigned getRelocType(const MCFixup &Fixup, const MCValue &Target,
+                                bool IsPCRel) const override;
+  bool needsRelocateWithSymbol(const MCValue &, unsigned Type) const override;
 };
 } // namespace
 
@@ -44,10 +43,11 @@ ORISCObjectWriter::ORISCObjectWriter(uint8_t OSABI)
 
 ORISCObjectWriter::~ORISCObjectWriter() {}
 
-unsigned ORISCObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
-                                          const MCFixup &Fixup,
+unsigned ORISCObjectWriter::getRelocType(const MCFixup &Fixup, const MCValue &Target,
                                           bool IsPCRel) const {
-  switch (Fixup.getTargetKind()) {
+  auto Kind = Fixup.getKind();
+  auto Spec = Target.getSpecifier();
+  switch (Spec) {
     default:
       return ELF::R_ORISC_NONE;
     case ORISC::fixup_orisc_ctxt_idx:
@@ -67,8 +67,6 @@ llvm::createORISCELFObjectWriter(uint8_t OSABI, bool Is64Bit) {
   return std::make_unique<ORISCObjectWriter>(OSABI);
 }
 
-bool ORISCObjectWriter::needsRelocateWithSymbol(const MCValue &,
-                                                 const MCSymbol &,
-                                                 unsigned Type) const {
+bool ORISCObjectWriter::needsRelocateWithSymbol(const MCValue &, unsigned Type) const {
   return false;
 }

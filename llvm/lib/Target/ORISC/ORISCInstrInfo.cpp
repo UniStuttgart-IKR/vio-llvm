@@ -29,8 +29,8 @@ using namespace llvm;
 #define GET_INSTRINFO_CTOR_DTOR
 #include "ORISCGenInstrInfo.inc"
 
-ORISCInstrInfo::ORISCInstrInfo(ORISCSubtarget &STI)
-    : ORISCGenInstrInfo(), STI(STI) {}
+ORISCInstrInfo::ORISCInstrInfo(const ORISCSubtarget &STI, const TargetRegisterInfo &TRI)
+    : ORISCGenInstrInfo(STI, TRI), STI(STI) {}
 
 MCInst ORISCInstrInfo::getNop() const {
     return MCInstBuilder(ORISC::CLZ)
@@ -98,30 +98,30 @@ Register ORISCInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
     return 0;
 }
 void ORISCInstrInfo::loadRegFromStackSlot(
-    MachineBasicBlock &MBB, MachineBasicBlock::iterator I, Register DstReg,
-    int FI, const TargetRegisterClass *RC, const TargetRegisterInfo *TRI,
-    Register VReg, MachineInstr::MIFlag Flags) const {
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, Register DestReg,
+      int FrameIndex, const TargetRegisterClass *RC, Register VReg,
+      unsigned SubReg, MachineInstr::MIFlag Flags) const {
     MachineFunction *MF = MBB.getParent();
     MachineFrameInfo &MFI = MF->getFrameInfo();
     DebugLoc DL =
-        Flags & MachineInstr::FrameDestroy ? MBB.findDebugLoc(I) : DebugLoc();
+        Flags & MachineInstr::FrameDestroy ? MBB.findDebugLoc(MI) : DebugLoc();
 
     MachineMemOperand *MMO = MF->getMachineMemOperand(
-        MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
-        MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+        MachinePointerInfo::getFixedStack(*MF, FrameIndex), MachineMemOperand::MOLoad,
+        MFI.getObjectSize(FrameIndex), MFI.getObjectAlign(FrameIndex));
 
     unsigned int Opcode;
-    if (DstReg == ORISC::P31)
+    if (DestReg == ORISC::P31)
         Opcode = ORISC::RSTRPC;
-    else if (ORISC::PRRegClass.contains(DstReg))
+    else if (ORISC::PRRegClass.contains(DestReg))
         Opcode = ORISC::LP_I;
     else
         Opcode = ORISC::LW_I;
 
-    BuildMI(MBB, I, DebugLoc(), get(Opcode))
-        .addReg(DstReg)
-        .addReg(TRI->getFrameRegister(*MF))
-        .addFrameIndex(FI)
+    BuildMI(MBB, MI, DebugLoc(), get(Opcode))
+        .addReg(DestReg)
+        .addReg(TRI.getFrameRegister(*MF))
+        .addFrameIndex(FrameIndex)
         .addMemOperand(MMO)
         .setMIFlag(Flags);
 }
@@ -164,19 +164,15 @@ Register ORISCInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
     return 0;
 }
 
-void ORISCInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
-                                         MachineBasicBlock::iterator I,
-                                         Register SrcReg, bool IsKill, int FI,
-                                         const TargetRegisterClass *RC,
-                                         const TargetRegisterInfo *TRI,
-                                         Register VReg,
-                                         MachineInstr::MIFlag Flags) const {
+void ORISCInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, Register SrcReg,
+                                            bool isKill, int FrameIndex, const TargetRegisterClass *RC, Register VReg,
+                                            MachineInstr::MIFlag Flags) const {
     MachineFunction *MF = MBB.getParent();
     MachineFrameInfo &MFI = MF->getFrameInfo();
 
     MachineMemOperand *MMO = MF->getMachineMemOperand(
-        MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
-        MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+        MachinePointerInfo::getFixedStack(*MF, FrameIndex), MachineMemOperand::MOLoad,
+        MFI.getObjectSize(FrameIndex), MFI.getObjectAlign(FrameIndex));
 
     unsigned int Opcode;
     if (SrcReg == ORISC::P31)
@@ -186,10 +182,10 @@ void ORISCInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     else
         Opcode = ORISC::SW_I;
 
-    BuildMI(MBB, I, DebugLoc(), get(Opcode))
-        .addReg(TRI->getFrameRegister(*MF), getKillRegState(IsKill))
-        .addFrameIndex(FI)
-        .addReg(SrcReg, getKillRegState(IsKill))
+    BuildMI(MBB, MI, DebugLoc(), get(Opcode))
+        .addReg(TRI.getFrameRegister(*MF), getKillRegState(isKill))
+        .addFrameIndex(FrameIndex)
+        .addReg(SrcReg, getKillRegState(isKill))
         .addMemOperand(MMO)
         .setMIFlag(Flags);
 }

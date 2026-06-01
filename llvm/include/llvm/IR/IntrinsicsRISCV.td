@@ -2006,6 +2006,7 @@ let TargetPrefix = "riscv" in {
   def int_riscv_itd_64    : RiscvZhmReadObject_64;
   def int_riscv_lt_64     : RiscvZhmLt_64;
   def int_riscv_st_64     : RiscvZhmSt_64;
+}
 
 // Zvabd - Vector Absolute Difference
 //===----------------------------------------------------------------------===//

@@ -45,7 +45,7 @@ using namespace llvm;
 
 IKRRISC2TargetLowering::IKRRISC2TargetLowering(const TargetMachine &TM,
                                            const IKRRISC2Subtarget &STI)
-    : TargetLowering(TM), Subtarget(STI) {
+    : TargetLowering(TM, STI), Subtarget(STI) {
   MVT PtrVT = MVT::i32;
   // Set up the register classes.
   addRegisterClass(MVT::i32, &IKRRISC2::GPRRegClass);
@@ -127,8 +127,6 @@ IKRRISC2TargetLowering::IKRRISC2TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::CTPOP, MVT::i32, Expand);
   setOperationAction(ISD::CTTZ, MVT::i32, Expand);
   setOperationAction(ISD::CTLZ, MVT::i32, Expand);
-  setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Expand);
-  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Expand);
 
   // Implement custom stack allocations
   setOperationAction(ISD::DYNAMIC_STACKALLOC, PtrVT, Expand);

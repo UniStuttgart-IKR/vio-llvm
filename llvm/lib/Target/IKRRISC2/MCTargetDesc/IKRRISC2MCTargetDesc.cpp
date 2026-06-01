@@ -60,7 +60,7 @@ static MCInstPrinter *createIKRRISC2MCInstPrinter(const Triple &T,
 static MCAsmInfo *createIKRRISC2MCAsmInfo(const MCRegisterInfo &MRI,
                                            const Triple &TT,
                                            const MCTargetOptions &Options) {
-  MCAsmInfo *MAI = new IKRRISC2MCAsmInfo(TT);
+  MCAsmInfo *MAI = new IKRRISC2MCAsmInfo(TT, Options);
 
   return MAI;
 }

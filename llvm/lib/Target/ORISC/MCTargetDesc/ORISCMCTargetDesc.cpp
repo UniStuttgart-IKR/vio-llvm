@@ -63,7 +63,7 @@ static MCInstPrinter *createORISCMCInstPrinter(const Triple &T,
 static MCAsmInfo *createORISCMCAsmInfo(const MCRegisterInfo &MRI,
                                            const Triple &TT,
                                            const MCTargetOptions &Options) {
-  MCAsmInfo *MAI = new ORISCMCAsmInfo(TT);
+  MCAsmInfo *MAI = new ORISCMCAsmInfo(TT, Options);
 
   return MAI;
 }

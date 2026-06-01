@@ -220,9 +220,6 @@ void MachineFunction::init() {
       /*ForcedRealign=*/ForceRealignSP && CanRealignSP);
   FrameInfo->setFramePointerPolicy(getFramePointerPolicy(F));
 
-  if (STI->canAllocateOnHeap())
-    FrameInfo->disableVarSizedFrameObjects();
-
   setUnsafeStackSize(F, *FrameInfo);
 
   if (F.hasFnAttribute(Attribute::StackAlignment))

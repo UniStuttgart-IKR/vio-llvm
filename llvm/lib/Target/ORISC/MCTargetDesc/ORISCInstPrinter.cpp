@@ -15,6 +15,7 @@
 #include "ORISCInstPrinter.h"
 #include "ORISCMCTargetDesc.h"
 #include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegister.h"
@@ -38,7 +39,7 @@ void ORISCInstPrinter::printOperand(const MCOperand &MC, raw_ostream &O) {
   else if (MC.isImm())
     O << MC.getImm();
   else if (MC.isExpr())
-    MC.getExpr()->print(O, &MAI);
+    MAI.printExpr(O, *MC.getExpr());
   else
     report_fatal_error("Invalid operand");
 }
@@ -68,7 +69,7 @@ void ORISCInstPrinter::printSymbol(const MCInst *MI, unsigned OpNo,
   }
   const MCOperand &MC = MI->getOperand(OpNo);
   if (MC.isExpr())
-    MC.getExpr()->print(O, &MAI);
+    MAI.printExpr(O, *MC.getExpr());
   else if (MC.isImm())
     O << MC.getImm();
   else {

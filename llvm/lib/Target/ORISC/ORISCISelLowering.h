@@ -130,8 +130,9 @@ public:
   EmitInstrWithCustomInserter(MachineInstr &MI,
                               MachineBasicBlock *BB) const override;
 
-  bool getTgtMemIntrinsic(IntrinsicInfo &Info, const CallInst &I,
-                          MachineFunction &MF, unsigned Intrinsic) const override;
+  void getTgtMemIntrinsic(SmallVectorImpl<IntrinsicInfo> &Infos,
+                                  const CallBase &I, MachineFunction &MF,
+                                  unsigned Intrinsic) const override;
 
 private:
   const ORISCSubtarget &Subtarget;

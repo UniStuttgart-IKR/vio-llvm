@@ -28,7 +28,7 @@ class ORISCSubtarget;
 
 class ORISCInstrInfo : public ORISCGenInstrInfo {
 public:
-    explicit ORISCInstrInfo(ORISCSubtarget &STI);
+    explicit ORISCInstrInfo(const ORISCSubtarget &STI, const TargetRegisterInfo &TRI);
 
     MCInst getNop() const override;
 
@@ -51,16 +51,15 @@ public:
                                 int &FrameIndex, TypeSize &MemBytes) const override;
 
     void storeRegToStackSlot(
-        MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI, Register SrcReg,
-        bool isKill, int FrameIndex, const TargetRegisterClass *RC,
-        const TargetRegisterInfo *TRI, Register VReg,
-        MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const override;
+        MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, Register SrcReg,
+      bool isKill, int FrameIndex, const TargetRegisterClass *RC, Register VReg,
+      MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const override;
 
     void loadRegFromStackSlot(
-        MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
-        Register DestReg, int FrameIdx, const TargetRegisterClass *RC,
-        const TargetRegisterInfo *TRI, Register VReg,
-        MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const override;
+        MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, Register DestReg,
+      int FrameIndex, const TargetRegisterClass *RC, Register VReg,
+      unsigned SubReg = 0,
+      MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const override;
 
     // Branch analysis.
     bool analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,

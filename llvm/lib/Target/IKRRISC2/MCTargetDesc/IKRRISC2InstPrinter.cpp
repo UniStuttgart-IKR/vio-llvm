@@ -14,6 +14,7 @@
 
 #include "IKRRISC2InstPrinter.h"
 #include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegister.h"
@@ -41,7 +42,7 @@ void IKRRISC2InstPrinter::printOperand(const MCOperand &MC, raw_ostream &O) {
   else if (MC.isImm())
     O << MC.getImm();
   else if (MC.isExpr())
-    MC.getExpr()->print(O, &MAI);
+    MAI.printExpr(O, *MC.getExpr());
   else
     report_fatal_error("Invalid operand");
 }
@@ -71,7 +72,7 @@ void IKRRISC2InstPrinter::printBranchTarget(const MCInst *MI, int OpNo,
   }
   const MCOperand &MC = MI->getOperand(OpNo);
   if (MC.isExpr())
-    MC.getExpr()->print(O, &MAI);
+    MAI.printExpr(O, *MC.getExpr());
   else
     llvm_unreachable("Invalid Branch Operand");
 }

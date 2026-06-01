@@ -59,7 +59,7 @@ uint32_t ORISCMCCodeEmitter::getBranchTargetEncoding(
         case ORISC::BRA:
         case ORISC::BSR:
             Fixups.push_back(MCFixup::create(
-                0, MO.getExpr(), MCFixupKind(ORISC::fixup_orisc_branch_25), MI.getLoc()));
+                0, MO.getExpr(), MCFixupKind(ORISC::fixup_orisc_branch_25)));
             return 0;
 
         case ORISC::BEQ:
@@ -71,7 +71,7 @@ uint32_t ORISCMCCodeEmitter::getBranchTargetEncoding(
         case ORISC::BEQP:
         case ORISC::BNEP:
             Fixups.push_back(MCFixup::create(
-                0, MO.getExpr(), MCFixupKind(ORISC::fixup_orisc_branch_12), MI.getLoc()));
+                0, MO.getExpr(), MCFixupKind(ORISC::fixup_orisc_branch_12)));
             return 0;
         default:
             LLVM_DEBUG(MI.dump());
@@ -90,7 +90,7 @@ uint32_t ORISCMCCodeEmitter::getExternalSymbolEncoding(
     switch (MI.getOpcode()) {
     case ORISC::JLIB:
         Fixups.push_back(MCFixup::create(
-            0, Expr, MCFixupKind(ORISC::fixup_orisc_jlib_idx), MI.getLoc()));
+            0, Expr, MCFixupKind(ORISC::fixup_orisc_jlib_idx)));
         return 0;
     case ORISC::LP_I:
     //case ORISC::LD_I:
@@ -101,7 +101,7 @@ uint32_t ORISCMCCodeEmitter::getExternalSymbolEncoding(
     case ORISC::LBS_I:
     case ORISC::LBU_I:
         Fixups.push_back(MCFixup::create(
-            0, Expr, MCFixupKind(ORISC::fixup_orisc_ctxt_idx), MI.getLoc()));
+            0, Expr, MCFixupKind(ORISC::fixup_orisc_ctxt_idx)));
         return 0;
     default:
         LLVM_DEBUG(MI.dump());

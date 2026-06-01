@@ -22,7 +22,7 @@ class IKRRISC2MCAsmInfo : public MCAsmInfoELF {
   void anchor() override;
 
 public:
-  explicit IKRRISC2MCAsmInfo(const Triple &TargetTriple);
+  explicit IKRRISC2MCAsmInfo(const Triple &TT, const MCTargetOptions &Options);
 };
 
 } // end namespace llvm

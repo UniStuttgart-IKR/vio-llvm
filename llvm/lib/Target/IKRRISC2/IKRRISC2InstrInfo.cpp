@@ -26,8 +26,8 @@ using namespace llvm;
 #define GET_INSTRINFO_CTOR_DTOR
 #include "IKRRISC2GenInstrInfo.inc"
 
-IKRRISC2InstrInfo::IKRRISC2InstrInfo(IKRRISC2Subtarget &STI)
-    : IKRRISC2GenInstrInfo() {}
+IKRRISC2InstrInfo::IKRRISC2InstrInfo(const TargetSubtargetInfo &STI, const TargetRegisterInfo &TRI)
+    : IKRRISC2GenInstrInfo(STI, TRI) {}
 
 
 

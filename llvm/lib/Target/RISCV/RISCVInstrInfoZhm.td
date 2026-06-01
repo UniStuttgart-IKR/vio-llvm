@@ -52,17 +52,10 @@ let Predicates = [HasStdExtZhm] in {
     let hasSideEffects = 1;
   }
   
-
   def : Pat<(int_riscv_alci   uimm12:$imm12), (ALCI   uimm12:$imm12)>;
   def : Pat<(int_riscv_alci_d uimm12:$imm12), (ALCI_D uimm12:$imm12)>;
   def : Pat<(int_riscv_clr    GPR:$rs1),      (CLR    GPR:$rs1)>;
   def : Pat<(int_riscv_sep    GPR:$rs1),      (SEP    GPR:$rs1)>;
-
-  def : Pat<(iPTR (allocate (XLenVT 0),         uimm12:$imm12)),    (ALCI_D uimm12:$imm12)>;
-  def : Pat<(iPTR (allocate (XLenVT 0),        (XLenVT GPR:$rs1))), (ALC_D   GPR:$rs1)>;
-  def : Pat<(iPTR (allocate  uimm12:$imm12,    (XLenVT 0))),        (ALCI   uimm12:$imm12)>;
-  def : Pat<(iPTR (allocate (XLenVT GPR:$rs1), (XLenVT 0))),        (ALC     GPR:$rs1)>;
-  def : Pat<(iPTR (allocate (XLenVT GPR:$rs1), (XLenVT GPR:$rs2))), (ALC    (ADD GPR:$rs1, GPR:$rs2))>;
 }
 
 let Predicates = [HasStdExtZhm, IsRV32] in {

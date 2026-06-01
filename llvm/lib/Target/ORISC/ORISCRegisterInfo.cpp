@@ -59,7 +59,7 @@ bool ORISCRegisterInfo::isReservedReg(const MachineFunction &MF,
 }
 
 const TargetRegisterClass*
-ORISCRegisterInfo::getPointerRegClass(const MachineFunction &MF, unsigned Kind) const {
+ORISCRegisterInfo::getPointerRegClass(unsigned Kind) const {
 	return &ORISC::PRRegClass;
 }
 

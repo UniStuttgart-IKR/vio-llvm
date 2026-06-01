@@ -22,7 +22,7 @@ class ORISCMCAsmInfo : public MCAsmInfoELF {
   void anchor() override;
 
 public:
-  explicit ORISCMCAsmInfo(const Triple &TargetTriple);
+  explicit ORISCMCAsmInfo(const Triple &TT, const MCTargetOptions &Options);
 };
 
 } // end namespace llvm

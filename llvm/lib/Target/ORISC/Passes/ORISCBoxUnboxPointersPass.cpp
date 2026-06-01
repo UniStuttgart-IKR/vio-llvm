@@ -127,7 +127,7 @@ bool BoxUnboxPointersPass::visitOther(Instruction *I) {
     SmallVector<User *> Users = SmallVector<User *, 32>(I->users());
     if (Users.empty())
         return false;
-    IRBuilder<> Builder(I->getNextNonDebugInstruction());
+    IRBuilder<> Builder(I->getNextNode());
     Value *Base = Builder.CreateCall(UnboxBaseFn, I, I->getName() + ".base");
     Value *Index = Builder.CreateCall(UnboxIndexFn, I, I->getName() + ".index");
     for (User *U : Users) {
@@ -159,7 +159,7 @@ bool BoxUnboxPointersPass::handleUser(Value *Base, Value *CurrentIndex, Value *P
     if (GetElementPtrInst *G = dyn_cast<GetElementPtrInst>(U)) {
         RemoveFromParentList.push_back(G);
         SmallVector<Value *, 8> Indices(G->indices());
-        Builder.SetInsertPoint(G->getNextNonDebugInstruction());
+        Builder.SetInsertPoint(G->getNextNode());
         StringRef Name = G->getName();
         G->setName(Name + ".old");
         Value *NewG = Builder.CreateGEP(G->getSourceElementType(), CurrentIndex, Indices, Name, G->getNoWrapFlags());

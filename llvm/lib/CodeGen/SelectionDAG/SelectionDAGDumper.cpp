@@ -583,8 +583,6 @@ std::string SDNode::getOperationName(const SelectionDAG *G) const {
   case ISD::VECREDUCE_FMAXIMUM:         return "vecreduce_fmaximum";
   case ISD::VECREDUCE_FMINIMUM:         return "vecreduce_fminimum";
   
-  case ISD::ALLOCATE:
-    return "allocate";
   case ISD::STACKMAP:
     return "stackmap";
   case ISD::PATCHPOINT:

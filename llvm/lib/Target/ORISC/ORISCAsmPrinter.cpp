@@ -49,7 +49,7 @@ void ORISCAsmPrinter::emitLinkage(const GlobalValue *GV, MCSymbol *GVSym) const 
 
 void ORISCAsmPrinter::emitFunctionEntryLabel() {
   AsmPrinter::emitFunctionEntryLabel();
-  if (CurrentFnSym && CurrentFnSym->isExternal())
+  if (CurrentFnSym && CurrentFnSym->isWeakExternal())
     PublicFunctions.push_back(CurrentFnSym);
 }
 

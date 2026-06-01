@@ -15,6 +15,7 @@
 #include "MCTargetDesc/ORISCMCTargetDesc.h"
 #include "TargetInfo/ORISCTargetInfo.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCDecoder.h"
 #include "llvm/MC/MCDecoderOps.h"
 #include "llvm/MC/MCDisassembler/MCDisassembler.h"
 #include "llvm/MC/MCExpr.h"
@@ -26,6 +27,7 @@
 #include <cstdint>
 
 using namespace llvm;
+using namespace llvm::MCD;
 
 #define DEBUG_TYPE "ORISC-disassembler"
 

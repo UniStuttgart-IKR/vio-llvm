@@ -19,7 +19,8 @@ using namespace llvm;
 
 void IKRRISC2MCAsmInfo::anchor() {}
 
-IKRRISC2MCAsmInfo::IKRRISC2MCAsmInfo(const Triple &TT) {
+IKRRISC2MCAsmInfo::IKRRISC2MCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
+    : MCAsmInfoELF(Options) {
   CodePointerSize = CalleeSaveStackSlotSize = 4;
   AlignmentIsInBytes = false;
   Data8bitsDirective = "\t.byte\t";

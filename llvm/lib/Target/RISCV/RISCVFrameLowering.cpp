@@ -1264,6 +1264,7 @@ void RISCVFrameLowering::deallocateStack(MachineFunction &MF,
                                          uint64_t &StackSize,
                                          int64_t CFAOffset) const {
   const RISCVRegisterInfo *RI = STI.getRegisterInfo();
+  const RISCVInstrInfo *TII = STI.getInstrInfo();
 
   if (MF.getSubtarget<RISCVSubtarget>().hasStdExtZhm()){
     bool IsRV64 = STI.is64Bit();
@@ -2200,9 +2201,6 @@ bool RISCVFrameLowering::assignCalleeSavedSpillSlots(
       RVFI->setRVPushStackSize(alignTo((STI.getXLen() / 8) * PushedRegNum, 16));
     }
   }
-
-  MachineFrameInfo &MFI = MF.getFrameInfo();
-  const TargetRegisterInfo *RegInfo = MF.getSubtarget().getRegisterInfo();
     
   //Allocate constant spot for sp if Zhm Extension is active
   const auto &STI = MF.getSubtarget<RISCVSubtarget>();
@@ -2470,7 +2468,6 @@ bool RISCVFrameLowering::restoreCalleeSavedRegisters(
   loadRegFromStackSlot(UnmanagedCSI);
   loadRegFromStackSlot(RVVCSI);
 
-  RISCVMachineFunctionInfo *RVFI = MF->getInfo<RISCVMachineFunctionInfo>();
   if (RVFI->useQCIInterrupt(*MF)) {
     // Don't emit anything here because restoration is handled by
     // QC.C.MILEAVERET which we already inserted to return.

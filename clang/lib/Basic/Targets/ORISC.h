@@ -37,7 +37,6 @@ protected:
 public:
   ORISCTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
-    // no big-endianess support yet
     BigEndian = true;
     NoAsmVariants = true;
     LongLongAlign = 64;
@@ -50,7 +49,7 @@ public:
     WIntType = UnsignedInt;
     UseZeroLengthBitfieldAlignment = true;
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 32;
-    resetDataLayout("E-p:32:32-i32:32:32-i16:16:16-i8:8:8-n32");
+    resetDataLayout("E-p:32:32-i64:64:64-i32:32:32-i16:16:16-i8:8:8-n32");
   }
 
   void getTargetDefines(const LangOptions &Opts,

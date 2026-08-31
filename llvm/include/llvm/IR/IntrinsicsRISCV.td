@@ -1943,7 +1943,7 @@ let TargetPrefix = "riscv" in {
       : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty],
               [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
   class RiscvZhmSep
-      : Intrinsic<[llvm_i1_ty], [llvm_ptr_ty],
+      : Intrinsic<[llvm_i32_ty], [llvm_ptr_ty],
               [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
   class RiscvZhmClr
       : Intrinsic<[], [llvm_ptr_ty],

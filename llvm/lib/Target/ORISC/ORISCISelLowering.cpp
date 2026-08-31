@@ -310,14 +310,15 @@ SDValue ORISCTargetLowering::
     //ADD (GEP B, I), O -> GEP B, (ADD I, O)
     //ADD O, (GEP B, I) -> GEP B, (ADD I, O)
     bool LHSIsGep = Op->getOperand(0)->getOpcode() == ISD::INTRINSIC_WO_CHAIN
-                    && Op->getOperand(0).getConstantOperandVal(0) == Intrinsic::orisc_gep;
+                    && (Op->getOperand(0).getConstantOperandVal(0) == Intrinsic::orisc_gep_p || Op->getOperand(0).getConstantOperandVal(0) == Intrinsic::orisc_gep_i);
     bool RHSIsGep = Op->getOperand(1)->getOpcode() == ISD::INTRINSIC_WO_CHAIN
-                    && Op->getOperand(1).getConstantOperandVal(0) == Intrinsic::orisc_gep;
+                    && (Op->getOperand(1).getConstantOperandVal(0) == Intrinsic::orisc_gep_p || Op->getOperand(1).getConstantOperandVal(0) == Intrinsic::orisc_gep_i);
 
     if (LHSIsGep || RHSIsGep) {
+      uint64_t IntrinsicID = Op->getOperand(LHSIsGep ? 0 : 1).getConstantOperandVal(0);
       SDLoc DL(Op);
       SDValue OldGep = LHSIsGep ? Op->getOperand(0) : Op->getOperand(1);
-      SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep, DL, MVT::i32);
+      SDValue GepID = DAG.getConstant(IntrinsicID, DL, MVT::i32);
       SDValue Base = OldGep->getOperand(1);
       SDValue Index = OldGep->getOperand(2);
       SDValue Offset = LHSIsGep ? Op->getOperand(1) : Op->getOperand(0);
@@ -342,7 +343,7 @@ static inline SDValue getShiftedIndexGep(SDValue GEP, EVT MemVT, SelectionDAG &D
         S = 2;
     
     SDLoc DL(GEP);
-    SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep, DL, MVT::i32);
+    SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep_p, DL, MVT::i32);  // FIXME: Is this enough or do we need to consider orisc_gep_i?
     SDValue Base = GEP->getOperand(1);
     SDValue Index = GEP->getOperand(2);
 
@@ -390,7 +391,7 @@ SDValue ORISCTargetLowering::
         GEP = lowerAdd(GEP, DAG);
 
     assert(GEP->getOpcode() == ISD::INTRINSIC_WO_CHAIN
-            && GEP.getConstantOperandVal(0) == Intrinsic::orisc_gep
+            && (GEP.getConstantOperandVal(0) == Intrinsic::orisc_gep_p || GEP->getConstantOperandVal(0) == Intrinsic::orisc_gep_i)
                 && "Pointer Addresses Have To Be GEPs!");
     
     EVT MemVT = OrigStore->getMemoryVT();
@@ -428,7 +429,7 @@ SDValue ORISCTargetLowering::
         GEP = lowerAdd(GEP, DAG);
 
     assert(GEP->getOpcode() == ISD::INTRINSIC_WO_CHAIN
-            && GEP.getConstantOperandVal(0) == Intrinsic::orisc_gep
+            && (GEP.getConstantOperandVal(0) == Intrinsic::orisc_gep_p || GEP->getConstantOperandVal(0) == Intrinsic::orisc_gep_i)
                 && "Pointer Addresses Have To Be GEPs!");
     
     EVT MemVT = OrigLoad->getMemoryVT();
@@ -477,7 +478,8 @@ SDValue ORISCTargetLowering::
     default:
         return Op;
 
-    case Intrinsic::orisc_gep:
+    case Intrinsic::orisc_gep_i:
+    case Intrinsic::orisc_gep_p:
         if (isa<FrameIndexSDNode>(Op->getOperand(1)) 
                 && isa<ConstantSDNode>(Op->getOperand(2)) && Op->getConstantOperandVal(2) == 0) {
             uint64_t FI = cast<FrameIndexSDNode>(Op->getOperand(1))->getIndex();
@@ -530,7 +532,7 @@ SDValue ORISCTargetLowering::
         SDValue Const1 = DAG.getConstant(1, DL, MVT::i32);
         SDValue Const4 = DAG.getConstant(4, DL, MVT::i32);
         SDValue AlcID = DAG.getConstant(Intrinsic::orisc_allocate, DL, MVT::i32);
-        SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep, DL, MVT::i32);
+        SDValue GepID = DAG.getConstant(Intrinsic::orisc_gep_i, DL, MVT::i32);
         
         SDValue AlcOps[] = { DummyChain, AlcID, Const1, Const4 };
         SDValue Alc = DAG.getNode(ISD::INTRINSIC_W_CHAIN, DL, 
@@ -612,7 +614,8 @@ static inline void getBaseIndex(SDValue Value, SDValue &Base, SDValue &Index, Se
         Base = Value->getOperand(2);
         Index = Value->getOperand(3);
     } else if (Value->getOpcode() == ISD::INTRINSIC_WO_CHAIN && 
-                Value->getConstantOperandVal(0) == Intrinsic::orisc_gep) {
+                (Value->getConstantOperandVal(0) == Intrinsic::orisc_gep_p
+                || Value->getConstantOperandVal(0) == Intrinsic::orisc_gep_i)) {
         Base = Value->getOperand(1);
         Index = Value->getOperand(2);
     } else if (Value->getOpcode() == ORISCISD::BUILD_PTRARG) {
@@ -816,7 +819,8 @@ ORISCTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool I
     // Check if Chain is from an Outgoing Box or Gep and replace it by parent Chain
     if (Chain->getOpcode() == ISD::INTRINSIC_W_CHAIN && 
         (Chain->getConstantOperandVal(1) == Intrinsic::orisc_box
-                    || Chain->getConstantOperandVal(1) == Intrinsic::orisc_gep))
+                    || Chain->getConstantOperandVal(1) == Intrinsic::orisc_gep_p
+                    || Chain->getConstantOperandVal(1) == Intrinsic::orisc_gep_i))
         Chain = Chain->getOperand(0);
 
     // Assign locations to each returned value.

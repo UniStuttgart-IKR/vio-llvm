@@ -135,14 +135,17 @@ def : Pat<(orisc_library_call texternalsym:$symbol, PR:$px), (JLIB PR:$px, exter
 //Stores with constant Offset
 multiclass StoreIPat<PatFrag StoreOp, ORISCInstr Inst, RegisterClass XR = DR> {
 	def : Pat<(StoreOp XR:$dy, oframeindex:$fi), (Inst (pointer P30), (i32 (to_tframeindex $fi)), XR:$dy)>;
-	def : Pat<(StoreOp XR:$dy, (int_orisc_gep (iPTR PR:$px), uimm12:$ix12)), (Inst PR:$px, uimm12:$ix12, XR:$dy)>;
+	def : Pat<(StoreOp XR:$dy, (int_orisc_gep_p (iPTR PR:$px), uimm12:$ix12)), (Inst PR:$px, uimm12:$ix12, XR:$dy)>;
+	def : Pat<(StoreOp XR:$dy, (int_orisc_gep_i (iPTR PR:$px), uimm12:$ix12)), (Inst PR:$px, uimm12:$ix12, XR:$dy)>;
 //					   value       			  base   	 offset				 base      offset     value
 }
 
 //Stores with variable Index
 multiclass StorePat<PatFrag StoreOp, ORISCInstr Inst, RegisterClass XR = DR> {
-	def  : Pat<(StoreOp XR:$dy, (int_orisc_gep (iPTR PR:$px), (add DR:$dz, uimm4:$ui4))), (Inst PR:$px, DR:$dz, 1, uimm4:$ui4, XR:$dy)>;
-	def  : Pat<(StoreOp XR:$dy, (int_orisc_gep (iPTR PR:$px), DR:$dz)), (Inst PR:$px, DR:$dz, 1, 0, XR:$dy)>;
+	def  : Pat<(StoreOp XR:$dy, (int_orisc_gep_p (iPTR PR:$px), (add DR:$dz, uimm4:$ui4))), (Inst PR:$px, DR:$dz, 1, uimm4:$ui4, XR:$dy)>;
+	def  : Pat<(StoreOp XR:$dy, (int_orisc_gep_i (iPTR PR:$px), (add DR:$dz, uimm4:$ui4))), (Inst PR:$px, DR:$dz, 1, uimm4:$ui4, XR:$dy)>;
+	def  : Pat<(StoreOp XR:$dy, (int_orisc_gep_p (iPTR PR:$px), DR:$dz)), (Inst PR:$px, DR:$dz, 1, 0, XR:$dy)>;
+	def  : Pat<(StoreOp XR:$dy, (int_orisc_gep_i (iPTR PR:$px), DR:$dz)), (Inst PR:$px, DR:$dz, 1, 0, XR:$dy)>;
 //					     value		 	  			   base	   index   		    base	index  s  p  value
 }
 
@@ -157,9 +160,12 @@ defm : StorePat<truncstorei16, SH>;
 defm : StorePat<truncstorei8,  SB>;
 
 def : Pat<(store (pointer PR:$py), oframeindex:$fi), (SP_I (pointer P30), (i32 (to_tframeindex $fi)), PR:$py)>;
-def : Pat<(store (pointer PR:$py), (int_orisc_gep (iPTR PR:$px), uimm12:$ix12)), (SP_I PR:$px, uimm12:$ix12, PR:$py)>;
-def : Pat<(store (pointer PR:$py), (int_orisc_gep (iPTR PR:$px), DR:$dz)), (SP PR:$px, DR:$dz, 1, 0, PR:$py)>;
-def : Pat<(store (pointer PR:$py), (int_orisc_gep (iPTR PR:$px), (add DR:$dz, uimm4:$ui4))), (SP PR:$px, DR:$dz, 1, uimm4:$ui4, PR:$py)>;
+def : Pat<(store (pointer PR:$py), (int_orisc_gep_p (iPTR PR:$px), uimm12:$ix12)), (SP_I PR:$px, uimm12:$ix12, PR:$py)>;
+def : Pat<(store (pointer PR:$py), (int_orisc_gep_p (iPTR PR:$px), DR:$dz)), (SP PR:$px, DR:$dz, 1, 0, PR:$py)>;
+def : Pat<(store (pointer PR:$py), (int_orisc_gep_p (iPTR PR:$px), (add DR:$dz, uimm4:$ui4))), (SP PR:$px, DR:$dz, 1, uimm4:$ui4, PR:$py)>;
+def : Pat<(store (pointer PR:$py), (int_orisc_gep_i (iPTR PR:$px), uimm12:$ix12)), (SP_I PR:$px, uimm12:$ix12, PR:$py)>;
+def : Pat<(store (pointer PR:$py), (int_orisc_gep_i (iPTR PR:$px), DR:$dz)), (SP PR:$px, DR:$dz, 1, 0, PR:$py)>;
+def : Pat<(store (pointer PR:$py), (int_orisc_gep_i (iPTR PR:$px), (add DR:$dz, uimm4:$ui4))), (SP PR:$px, DR:$dz, 1, uimm4:$ui4, PR:$py)>;
 
 
 //				------ LOADS ------
@@ -170,14 +176,17 @@ def : Pat<(orisc_get_capability (iPTR texternalsym:$symbol)), (LP_I (pointer P29
 //Loads with constant Offset
 multiclass LoadIPat<PatFrag LoadOp, ORISCInstr Inst, ValueType vt = i32> {
 	def : Pat<(vt (LoadOp oframeindex:$fi)), (Inst (pointer P30), (i32 (to_tframeindex $fi)))>;
-	def : Pat<(vt (LoadOp (int_orisc_gep PR:$px, uimm12:$ix12))), (Inst PR:$px, uimm12:$ix12)>;
+	def : Pat<(vt (LoadOp (int_orisc_gep_p PR:$px, uimm12:$ix12))), (Inst PR:$px, uimm12:$ix12)>;
+	def : Pat<(vt (LoadOp (int_orisc_gep_i PR:$px, uimm12:$ix12))), (Inst PR:$px, uimm12:$ix12)>;
 //					   					  base       offset   			 base       offset
 }
 
 //Loads with variable Index
 multiclass LoadPat<PatFrag LoadOp, ORISCInstr Inst, ValueType vt = i32> {
-	def : Pat<(vt (LoadOp (int_orisc_gep PR:$px, (add DR:$dz, uimm4:$ui4)))), (Inst PR:$px, DR:$dz, 1, uimm4:$ui4)>;
-	def : Pat<(vt (LoadOp (int_orisc_gep PR:$px, DR:$dz))), (Inst PR:$px, DR:$dz, 1, 0)>;
+	def : Pat<(vt (LoadOp (int_orisc_gep_p PR:$px, (add DR:$dz, uimm4:$ui4)))), (Inst PR:$px, DR:$dz, 1, uimm4:$ui4)>;
+	def : Pat<(vt (LoadOp (int_orisc_gep_i PR:$px, (add DR:$dz, uimm4:$ui4)))), (Inst PR:$px, DR:$dz, 1, uimm4:$ui4)>;
+	def : Pat<(vt (LoadOp (int_orisc_gep_p PR:$px, DR:$dz))), (Inst PR:$px, DR:$dz, 1, 0)>;
+	def : Pat<(vt (LoadOp (int_orisc_gep_i PR:$px, DR:$dz))), (Inst PR:$px, DR:$dz, 1, 0)>;
 //					   				  	  base   index		 	   base	  index   s  p
 }
 

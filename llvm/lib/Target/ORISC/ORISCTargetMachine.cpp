@@ -42,7 +42,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeORISCTarget() {
 }
 
 static std::string getDataLayout() {
-	return "E-p:32:32-i32:32:32-i16:16:16-i8:8:8-n32";
+	return "E-p:32:32-i64:64:64-i32:32:32-i16:16:16-i8:8:8-n32";
 }
 
 static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {

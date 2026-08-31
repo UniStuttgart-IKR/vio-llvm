@@ -322,9 +322,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
                    MVT::i1, Promote);
 
   // TODO: add all necessary setOperationAction calls.
-  if (Subtarget.hasStdExtZhm()) {
-    setOperationAction(ISD::ALLOCATE, XLenVT, Custom);
-  } else {
+  if (!Subtarget.hasStdExtZhm()) {
     setOperationAction(ISD::DYNAMIC_STACKALLOC, XLenVT, Expand);
   }
 
@@ -8922,28 +8920,6 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     return lowerMaskedStore(Op, DAG);
   case ISD::VECTOR_COMPRESS:
     return lowerVectorCompress(Op, DAG);
-  case ISD::ALLOCATE: {
-    //On RISC-V we only differenciate between Data-Only Objects and non-Data-Only Objects.
-    //If PointersSize is != 0, add all Datas to the PointersSize and replace DatasSize by 0
-    //so the InstructionSelection can match against an ALCI if possible
-    SDLoc dl(Op);
-    EVT PtrVT = getPointerTy(DAG.getDataLayout());
-    if (   !(isa<ConstantSDNode>(Op.getOperand(1)) && Op->getConstantOperandVal(1) == 0) 
-        && !(isa<ConstantSDNode>(Op.getOperand(2)) && Op->getConstantOperandVal(2) == 0)) {
-      SDValue SumNode = DAG.getNode(ISD::ADD, dl, PtrVT, Op.getOperand(1), Op.getOperand(2));
-      SDValue Ops[] = {Op.getOperand(0),
-                      SumNode,
-                      DAG.getConstant(0, dl, MVT::i32)};
-      SDVTList VTs = DAG.getVTList(PtrVT, MVT::Other);
-      return DAG.getNode(ISD::ALLOCATE, dl, VTs, Ops);
-    }
-    //If we would allocate a Zero-length Object, just return a NULL-Pointer 
-    if (   (isa<ConstantSDNode>(Op.getOperand(1)) && Op->getConstantOperandVal(1) == 0) 
-        && (isa<ConstantSDNode>(Op.getOperand(2)) && Op->getConstantOperandVal(2) == 0))
-      return DAG.getConstant(0, dl, MVT::i32);
-
-    return Op;
-  }
   case ISD::SELECT_CC: {
     // This occurs because we custom legalize SETGT and SETUGT for setcc. That
     // causes LegalizeDAG to think we need to custom legalize select_cc. Expand
@@ -24441,6 +24417,7 @@ static SDValue unpackFromMemLoc(SelectionDAG &DAG, SDValue Chain,
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
+  EVT ValVT = VA.getValVT();
   EVT LocVT = VA.getLocVT();
   EVT PtrVT = MVT::getIntegerVT(DAG.getDataLayout().getPointerSizeInBits(0));
   if (VA.getLocInfo() == CCValAssign::Indirect) {
@@ -24742,18 +24719,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     if (VarArgsSaveSize == 0) {
       int VaArgOffset = CCInfo.getStackSize();
       FI = MFI.CreateFixedObject(XLenInBytes, VaArgOffset, true);
-    } else {
-      int VaArgOffset = -VarArgsSaveSize;
-      FI = MFI.CreateFixedObject(VarArgsSaveSize, VaArgOffset, true);
 
-      // If saving an odd number of registers then create an extra stack slot to
-      // ensure that the frame pointer is 2*XLEN-aligned, which in turn ensures
-      // offsets to even-numbered registers remain 2*XLEN-aligned.
-      if (Idx % 2) {
-        MFI.CreateFixedObject(
-            XLenInBytes, VaArgOffset - static_cast<int>(XLenInBytes), true);
-        VarArgsSaveSize += XLenInBytes;
-      }
     } else {
       SDValue FIN;
       if (Subtarget.hasStdExtZhm()) {
@@ -24762,7 +24728,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
 
         SDValue Ops[] = {Chain, AlcLen, DAG.getConstant(0, DL, XLenVT)};
         SDVTList VTs = DAG.getVTList(PtrVT, MVT::Other);
-        SDValue NewArgObj = DAG.getNode(ISD::ALLOCATE, DL, VTs, Ops);
+        SDValue NewArgObj = SDValue(DAG.getMachineNode(RISCV::QSZ, DL, VTs, Ops), 0);
         Chain = DAG.getMemcpy(NewArgObj.getValue(1), DL, NewArgObj.getValue(0), ArgObj, 
                       SizeNode, RequiredAlign,
                       /*IsVolatile=*/false,
@@ -25426,9 +25392,7 @@ SDValue RISCVTargetLowering::lowerCallZhm(CallLoweringInfo &CLI,
   // Analyze the operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState ArgCCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
-  analyzeOutputArgs(MF, ArgCCInfo, Outs, /*IsRet=*/false, &CLI,
-                    CallConv == CallingConv::Fast ? CC_RISCV_FastCC
-                                                  : CC_RISCV);
+  analyzeOutputArgs(MF, ArgCCInfo, Outs, /*IsRet=*/false, &CLI, CC_RISCV);
 
   // Check if it's really possible to do a tail call.
   if (IsTailCall)

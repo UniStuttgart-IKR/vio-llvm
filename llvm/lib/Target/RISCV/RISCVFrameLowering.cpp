@@ -2869,8 +2869,4 @@ RISCVFrameLowering::getInitialCFARegister(const MachineFunction &MF) const {
 // that.
 uint64_t RISCVFrameLowering::getStackThreshold() const {
   return STI.is64Bit() ? INT64_MAX : UINT32_MAX;
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> origin/main

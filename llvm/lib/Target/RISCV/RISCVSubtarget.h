@@ -289,9 +289,8 @@ public:
     return UserReservedRegister[i.id()];
   }
 
-<<<<<<< HEAD
   bool isStackRealignmentSupported() const { return !hasStdExtZhm(); }
-=======
+
   TargetRegisterClass const *getLargestFPRegClass() const {
     if (HasStdExtQ)
       return &RISCV::FPR128RegClass;
@@ -301,7 +300,6 @@ public:
       return &RISCV::FPR32RegClass;
     return nullptr;
   };
->>>>>>> origin/main
 
   // XRay support - require D and C extensions.
   bool isXRaySupported() const override { return hasStdExtD() && hasStdExtC(); }
@@ -463,8 +461,6 @@ public:
 
   void overridePostRASchedPolicy(MachineSchedPolicy &Policy,
                                  const SchedRegion &Region) const override;
-
-  bool canAllocateOnHeap() const override { return hasStdExtZhm(); }
 };
 } // namespace llvm
 

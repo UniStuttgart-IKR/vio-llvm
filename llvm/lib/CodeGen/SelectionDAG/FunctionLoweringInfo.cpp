@@ -133,7 +133,6 @@ void FunctionLoweringInfo::set(const Function &fn, MachineFunction &mf,
   for (const BasicBlock &BB : *Fn) {
     for (const Instruction &I : BB) {
       if (const AllocaInst *AI = dyn_cast<AllocaInst>(&I)) {
-        Type *Ty = AI->getAllocatedType();
         Align Alignment = AI->getAlign();
 
         // Static allocas can be folded into the initial stack frame
@@ -175,9 +174,8 @@ void FunctionLoweringInfo::set(const Function &fn, MachineFunction &mf,
           // a single dynamic allocation instead of using a separate
           // stack allocation for each one.
           // Inform the Frame Information that we have variable-sized objects.
-          if (!MF->getSubtarget().canAllocateOnHeap())
-            MF->getFrameInfo().CreateVariableSizedObject(
-                Alignment <= StackAlign ? Align(1) : Alignment, AI);
+          MF->getFrameInfo().CreateVariableSizedObject(
+              Alignment <= StackAlign ? Align(1) : Alignment, AI);
         }
       } else if (auto *Call = dyn_cast<CallBase>(&I)) {
         // Look for inline asm that clobbers the SP register.

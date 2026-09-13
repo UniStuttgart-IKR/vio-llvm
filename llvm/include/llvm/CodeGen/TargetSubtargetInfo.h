@@ -390,10 +390,6 @@ public:
 
   virtual bool isRegisterReservedByUser(Register R) const { return false; }
 
-<<<<<<< HEAD
-  virtual bool canAllocateOnHeap() const { return false; }
-
-=======
   /// Target features to ignore for inline compatibility check.
   virtual const FeatureBitset &getInlineIgnoreFeatures() const = 0;
   /// Target features where the callee may have an additional feature,
@@ -405,7 +401,6 @@ public:
 private:
   /// Lazy, incrementally-populated cache for isIntrinsicSupported().
   mutable DenseMap<unsigned, bool> IntrinsicSupportCache;
->>>>>>> origin/main
 };
 } // end namespace llvm
 

@@ -68,7 +68,6 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicsAMDGPU.h"
-#include "llvm/IR/IntrinsicsRISCV.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/PatternMatch.h"
@@ -4039,17 +4038,6 @@ bool IRTranslatorImpl::translateAlloca(const User &U,
         getOrCreateVReg(*ConstantInt::get(IntPtrIRTy, TySize.getFixedValue()));
   }
   MIRBuilder.buildMul(AllocSize, NumElts, TySizeReg);
-
-  // If the used Subtarget supports allocation on a heap, we can translate
-  // this alloca directly to an allocation instruction.
-  // FIXME: make this Intrinsic Target independent!
-  if (MF->getSubtarget().canAllocateOnHeap()) {
-    bool Is64Bit = MIRBuilder.getDataLayout().getPointerSizeInBits() == 64;
-    Register Res = getOrCreateVReg(AI);
-    auto MIB = MIRBuilder.buildIntrinsic(Is64Bit ? Intrinsic::riscv_alc_64 : Intrinsic::riscv_alc_32, Res, false, false);
-    ((SrcOp)AllocSize).addSrcToMIB(MIB);
-    return true;
-  }
 
   // Round the size of the allocation up to the stack alignment size
   // by add SA-1 to the size. This doesn't overflow because we're computing

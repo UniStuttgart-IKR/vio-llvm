@@ -1020,9 +1020,7 @@ bool MIRParserImpl::initializeFrameInfo(PerFunctionMIParsingState &PFS,
     if (!TFI->isSupportedStackID(Object.StackID))
       return error(Object.ID.SourceRange.Start,
                    Twine("StackID is not supported by target"));
-    // If we have a Subtarget that can directly allocate Objects on the heap
-    // do not create a VarSized Object here!
-    if (Object.Type == yaml::MachineStackObject::VariableSized && !MF.getSubtarget().canAllocateOnHeap())
+    if (Object.Type == yaml::MachineStackObject::VariableSized)
       ObjectIdx =
           MFI.CreateVariableSizedObject(Object.Alignment.valueOrOne(), Alloca);
     else

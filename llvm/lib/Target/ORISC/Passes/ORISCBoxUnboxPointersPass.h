@@ -11,7 +11,7 @@
 
 namespace llvm {
 
-class BoxUnboxPointersPass : public PassInfoMixin<BoxUnboxPointersPass>  {
+class BoxUnboxPointersPass : public detail::PassInfoMixin<BoxUnboxPointersPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }

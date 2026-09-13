@@ -9,7 +9,7 @@
 
 namespace llvm {
 
-class ReplaceNullPointersPass : public PassInfoMixin<ReplaceNullPointersPass>  {
+class ReplaceNullPointersPass : public detail::PassInfoMixin<ReplaceNullPointersPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }

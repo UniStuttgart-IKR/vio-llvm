@@ -14,7 +14,7 @@
 
 namespace llvm {
 
-class EscapeAllocaPass : public PassInfoMixin<EscapeAllocaPass>  {
+class EscapeAllocaPass : public detail::PassInfoMixin<EscapeAllocaPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }

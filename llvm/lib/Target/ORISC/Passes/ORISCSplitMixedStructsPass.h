@@ -10,7 +10,7 @@
 
 namespace llvm {
 
-class SplitMixedStructsPass : public PassInfoMixin<SplitMixedStructsPass>  {
+class SplitMixedStructsPass : public detail::PassInfoMixin<SplitMixedStructsPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }

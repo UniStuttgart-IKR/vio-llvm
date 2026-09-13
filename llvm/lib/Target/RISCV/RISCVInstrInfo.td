@@ -1260,7 +1260,6 @@ def : InstAlias<"ntl.s1",     (ADD   X0, X0, X4)>;
 def : InstAlias<"ntl.all",    (ADD   X0, X0, X5)>;
 
 let EmitPriority = 0 in {
-<<<<<<< HEAD
 def : InstAlias<"lb \t$rd, (${rs1})",
                 (LB  GPR:$rd, GPR:$rs1, 0)>;
 def : InstAlias<"lh \t$rd, (${rs1})",
@@ -1279,8 +1278,6 @@ def : InstAlias<"sh \t$rs2, (${rs1})",
 def : InstAlias<"sw \t$rs2, (${rs1})",
                 (SW  GPR:$rs2, GPR:$rs1, 0)>;
 
-=======
->>>>>>> origin/main
 def : InstAlias<"add $rd, $rs1, $imm12",
                 (ADDI  GPR:$rd, GPR:$rs1, simm12_lo:$imm12)>;
 def : InstAlias<"and $rd, $rs1, $imm12",
@@ -1296,7 +1293,6 @@ def : InstAlias<"srl \t$rd, $rs1, $shamt",
 def : InstAlias<"sra \t$rd, $rs1, $shamt",
                 (SRAI  GPR:$rd, GPR:$rs1, uimmlog2xlen:$shamt)>;
 let Predicates = [IsRV64] in {
-<<<<<<< HEAD
 def : InstAlias<"lwu \t$rd, (${rs1})",
                 (LWU  GPR:$rd, GPR:$rs1, 0)>;
 def : InstAlias<"ld \t$rd, (${rs1})",
@@ -1304,8 +1300,6 @@ def : InstAlias<"ld \t$rd, (${rs1})",
 def : InstAlias<"sd \t$rs2, (${rs1})",
                 (SD  GPR:$rs2, GPR:$rs1, 0)>;
 
-=======
->>>>>>> origin/main
 def : InstAlias<"addw $rd, $rs1, $imm12",
                 (ADDIW  GPR:$rd, GPR:$rs1, simm12_lo:$imm12)>;
 def : InstAlias<"sllw $rd, $rs1, $shamt",

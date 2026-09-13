@@ -592,6 +592,8 @@ std::string Triple::computeDataLayout(StringRef ABIName) const {
     return "e-m:e-p:32:32:32-a:0-n16:32-"
            "i64:64:64-i32:32:32-i16:16:16-i1:8:8-f32:32:32-f64:64:64-"
            "v32:32:32-v64:64:64-v512:512:512-v1024:1024:1024-v2048:2048:2048";
+  case Triple::ikrrisc2:
+    return "E-p:32:32-i64:64:64-i32:32:32-i16:16:16-i8:8:8-n32";
   case Triple::loongarch32:
   case Triple::loongarch64:
     return computeLoongArchDataLayout(*this);
@@ -648,6 +650,8 @@ std::string Triple::computeDataLayout(StringRef ABIName) const {
   case Triple::nvptx:
   case Triple::nvptx64:
     return computeNVPTXDataLayout(*this, ABIName);
+  case Triple::orisc:
+    return "E-p:32:32-i64:64:64-i32:32:32-i16:16:16-i8:8:8-n32";
   case Triple::spir:
   case Triple::spir64:
   case Triple::spirv:

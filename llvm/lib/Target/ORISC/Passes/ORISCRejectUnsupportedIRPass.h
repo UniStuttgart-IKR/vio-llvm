@@ -8,7 +8,7 @@
 
 namespace llvm {
 
-class RejectUnsupportedIRPass : public PassInfoMixin<RejectUnsupportedIRPass>  {
+class RejectUnsupportedIRPass : public detail::PassInfoMixin<RejectUnsupportedIRPass>  {
 public:
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
     static bool isRequired() { return true; }

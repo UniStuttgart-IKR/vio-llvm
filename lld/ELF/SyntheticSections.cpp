@@ -2132,9 +2132,6 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *buf) {
   for (SymbolTableEntry &ent : symbols) {
     Symbol *sym = ent.sym;
 
-
-    bool isDefinedHere = type == SHT_SYMTAB || sym->partition == partition;
-
     // Set st_name, st_info and st_other.
     eSym->st_name = ent.strTabOffset;
     eSym->setBindingAndType(sym->binding, sym->type);

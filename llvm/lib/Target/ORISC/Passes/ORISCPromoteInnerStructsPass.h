@@ -11,7 +11,7 @@
 
 namespace llvm {
 
-class PromoteInnerStructsPass : public PassInfoMixin<PromoteInnerStructsPass>  {
+class PromoteInnerStructsPass : public detail::PassInfoMixin<PromoteInnerStructsPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }

@@ -933,8 +933,8 @@ void RelocScan::process(RelExpr expr, RelType type, uint64_t offset,
 
   // local symbols which are used with %got_off need to included in .dynsym in order for the linker to fill them in at load time
  if(sym.getInOtherObject()){
-    if(sym.isExported == 0)
-      ctx.mainPart->dynSymTab->addSymbol(&sym);
+    //if(sym.isExported == 0)
+      //ctx.symtab->addSymbol(sym);//FIXME: IS THIS CORRECT?!
   }
 
   const bool isIfunc = sym.isGnuIFunc();

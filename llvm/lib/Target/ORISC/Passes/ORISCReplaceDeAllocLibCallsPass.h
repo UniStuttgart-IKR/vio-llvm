@@ -9,7 +9,7 @@
 
 namespace llvm {
 
-class ReplaceDeAllocLibCallsPass : public PassInfoMixin<ReplaceDeAllocLibCallsPass>  {
+class ReplaceDeAllocLibCallsPass : public detail::PassInfoMixin<ReplaceDeAllocLibCallsPass>  {
 public:
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
     static bool isRequired() { return true; }

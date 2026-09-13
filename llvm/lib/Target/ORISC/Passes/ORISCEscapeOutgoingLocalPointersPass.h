@@ -10,7 +10,7 @@
 
 namespace llvm {
 
-class EscapeOutgoingLocalPointersPass : public PassInfoMixin<EscapeOutgoingLocalPointersPass>  {
+class EscapeOutgoingLocalPointersPass : public detail::PassInfoMixin<EscapeOutgoingLocalPointersPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }

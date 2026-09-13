@@ -1133,13 +1133,11 @@ static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
   case RISCVII::MO_TLSDESC_CALL:
     Kind = ELF::R_RISCV_TLSDESC_CALL;
     break;
-<<<<<<< HEAD
-  case RISCVII::MO_GOT_OFF:
-    Kind = ELF::R_RISCV_GOT_OFF;
-=======
   case RISCVII::MO_QC_ACCESS:
     Kind = RISCV::S_QC_ACCESS;
->>>>>>> origin/main
+    break;
+  case RISCVII::MO_GOT_OFF:
+    Kind = ELF::R_RISCV_GOT_OFF;
     break;
   }
 

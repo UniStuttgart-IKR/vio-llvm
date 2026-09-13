@@ -282,18 +282,11 @@ static void demoteSymbolsAndComputeIsPreemptible(Ctx &ctx) {
           sym->versionId = VER_NDX_GLOBAL;
         }
       }
-
-<<<<<<< HEAD
-    sym->isExported = sym->getInOtherObject();
-    sym->isPreemptible = (sym->isUndefined() || sym->isExported) &&
-                         computeIsPreemptible(ctx, *sym);
-  }
-=======
+      sym->isExported = sym->getInOtherObject();
       sym->isPreemptible = (sym->isUndefined() || sym->isExported) &&
-                           computeIsPreemptible(ctx, *sym);
+                          computeIsPreemptible(ctx, *sym);
     }
   });
->>>>>>> origin/main
 }
 
 static OutputSection *findSection(Ctx &ctx, StringRef name) {

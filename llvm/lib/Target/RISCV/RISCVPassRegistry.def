@@ -16,6 +16,7 @@
 #ifndef MODULE_PASS
 #define MODULE_PASS(NAME, CREATE_PASS)
 #endif
+MODULE_PASS("riscv-zhm-escape-alloca", RISCVZhmEscapeAlloca())
 MODULE_PASS("riscv-asm-printer-begin", RISCVAsmPrinterBeginPass())
 MODULE_PASS("riscv-asm-printer-end", RISCVAsmPrinterEndPass())
 #undef MODULE_PASS

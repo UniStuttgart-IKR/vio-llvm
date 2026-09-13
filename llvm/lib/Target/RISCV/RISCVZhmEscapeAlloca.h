@@ -1,5 +1,5 @@
-#ifndef LLVM_LIB_TARGET_ORISC_ORISCESCAPEALLOCAPASS_H
-#define LLVM_LIB_TARGET_ORISC_ORISCESCAPEALLOCAPASS_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVZHMESCAPEALLOCA_H
+#define LLVM_LIB_TARGET_RISCV_RISCVZHMESCAPEALLOCA_H
 
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -14,7 +14,7 @@
 
 namespace llvm {
 
-class EscapeAllocaPass : public detail::PassInfoMixin<EscapeAllocaPass>  {
+class RISCVZhmEscapeAlloca : public RequiredPassInfoMixin<RISCVZhmEscapeAlloca>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
@@ -36,48 +36,24 @@ private:
     bool visitReturnInst(ReturnInst *I);
     bool checkArgument(Value *Arg);
 
-    friend PassInfoMixin<EscapeAllocaPass>;
+    friend PassInfoMixin<RISCVZhmEscapeAlloca>;
 
     struct ObjectSize {
-        Value *Pi;
-        uint64_t PiConst;
         Value *Dt;
         uint64_t DtConst;
         AllocaInst *AI;
 
         ObjectSize(AllocaInst *AI, 
-                    Value *Pi = nullptr, 
-                    uint64_t PiConst = 0, 
                     Value *Dt = nullptr, 
                     uint64_t DtConst = 0){
             this->AI = AI;
-            this->Pi = Pi;
-            this->PiConst = PiConst;
             this->Dt = Dt;
             this->DtConst = DtConst;
         };
 
         ObjectSize operator + (const ObjectSize &Other) const {
-            Value *NewPi = nullptr;
-            uint64_t NewPiConst = 0;
             Value *NewDt = nullptr;
             uint64_t NewDtConst = 0;
-
-            if (!Pi && !Other.Pi) {
-                NewPiConst = PiConst + Other.PiConst;
-            } else if (!Other.Pi) {
-                Value *OtherPiAsValue = ConstantInt::get(
-                    Type::getInt32Ty(AI->getContext()),
-                    Other.PiConst);
-                IRBuilder<> Builder(AI);
-                NewPi = Builder.CreateAdd(Pi, OtherPiAsValue);
-            } else { //!Pi
-                Value *ThisPiAsValue = ConstantInt::get(
-                    Type::getInt32Ty(AI->getContext()),
-                    PiConst);
-                IRBuilder<> Builder(AI);
-                NewPi = Builder.CreateAdd(ThisPiAsValue, Other.Pi);
-            }
 
             if (!Dt && !Other.Dt) {
                 NewDtConst = DtConst + Other.DtConst;
@@ -95,25 +71,14 @@ private:
                 NewDt = Builder.CreateAdd(ThisDtAsValue, Other.Dt);
             }
 
-            return {AI, NewPi, NewPiConst, NewDt, NewDtConst};
+            return {AI, NewDt, NewDtConst};
         }
 
         //FIXME: We assume only constant array multipliers are allowed (is this true?)
         ObjectSize operator * (const uint64_t NumElements) const {
-            Value *NewPi = nullptr;
-            uint64_t NewPiConst = 0;
             Value *NewDt = nullptr;
             uint64_t NewDtConst = 0;
 
-            if (!Pi) {
-                NewPiConst = PiConst * NumElements;
-            } else {
-                Value *NumElsAsValue = ConstantInt::get(
-                    Type::getInt32Ty(AI->getContext()),
-                    NumElements);
-                IRBuilder<> Builder(AI);
-                NewPi = Builder.CreateMul(Pi, NumElsAsValue);
-            }
             if (!Dt) {
                 NewDtConst = DtConst * NumElements;
             } else {
@@ -124,29 +89,13 @@ private:
                 NewDt = Builder.CreateMul(Dt, NumElsAsValue);
             }
 
-            return {AI, NewPi, NewPiConst, NewDt, NewDtConst};
+            return {AI, NewDt, NewDtConst};
         }
         
         ObjectSize operator * (Value *NumElementsValue) const {
-            Value *NewPi = nullptr;
-            uint64_t NewPiConst = 0;
             Value *NewDt = nullptr;
             uint64_t NewDtConst = 0;
 
-            if (!Pi) {
-                if (PiConst == 1) {
-                    NewPi = NumElementsValue;
-                } else if (PiConst != 0) {
-                    IRBuilder<> Builder(AI);
-                    Value *PiConstAsValue = ConstantInt::get(
-                        Type::getInt32Ty(AI->getContext()),
-                        PiConst);
-                    NewPi = Builder.CreateMul(PiConstAsValue, NumElementsValue);
-                }
-            } else {
-                IRBuilder<> Builder(AI);
-                NewPi = Builder.CreateMul(Pi, NumElementsValue);
-            }
             if (!Dt) {
                 if (DtConst == 1) {
                     NewDt = NumElementsValue;
@@ -162,13 +111,11 @@ private:
                 NewDt = Builder.CreateMul(Dt, NumElementsValue);
             }
 
-            return {AI, NewPi, NewPiConst, NewDt, NewDtConst};
+            return {AI, NewDt, NewDtConst};
         }
     };
-
-    void addTypeSizeToObjectSize(Type *AllocatedType, ObjectSize *OS);
 };
 
 } // namespace llvm
 
-#endif // LLVM_LIB_TARGET_ORISC_ORISCESCAPEALLOCAPASS_H
+#endif // LLVM_LIB_TARGET_RISCV_RISCVZHMESCAPEALLOCA_H

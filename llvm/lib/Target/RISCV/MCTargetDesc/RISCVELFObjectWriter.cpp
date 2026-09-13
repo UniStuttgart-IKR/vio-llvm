@@ -142,8 +142,15 @@ unsigned RISCVELFObjectWriter::getRelocType(const MCFixup &Fixup,
     return ELF::R_RISCV_QC_E_32;
   case RISCV::fixup_riscv_qc_abs20_u:
     return ELF::R_RISCV_QC_ABS20_U;
+<<<<<<< HEAD
   case RISCV::fixup_riscv_got_off:
     return ELF::R_RISCV_GOT_OFF;
+=======
+  case RISCV::fixup_qc_access_16:
+    return ELF::R_RISCV_QC_ACCESS_16;
+  case RISCV::fixup_qc_access_32:
+    return ELF::R_RISCV_QC_ACCESS_32;
+>>>>>>> origin/main
   }
 }
 

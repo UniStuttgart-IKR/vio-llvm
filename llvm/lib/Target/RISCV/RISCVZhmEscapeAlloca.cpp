@@ -37,9 +37,22 @@ PreservedAnalyses RISCVZhmEscapeAlloca::run(Module &M, ModuleAnalysisManager &AM
     LLVMContext &Ctx = M.getContext();
     
     Type *PtrTy = PointerType::get(Ctx, 0);
-    Type *IntTy = Type::getInt32Ty(Ctx);
+    
+    Type *IntTy;
+    if (M.getTargetTriple().isArch64Bit()) {
+        IntTy = Type::getInt64Ty(Ctx);
+    } else if (M.getTargetTriple().isArch32Bit()) {
+        IntTy = Type::getInt32Ty(Ctx);
+    } else {
+        IntTy = Type::getInt128Ty(Ctx);
+    }
     FunctionType *AllocateFnTy = FunctionType::get(PtrTy, {IntTy}, false);
-    AllocateFn = M.getOrInsertFunction("llvm.riscv.alci", AllocateFnTy);
+    AlciFn = M.getOrInsertFunction("llvm.riscv.alci", AllocateFnTy);
+    AlcidFn = M.getOrInsertFunction("llvm.riscv.alci.d", AllocateFnTy);
+    StringRef AlcrName = M.getTargetTriple().isArch32Bit() ? "llvm.riscv.alc.32" : "llvm.riscv.alc.64";
+    AlcrFn = M.getOrInsertFunction(AlcrName, AllocateFnTy);
+    StringRef AlcrdName = M.getTargetTriple().isArch32Bit() ? "llvm.riscv.alc.32" : "llvm.riscv.alc.64";
+    AlcrdFn = M.getOrInsertFunction(AlcrdName, AllocateFnTy);
 
     Zero = ConstantInt::get(Type::getInt32Ty(Ctx), 0);
     One =  ConstantInt::get(Type::getInt32Ty(Ctx), 1);
@@ -51,11 +64,13 @@ PreservedAnalyses RISCVZhmEscapeAlloca::run(Module &M, ModuleAnalysisManager &AM
     for (Function &F : M)
         for (BasicBlock &BB : F)
             for (Instruction &I : BB)
-                if (auto *CI = dyn_cast<CallInst>(&I))
+                if (AllocaInst *AI = dyn_cast<AllocaInst>(&I))
+                    Changed |= visitAllocaInst(AI);
+                else if (CallInst *CI = dyn_cast<CallInst>(&I))
                     Changed |= visitCallInst(CI);
-                else if (auto *SI = dyn_cast<StoreInst>(&I))
+                else if (StoreInst *SI = dyn_cast<StoreInst>(&I))
                     Changed |= visitStoreInst(SI);
-                else if (auto *RI = dyn_cast<ReturnInst>(&I))
+                else if (ReturnInst *RI = dyn_cast<ReturnInst>(&I))
                     Changed |= visitReturnInst(RI);
 
     for (Instruction *I : RemoveFromParentList) {
@@ -63,6 +78,33 @@ PreservedAnalyses RISCVZhmEscapeAlloca::run(Module &M, ModuleAnalysisManager &AM
         Changed = true;
     }
     return Changed ? PreservedAnalyses::all() : PreservedAnalyses::none();
+}
+
+static bool isDataOnly(Type *Ty) {
+    if (Ty->isStructTy()) {
+        StructType *STy = cast<StructType>(Ty);
+        for (const auto *ElTy = STy->element_begin(); ElTy != STy->element_end(); ++ElTy) {
+            if (!isDataOnly(*ElTy))
+                return false;
+        }
+    } else if (Ty->isArrayTy()) {
+        ArrayType *ATy = cast<ArrayType>(Ty);
+        return isDataOnly(ATy->getArrayElementType());
+    } else {
+        return !Ty->isPointerTy();
+    }
+    return true; //unreachable?
+}
+
+//Check if Alloca allocates a VLA
+bool RISCVZhmEscapeAlloca::visitAllocaInst(AllocaInst *AI){
+    std::optional<TypeSize> Size = AI->getAllocationSize(*DL);
+    if (Size.has_value())
+        return false;
+    
+    FunctionCallee Callee = isDataOnly(AI->getAllocatedType()) ? AlciFn : AlcrFn;
+    replaceAlloca(Callee, AI->getArraySize(), AI);
+    return true;
 }
 
 bool RISCVZhmEscapeAlloca::visitCallInst(CallInst *I){
@@ -115,23 +157,29 @@ bool RISCVZhmEscapeAlloca::checkArgument(Value *Arg){
     AllocaInst *AI = dyn_cast<AllocaInst>(Arg);
     assert(AI && "Argument not created by Load, IncomingArg or Alloca?!");
 
-    //Get Size as "Value"
+    //Get Size as Value and determine Callee
     Value *Size;
+    FunctionCallee Callee;
     std::optional<TypeSize> ConstSize = AI->getAllocationSize(*DL);
     if (ConstSize.has_value()) {
         Size = ConstantInt::get(
                 Type::getInt32Ty(AI->getContext()),
                 ConstSize.value());
+        Callee = isDataOnly(AI->getAllocatedType()) ? AlcidFn : AlciFn;
     } else {
         Size = AI->getArraySize();
+        Callee = isDataOnly(AI->getAllocatedType()) ? AlcrdFn : AlcrFn;
     }
 
     //Replace Alloca by Intrinsic Call
+    replaceAlloca(Callee, Size, AI);
+    return true;
+}
+
+void RISCVZhmEscapeAlloca::replaceAlloca(FunctionCallee Callee, Value *Size, AllocaInst *AI){
     IRBuilder<> Builder(AI);
-    CallInst *CI = Builder.CreateCall(AllocateFn, { Size });
+    CallInst *CI = Builder.CreateCall(Callee, { Size });
     CI->takeName(AI);
     AI->replaceAllUsesWith(CI);
     RemoveFromParentList.push_back(AI);
-
-    return true;
 }

@@ -20,7 +20,10 @@ public:
     static bool isRequired() { return true; }
     
 private:
-    FunctionCallee AllocateFn;
+    FunctionCallee AlciFn;
+    FunctionCallee AlcrFn;
+    FunctionCallee AlcidFn;
+    FunctionCallee AlcrdFn;
     Value *Zero, *One;
     const DataLayout *DL;
     std::vector<StructType *> StructTys;
@@ -31,10 +34,12 @@ private:
 
     SmallVector<Instruction *> RemoveFromParentList = SmallVector<Instruction *>();
 
+    bool visitAllocaInst(AllocaInst *I);
     bool visitCallInst(CallInst *I);
     bool visitStoreInst(StoreInst *I);
     bool visitReturnInst(ReturnInst *I);
     bool checkArgument(Value *Arg);
+    void replaceAlloca(FunctionCallee Callee, Value *Size, AllocaInst *AI);
 
     friend PassInfoMixin<RISCVZhmEscapeAlloca>;
 

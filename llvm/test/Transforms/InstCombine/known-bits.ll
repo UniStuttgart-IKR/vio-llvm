@@ -1539,7 +1539,9 @@ define i16 @test_inf_only_bfloat(bfloat nofpclass(nan sub norm zero) %x) {
 
 define i128 @test_inf_only_ppc_fp128(ppc_fp128 nofpclass(nan sub norm zero) %x) {
 ; CHECK-LABEL: @test_inf_only_ppc_fp128(
-; CHECK-NEXT:    ret i128 9218868437227405312
+; CHECK-NEXT:    [[TMP1:%.*]] = call ppc_fp128 @llvm.fabs.ppcf128(ppc_fp128 [[X:%.*]])
+; CHECK-NEXT:    [[AND:%.*]] = bitcast ppc_fp128 [[TMP1]] to i128
+; CHECK-NEXT:    ret i128 [[AND]]
 ;
   %y = bitcast ppc_fp128 %x to i128
   %and = and i128 %y, 170141183460469231731687303715884105727
@@ -1607,7 +1609,7 @@ define i32 @test_ninf_only(double %x) {
 ; CHECK:       if.else:
 ; CHECK-NEXT:    ret i32 0
 ;
-  %cmp = fcmp oeq double %x, 0xFFF0000000000000
+  %cmp = fcmp oeq double %x, -inf
   br i1 %cmp, label %if.then, label %if.else
 
 if.then:
@@ -1711,7 +1713,7 @@ define i1 @test_simplify_icmp2(double %x) {
 ; CHECK-NEXT:    ret i1 false
 ;
   %abs = tail call double @llvm.fabs.f64(double %x)
-  %cond = fcmp oeq double %abs, 0x7FF0000000000000
+  %cond = fcmp oeq double %abs, +inf
   br i1 %cond, label %if.then, label %if.else
 
 if.then:
@@ -2445,3 +2447,49 @@ define <vscale x 4 x i32> @scalable_add_to_disjoint_or(i8 %x, <vscale x 4 x i32>
 declare void @dummy()
 declare void @use(i1)
 declare void @sink(i8)
+
+define i1 @udiv_by_even_divisor_ult_128(i8 %x, i8 %y) {
+; CHECK-LABEL: @udiv_by_even_divisor_ult_128(
+; CHECK-NEXT:    ret i1 true
+;
+  %d = and i8 %y, -2
+  %q = udiv i8 %x, %d
+  %r = icmp ult i8 %q, 128
+  ret i1 %r
+}
+
+define i1 @udiv_high_known_ones_ugt_63(i8 %x, i8 %y) {
+; CHECK-LABEL: @udiv_high_known_ones_ugt_63(
+; CHECK-NEXT:    ret i1 true
+;
+  %n = or i8 %x, -64
+  %d0 = and i8 %y, 1
+  %d = or i8 %d0, 2
+  %q = udiv i8 %n, %d
+  %r = icmp ugt i8 %q, 63
+  ret i1 %r
+}
+
+define i1 @urem_smaller_lhs_bit_identity(i8 %x, i8 %y) {
+; CHECK-LABEL: @urem_smaller_lhs_bit_identity(
+; CHECK-NEXT:    ret i1 true
+;
+  %l = and i8 %x, 5
+  %d = or i8 %y, 8
+  %r = urem i8 %l, %d
+  %t = and i8 %r, 2
+  %c = icmp eq i8 %t, 0
+  ret i1 %c
+}
+
+define i1 @urem_smaller_lhs_known_ones_ugt_3(i8 %x, i8 %y) {
+; CHECK-LABEL: @urem_smaller_lhs_known_ones_ugt_3(
+; CHECK-NEXT:    ret i1 true
+;
+  %l0 = and i8 %x, 1
+  %l = or i8 %l0, 4
+  %d = or i8 %y, 8
+  %r = urem i8 %l, %d
+  %c = icmp ugt i8 %r, 3
+  ret i1 %c
+}

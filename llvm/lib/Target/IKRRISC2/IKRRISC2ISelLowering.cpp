@@ -441,6 +441,7 @@ lowerSetCC(SDValue Op, SelectionDAG &DAG) const {
 // Calling conventions
 //===----------------------------------------------------------------------===//
 
+#define GET_CALLING_CONV_IMPL
 #include "IKRRISC2GenCallingConv.inc"
 
 SDValue IKRRISC2TargetLowering::LowerFormalArguments(

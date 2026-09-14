@@ -11,7 +11,7 @@
 
 namespace llvm {
 
-class PromoteInnerStructsPass : public PassInfoMixin<PromoteInnerStructsPass>  {
+class PromoteInnerStructsPass : public RequiredPassInfoMixin<PromoteInnerStructsPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
@@ -35,7 +35,7 @@ private:
     void insertArrayAlloca(AllocaInst *AI, StructType *Outer, unsigned int IndexInOuter,
                            ArrayType *Array, unsigned int IndexInArray);
 
-    friend PassInfoMixin<PromoteInnerStructsPass>;
+    friend RequiredPassInfoMixin<PromoteInnerStructsPass>;
 };
 
 } // namespace llvm

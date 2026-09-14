@@ -16,15 +16,6 @@ add_public_tablegen_target(ORISCCommonTableGen)
 add_llvm_target(ORISCCodeGen
   ORISCAsmPrinter.cpp
   ORISCFrameLowering.cpp
-  Passes/ORISCPromoteInnerStructsPass.cpp
-  Passes/ORISCEscapeOutgoingLocalPointersPass.cpp
-  Passes/ORISCSplitMixedStructsPass.cpp
-  Passes/ORISCReplaceDeAllocLibCallsPass.cpp
-  Passes/ORISCReplaceNullPointersPass.cpp
-  Passes/ORISCRejectUnsupportedIRPass.cpp
-  Passes/ORISCEscapeAllocaPass.cpp
-  Passes/ORISCBoxUnboxPointersPass.cpp
-  Passes/ORISCShrinkPointerIndicesPass.cpp
   ORISCCallingConv.cpp
   ORISCISelDAGToDAG.cpp
   ORISCISelLowering.cpp
@@ -43,6 +34,7 @@ add_llvm_target(ORISCCodeGen
   SelectionDAG
   ORISCDesc
   ORISCInfo
+  ORISCPasses
   Passes
   Support
   Target
@@ -55,3 +47,4 @@ add_llvm_target(ORISCCodeGen
 add_subdirectory(Disassembler)
 add_subdirectory(TargetInfo)
 add_subdirectory(MCTargetDesc)
+add_subdirectory(Passes)

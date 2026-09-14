@@ -9,14 +9,14 @@
 
 namespace llvm {
 
-class ReplaceNullPointersPass : public PassInfoMixin<ReplaceNullPointersPass>  {
+class ReplaceNullPointersPass : public RequiredPassInfoMixin<ReplaceNullPointersPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
     
 private:
 
-    friend PassInfoMixin<ReplaceNullPointersPass>;
+    friend RequiredPassInfoMixin<ReplaceNullPointersPass>;
 };
 
 } // namespace llvm

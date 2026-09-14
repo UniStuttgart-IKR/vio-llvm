@@ -117,11 +117,6 @@ def  external_symbol : Operand<iPTR> {
   let ParserMatchClass = ExternalSymbol;
 }
 
-def to_tframeindex : SDNodeXForm<frameindex, [{
-  return CurDAG->getTargetFrameIndex(N->getIndex(), N->getValueType(0));
-}]>;
-
-
 def GetWordsIndex : SDNodeXForm<imm, [{
 	return CurDAG->getTargetConstant((N->getZExtValue() / 4), SDLoc(N),
                                     N->getValueType(0));

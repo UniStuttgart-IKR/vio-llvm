@@ -28,6 +28,7 @@ class Loop;
 class PredicatedScalarEvolution;
 class ScalarEvolution;
 class SCEV;
+class SCEVPredicate;
 class StoreInst;
 
 /// These are the kinds of recurrences that we support.
@@ -405,9 +406,13 @@ public:
   /// analysis, it can be passed through \p Expr. If the def-use chain
   /// associated with the phi includes casts (that we know we can ignore
   /// under proper runtime checks), they are passed through \p CastsToIgnore.
+  /// SCEV predicates checking potential overflow for \p Phi to be an induction,
+  /// if any, are passed via \p NoWrapPreds and recorded.
   LLVM_ABI static bool
   isInductionPHI(PHINode *Phi, const Loop *L, ScalarEvolution *SE,
-                 InductionDescriptor &D, const SCEV *Expr = nullptr,
+                 InductionDescriptor &D,
+                 ArrayRef<const SCEVPredicate *> NoWrapPreds = {},
+                 const SCEV *Expr = nullptr,
                  SmallVectorImpl<Instruction *> *CastsToIgnore = nullptr);
 
   /// Returns true if \p Phi is a floating point induction in the loop \p L.
@@ -449,12 +454,18 @@ public:
   /// SCEV overflow check.
   ArrayRef<Instruction *> getCastInsts() const { return RedundantCasts; }
 
+  /// Returns the SCEV predicates associated with this induction.
+  ArrayRef<const SCEVPredicate *> getNoWrapPredicates() const {
+    return NoWrapPredicates;
+  }
+
 private:
   /// Private constructor - used by \c isInductionPHI and
   /// \c getCanonicalIntInduction.
   InductionDescriptor(Value *Start, InductionKind K, const SCEV *Step,
                       BinaryOperator *InductionBinOp = nullptr,
-                      SmallVectorImpl<Instruction *> *Casts = nullptr);
+                      SmallVectorImpl<Instruction *> *Casts = nullptr,
+                      ArrayRef<const SCEVPredicate *> NoWrapPreds = {});
 
   /// Start value.
   TrackingVH<Value> StartValue;
@@ -467,6 +478,70 @@ private:
   // Instructions used for type-casts of the induction variable,
   // that are redundant when guarded with a runtime SCEV overflow check.
   SmallVector<Instruction *, 2> RedundantCasts;
+  // SCEV predicates checking overflow needed for this induction.
+  SmallVector<const SCEVPredicate *, 2> NoWrapPredicates;
+};
+
+/// A struct for saving information about monotonic variables.
+/// Monotonic variable can be considered as a "conditional" induction variable:
+/// its update happens only on loop iterations for which a certain predicate is
+/// satisfied. The step of the monotonic variable must be loop-invariant.
+class MonotonicDescriptor {
+public:
+  MonotonicDescriptor() = default;
+
+  /// Returns true if \p PN is a monotonic variable in the loop \p L. If \p PN
+  /// is monotonic, the monotonic descriptor \p D will contain the data
+  /// describing the PHI.
+  LLVM_ABI static bool isMonotonicPHI(PHINode *PN, const Loop *L,
+                                      MonotonicDescriptor &Desc,
+                                      ScalarEvolution &SE);
+
+  /// Returns the header PHI described by this descriptor.
+  PHINode *getHeaderPHI() const { return HeaderPHI; }
+
+  /// Returns the backedge PHI that selects between StepInst and the HeaderPHI.
+  PHINode *getBackedgePHI() const { return BackedgePHI; }
+
+  /// Returns the instruction that updates the value of the monotonic PHI.
+  Instruction *getStepInst() const { return StepInst; }
+
+  /// Returns a SCEV expression for the initial value of the monotonic PHI.
+  const SCEV *getStartSCEV() const { return StartSCEV; }
+
+  /// Returns a SCEV expression for the step of the monotonic PHI. This is
+  /// the value the monotonic PHI increments by on loop iterations where the
+  /// predicate is satisfied.
+  const SCEV *getStepSCEV() const { return StepSCEV; }
+
+  /// Returns the SCEV no-wrap flags that apply to StepInst.
+  unsigned getSCEVNoWrapFlags() const { return SCEVNoWrapFlags; }
+
+private:
+  MonotonicDescriptor(PHINode *HeaderPHI, PHINode *BackedgePHI,
+                      Instruction *StepInst, const SCEV *StartSCEV,
+                      const SCEV *StepSCEV, unsigned SCEVNoWrapFlags)
+      : HeaderPHI(HeaderPHI), BackedgePHI(BackedgePHI), StepInst(StepInst),
+        StartSCEV(StartSCEV), StepSCEV(StepSCEV),
+        SCEVNoWrapFlags(SCEVNoWrapFlags) {}
+
+  /// The header PHI (this is the PHI described by the descriptor).
+  PHINode *HeaderPHI = nullptr;
+
+  /// The backedge PHI that selects between StepInst and the HeaderPHI.
+  PHINode *BackedgePHI = nullptr;
+
+  /// The instruction that updates the value of the monotonic PHI.
+  Instruction *StepInst = nullptr;
+
+  /// SCEV expression representing the start value for the monotonic PHI.
+  const SCEV *StartSCEV = nullptr;
+
+  /// SCEV expression representing the step value for the monotonic PHI.
+  const SCEV *StepSCEV = nullptr;
+
+  /// The SCEV no-wrap flags that apply to StepInst.
+  unsigned SCEVNoWrapFlags = 0;
 };
 
 } // end namespace llvm

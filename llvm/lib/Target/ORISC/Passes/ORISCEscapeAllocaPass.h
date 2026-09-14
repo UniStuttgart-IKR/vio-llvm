@@ -14,7 +14,7 @@
 
 namespace llvm {
 
-class EscapeAllocaPass : public PassInfoMixin<EscapeAllocaPass>  {
+class EscapeAllocaPass : public RequiredPassInfoMixin<EscapeAllocaPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
@@ -36,7 +36,7 @@ private:
     bool visitReturnInst(ReturnInst *I);
     bool checkArgument(Value *Arg);
 
-    friend PassInfoMixin<EscapeAllocaPass>;
+    friend RequiredPassInfoMixin<EscapeAllocaPass>;
 
     struct ObjectSize {
         Value *Pi;
@@ -86,13 +86,13 @@ private:
                     Type::getInt32Ty(AI->getContext()),
                     Other.DtConst);
                 IRBuilder<> Builder(AI);
-                NewPi = Builder.CreateAdd(Dt, OtherDtAsValue);
+                NewDt = Builder.CreateAdd(Dt, OtherDtAsValue);
             } else { //!Dt
                 Value *ThisDtAsValue = ConstantInt::get(
                     Type::getInt32Ty(AI->getContext()),
                     DtConst);
                 IRBuilder<> Builder(AI);
-                NewDt = Builder.CreateAdd(ThisDtAsValue, Other.Pi);
+                NewDt = Builder.CreateAdd(ThisDtAsValue, Other.Dt);
             }
 
             return {AI, NewPi, NewPiConst, NewDt, NewDtConst};

@@ -10,7 +10,7 @@
 
 namespace llvm {
 
-class SplitMixedStructsPass : public PassInfoMixin<SplitMixedStructsPass>  {
+class SplitMixedStructsPass : public RequiredPassInfoMixin<SplitMixedStructsPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
@@ -26,7 +26,7 @@ private:
     bool visitUsers(Value *User);
     bool visitGEPInst(GetElementPtrInst *GEP);
 
-    friend PassInfoMixin<SplitMixedStructsPass>;
+    friend RequiredPassInfoMixin<SplitMixedStructsPass>;
 };
 
 } // namespace llvm

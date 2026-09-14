@@ -9,7 +9,7 @@
 
 namespace llvm {
 
-class ReplaceDeAllocLibCallsPass : public PassInfoMixin<ReplaceDeAllocLibCallsPass>  {
+class ReplaceDeAllocLibCallsPass : public RequiredPassInfoMixin<ReplaceDeAllocLibCallsPass>  {
 public:
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
     static bool isRequired() { return true; }
@@ -25,7 +25,7 @@ private:
     bool isNew(LibFunc LF);
     bool isDelete(LibFunc LF);
 
-    friend PassInfoMixin<ReplaceDeAllocLibCallsPass>;
+    friend RequiredPassInfoMixin<ReplaceDeAllocLibCallsPass>;
 };
 
 } // namespace llvm

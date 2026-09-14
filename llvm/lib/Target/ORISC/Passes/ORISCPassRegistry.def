@@ -22,6 +22,7 @@ MODULE_PASS("orisc-escape-outgoing-local-pointers", EscapeOutgoingLocalPointersP
 MODULE_PASS("orisc-escape-allocas", EscapeAllocaPass())
 MODULE_PASS("orisc-box-unbox-pointers", BoxUnboxPointersPass())
 MODULE_PASS("orisc-replace-null-pointers", ReplaceNullPointersPass())
+MODULE_PASS("orisc-switch-to-indirectbr", SwitchToIndirectbrPass())
 #undef MODULE_PASS
 
 #ifndef FUNCTION_PASS

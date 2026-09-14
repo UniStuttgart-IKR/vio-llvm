@@ -8,6 +8,7 @@ add_llvm_component_library(LLVMORISCPasses
   ORISCEscapeAllocaPass.cpp
   ORISCBoxUnboxPointersPass.cpp
   ORISCShrinkPointerIndicesPass.cpp
+  ORISCSwitchToIndirectbrPass.cpp
 
   LINK_COMPONENTS
   Analysis

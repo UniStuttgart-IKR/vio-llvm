@@ -38,6 +38,7 @@ public:
   // Pass Pipeline Configuration
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
   void registerPassBuilderCallbacks(PassBuilder &PB) override;
+  bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override;
   
   TargetLoweringObjectFile *getObjFileLowering() const override {
     return TLOF.get();

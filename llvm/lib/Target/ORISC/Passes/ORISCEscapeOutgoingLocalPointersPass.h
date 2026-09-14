@@ -10,7 +10,7 @@
 
 namespace llvm {
 
-class EscapeOutgoingLocalPointersPass : public detail::PassInfoMixin<EscapeOutgoingLocalPointersPass>  {
+class EscapeOutgoingLocalPointersPass : public RequiredPassInfoMixin<EscapeOutgoingLocalPointersPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
@@ -22,7 +22,7 @@ private:
     bool visitReturnInst(ReturnInst *I);
     bool makeAllStoresVolatile(Value *V);
     
-    friend PassInfoMixin<EscapeOutgoingLocalPointersPass>;
+    friend RequiredPassInfoMixin<EscapeOutgoingLocalPointersPass>;
 };
 
 } // namespace llvm

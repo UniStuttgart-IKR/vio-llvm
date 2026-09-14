@@ -8,7 +8,7 @@
 
 namespace llvm {
 
-class RejectUnsupportedIRPass : public detail::PassInfoMixin<RejectUnsupportedIRPass>  {
+class RejectUnsupportedIRPass : public RequiredPassInfoMixin<RejectUnsupportedIRPass>  {
 public:
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
     static bool isRequired() { return true; }
@@ -19,7 +19,7 @@ private:
     
     void visitPointerConversion(Instruction *I);
     void visitPointerCompare(ICmpInst *I);
-    friend PassInfoMixin<RejectUnsupportedIRPass>;
+    friend RequiredPassInfoMixin<RejectUnsupportedIRPass>;
 };
 
 } // namespace llvm

@@ -14,7 +14,7 @@
 
 namespace llvm {
 
-class EscapeAllocaPass : public detail::PassInfoMixin<EscapeAllocaPass>  {
+class EscapeAllocaPass : public RequiredPassInfoMixin<EscapeAllocaPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
@@ -36,7 +36,7 @@ private:
     bool visitReturnInst(ReturnInst *I);
     bool checkArgument(Value *Arg);
 
-    friend PassInfoMixin<EscapeAllocaPass>;
+    friend RequiredPassInfoMixin<EscapeAllocaPass>;
 
     struct ObjectSize {
         Value *Pi;

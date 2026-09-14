@@ -52,4 +52,5 @@ inline bool CC_ORISC_AssignPointerIndexPair(unsigned &ValNo, MVT &ValVT,
     return true; // handled successfully
 }
 
+#define GET_CALLING_CONV_IMPL
 #include "ORISCGenCallingConv.inc"

@@ -11,7 +11,7 @@
 
 namespace llvm {
 
-class BoxUnboxPointersPass : public detail::PassInfoMixin<BoxUnboxPointersPass>  {
+class BoxUnboxPointersPass : public RequiredPassInfoMixin<BoxUnboxPointersPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
@@ -36,7 +36,7 @@ private:
 
     inline Value *createGep(IRBuilder<> *Builder, Value *Base, Value * CurrentIndex);
 
-    friend PassInfoMixin<BoxUnboxPointersPass>;
+    friend RequiredPassInfoMixin<BoxUnboxPointersPass>;
 };
 
 } // namespace llvm

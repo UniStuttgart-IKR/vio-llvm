@@ -130,6 +130,8 @@ def : Pat<(orisc_load_const tglobaladdr:$symbol), (LP_I (pointer P28), external_
 def : Pat<(orisc_library_call texternalsym:$symbol, PR:$px), (JLIB PR:$px, external_symbol:$symbol)>;
 
 
+def : Pat<(brind (iPTR (load (int_orisc_gep_p PR:$px, DR:$dz)))), (JMP (LW PR:$px, DR:$dz, 1, 0))>;
+
 //				------ STORES ------
 
 //Stores with constant Offset

@@ -63,6 +63,10 @@ public:
     return MVT::pointer;
   }
 
+  //MVT getJumpTableRegTy(const DataLayout &DL) const override {
+  //  return MVT::i32;
+  //}
+
   bool isCtlzFast() const override {
     return true;
   }

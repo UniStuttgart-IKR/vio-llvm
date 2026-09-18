@@ -722,11 +722,14 @@ let mayLoad = 0, mayStore = 1, hasSideEffects = 0 in {
 
 // Branch and Jump Instructions
 let mayLoad = 0, mayStore = 0, hasSideEffects = 0 in {
-	def JMP:		ORISCInstrReg0BpuF<"jmp", 0>;
 	let Defs = [P31] in
 	def JSR:		ORISCInstrReg0BpuF<"jsr", 2>;
 	let Defs = [P31] in
 	def JLIB:		ORISCInstrBpuF<"jlib">;
+}
+
+let isTerminator = 1, isIndirectBranch = 1, mayLoad = 0, mayStore = 0, hasSideEffects = 0 in {
+	def JMP:		ORISCInstrReg0BpuF<"jmp", 0>;
 }
 
 let isReturn = 1, isTerminator = 1, mayLoad = 0, mayStore = 0, hasSideEffects = 0, Uses = [P31] in

@@ -1,5 +1,5 @@
-#ifndef LLVM_LIB_TARGET_ORISC_ORISCREPLACEREPLACENULLPOINTERSPASS_H
-#define LLVM_LIB_TARGET_ORISC_ORISCREPLACEREPLACENULLPOINTERSPASS_H
+#ifndef LLVM_LIB_TARGET_ORISC_ORISCSWITCHTOINDIRECTBRPASS_H
+#define LLVM_LIB_TARGET_ORISC_ORISCSWITCHTOINDIRECTBRPASS_H
 
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/DataLayout.h"
@@ -9,16 +9,16 @@
 
 namespace llvm {
 
-class ReplaceNullPointersPass : public RequiredPassInfoMixin<ReplaceNullPointersPass>  {
+class SwitchToIndirectbrPass : public RequiredPassInfoMixin<SwitchToIndirectbrPass>  {
 public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
     
 private:
 
-    friend RequiredPassInfoMixin<ReplaceNullPointersPass>;
+    friend RequiredPassInfoMixin<SwitchToIndirectbrPass>;
 };
 
 } // namespace llvm
 
-#endif // LLVM_LIB_TARGET_ORISC_ORISCREPLACEREPLACENULLPOINTERSPASS_H
+#endif // LLVM_LIB_TARGET_ORISC_ORISCSWITCHTOINDIRECTBRPASS_H

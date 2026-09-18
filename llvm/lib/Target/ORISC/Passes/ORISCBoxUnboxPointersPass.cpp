@@ -1,13 +1,16 @@
 
 #include "Passes/ORISCBoxUnboxPointersPass.h"
 #include "llvm/ADT/APInt.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/SparseBitVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instruction.h"
@@ -20,8 +23,11 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Transforms/IPO/InstrumentorRuntimeHelper.h"
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <set>
 
 using namespace llvm;
 
@@ -137,15 +143,22 @@ PreservedAnalyses BoxUnboxPointersPass::run(Module &M, ModuleAnalysisManager &AM
         }
     }
 
+    //FIXME: Please make me more efficient, I'm begging you ;-;
     for (int i = RemoveFromParentList.size()-1; i >= 0; --i) {
-        if (RemoveFromParentList[i]->use_empty())
-            RemoveFromParentList[i]->eraseFromParent();
-        else {
-            dbgs() << "\nBoxUnboxPass\n";
-            dbgs() << "\nInstruction marked for removal but still in use!\n";
+        if (RemoveFromParentList[i] && RemoveFromParentList[i]->use_empty()) {
             RemoveFromParentList[i]->dump();
+            for (int j = i-1; j >= 0; --j) {
+
+                //dbgs() << "i ist " << i << "\n";
+                //dbgs() << "j ist " << j << "\n";
+                //dbgs() << "size ist " << RemoveFromParentList.size() << "\n";
+                if (RemoveFromParentList[i] == RemoveFromParentList[j]) {
+                    RemoveFromParentList[j] = nullptr;
+                }
+            }
+            RemoveFromParentList[i]->eraseFromParent();
+            Changed = true;
         }
-        Changed = true;
     }
 
     dbgs() << "FUN\n";
@@ -242,6 +255,10 @@ static inline void addToRemoveIfNoUses(SmallVector<Instruction *> *RL, Instructi
 inline Value *BoxUnboxPointersPass::createGep(IRBuilder<> *Builder, Value *Base, Value * CurrentIndex) {
     Value *N;
     bool IsIndexPtrTy = CurrentIndex->getType()->isPointerTy();
+    if (IsIndexPtrTy && isa<ConstantPointerNull>(CurrentIndex)) {
+        CurrentIndex = ConstantInt::get(IntTy, 0);
+        IsIndexPtrTy = false;
+    }
     StringRef Name = Base->getName();
     if (Name.ends_with(".base"))
         Name = Name.substr(0, Name.size()-5);
@@ -252,6 +269,19 @@ inline Value *BoxUnboxPointersPass::createGep(IRBuilder<> *Builder, Value *Base,
 
     return N;
 } 
+
+static inline bool intrinsicNeedsGEPArgs(unsigned int IntrinsicID) {
+    switch (IntrinsicID) {
+        default:
+            return false;
+        case Intrinsic::memset:
+        case Intrinsic::memset_inline:
+        case Intrinsic::memcpy:
+        case Intrinsic::memcpy_inline:
+        case Intrinsic::memmove:
+            return true;
+    }
+}
 
 bool BoxUnboxPointersPass::handleUser(Value *Base, Value *CurrentIndex, Value *Parent, User *U) {
     bool Changed = false;
@@ -267,6 +297,8 @@ bool BoxUnboxPointersPass::handleUser(Value *Base, Value *CurrentIndex, Value *P
         SmallVector<User *> Users = SmallVector<User *, 32>(G->users());
         for (User *GU : Users)
             Changed |= handleUser(Base, NewG, G, GU);
+    } else if (isa<CallInst>(U) && intrinsicNeedsGEPArgs(cast<CallInst>(U)->getIntrinsicID())) {
+        Changed = handleMemIntrinsics(Parent, cast<CallInst>(U));
     } else if (Instruction *I = dyn_cast<Instruction>(U)) {
         Builder.SetInsertPoint(I);
         Value *N;
@@ -289,4 +321,120 @@ bool BoxUnboxPointersPass::handleUser(Value *Base, Value *CurrentIndex, Value *P
         Changed = I->replaceUsesOfWith(Parent, N);
     }
     return Changed;
+}
+
+static inline bool isUnbox(Value *V) {
+    if (!isa<CallInst>(V))
+        return false;
+    switch (cast<CallInst>(V)->getIntrinsicID()) {
+        default:
+            return false;
+        case Intrinsic::orisc_unbox_base:
+        case Intrinsic::orisc_unbox_index:
+            return true;
+    }
+}
+
+static inline bool isBox(Value *V) {
+    if (!isa<CallInst>(V))
+        return false;
+    switch (cast<CallInst>(V)->getIntrinsicID()) {
+        default:
+            return false;
+        case Intrinsic::orisc_box:
+            return true;
+    }
+}
+
+static inline bool isGep(Value *V) {
+    if (!isa<CallInst>(V))
+        return false;
+    switch (cast<CallInst>(V)->getIntrinsicID()) {
+        default:
+            return false;
+        case Intrinsic::orisc_gep_i:
+        case Intrinsic::orisc_gep_p:
+            return true;
+    }
+}
+
+static inline bool hasSrc(CallInst *Call) {
+    switch (Call->getIntrinsicID()) {
+        default:
+            return false;
+        case Intrinsic::memcpy:
+        case Intrinsic::memcpy_inline:
+        case Intrinsic::memmove:
+            return true;
+    }
+}
+
+bool BoxUnboxPointersPass::handleMemIntrinsics(Value *Parent, CallInst *Call) {
+    // For MemCpy and MemMov:
+    // If this is the first Arg to lead to MemCpy/MemMov,
+    // save this Arg and wait for the second Arg to reach it
+    if (hasSrc(Call) && !MemCpyMovMap.contains(Call)) {
+        int8_t ArgumentIndex = -1;
+        for (unsigned j = 0; j < Call->arg_size(); ++j){
+            if (Call->getArgOperand(j) == Parent) {
+                ArgumentIndex = j;
+                break;
+            }
+        }
+        assert(ArgumentIndex >= 0);
+        MemCpyMovMap[Call] = {Parent, ArgumentIndex};
+        return false;
+    }
+
+    IRBuilder<> Builder(Call->getContext());
+    Builder.SetInsertPoint(Call->getNextNode());
+    auto FT = Call->getFunctionType();
+    Value *NewDest;
+    Value *OldDest = Call->getArgOperand(0);
+    if (isGep(Call->getArgOperand(0))) {
+        NewDest = Call->getArgOperand(0);
+    } else if (isBox(Call->getArgOperand(0))) {
+        CallInst *BoxInst = cast<CallInst>(Call->getArgOperand(0));
+        NewDest = createGep(&Builder, BoxInst->getArgOperand(0), BoxInst->getArgOperand(1));
+    } else {
+        NewDest = createGep(&Builder, Call->getArgOperand(0), ConstantInt::get(IntTy, 0));
+    }
+    Value *NewSrc = nullptr;
+    Value *OldSrc = nullptr;
+    if (Call->getArgOperand(1)->getType()->isPointerTy()) {
+        OldSrc = Call->getArgOperand(1);
+        if (isGep(Call->getArgOperand(1))) {
+            NewSrc = Call->getArgOperand(1);
+        } else if (isBox(Call->getArgOperand(1))) {
+            CallInst *BoxInst = cast<CallInst>(Call->getArgOperand(1));
+            NewSrc = createGep(&Builder, BoxInst->getArgOperand(0), BoxInst->getArgOperand(1));
+        } else {
+            NewSrc = createGep(&Builder, Call->getArgOperand(1), ConstantInt::get(IntTy, 0));
+        }
+    }
+    SmallVector<Type *, 8> NewTypes;
+    SmallVector<Value *, 8> NewArgs;
+    NewTypes.reserve(Call->arg_size());
+    NewArgs.reserve(Call->arg_size());
+    for (Value *Arg : Call->args())
+        if (Arg == OldDest) {
+            NewArgs.push_back(NewDest);
+            NewTypes.push_back(NewDest->getType());
+        }else if (Arg == OldSrc) {
+            NewArgs.push_back(NewSrc);
+            NewTypes.push_back(NewSrc->getType());
+        } else {
+            NewArgs.push_back(Arg);
+            NewTypes.push_back(Arg->getType());
+        } 
+    Function *NewIntrinsic =
+        Intrinsic::getOrInsertDeclaration(
+            Call->getModule(),
+            Call->getIntrinsicID(),
+            FT->getReturnType(),
+            NewTypes);
+
+    CallInst *NewCall = Builder.CreateCall(NewIntrinsic, NewArgs);
+    RemoveFromParentList.push_back(Call);
+    return true;
 }

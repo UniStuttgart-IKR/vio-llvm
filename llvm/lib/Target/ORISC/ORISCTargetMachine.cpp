@@ -20,6 +20,7 @@
 #include "Passes/ORISCReplaceNullPointersPass.h"
 #include "Passes/ORISCSplitMixedStructsPass.h"
 #include "Passes/ORISCPromoteInnerStructsPass.h"
+#include "Passes/ORISCSwitchToIndirectbrPass.h"
 #include "ORISCSubtarget.h"
 #include "TargetInfo/ORISCTargetInfo.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
@@ -113,11 +114,22 @@ void ORISCTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
       //if -NoUnnecessaryAllocations remove unneeded Allocates
       MPM.addPass(BoxUnboxPointersPass());
       MPM.addPass(ReplaceNullPointersPass());
+      //MPM.addPass(SwitchToIndirectbrPass());
     });
 }
 
 TargetPassConfig *ORISCTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new ORISCPassConfig(*this, PM);
+}
+
+bool ORISCTargetMachine::isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const {
+  if (SrcAS == 1 && DestAS == 0)
+    return true;
+  if (SrcAS == 0 && DestAS == 1)
+    return true;
+  if (SrcAS == 1 && DestAS == 1)
+    return true;
+  return false;
 }
 
 void ORISCPassConfig::addCodeGenPrepare() {

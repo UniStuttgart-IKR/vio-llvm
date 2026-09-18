@@ -1976,7 +1976,7 @@ let TargetPrefix = "riscv" in {
   //Zhm
   class RiscvZhmAlci
       : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty],
-              [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
+              [IntrNoMem, IntrHasSideEffects, IntrNoDuplicate, IntrNoMerge, Throws]>;
   class RiscvZhmSep
       : Intrinsic<[llvm_i32_ty], [llvm_ptr_ty],
               [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
@@ -1991,19 +1991,19 @@ let TargetPrefix = "riscv" in {
 
   class RiscvZhmAlc_32
       : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty],
-              [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
+              [IntrNoMem, IntrHasSideEffects, IntrNoDuplicate, IntrNoMerge, Throws]>;
   class RiscvZhmReadObject_32
       : Intrinsic<[llvm_i32_ty], [llvm_ptr_ty],
-              [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
+              [IntrNoMem, IntrWillReturn, IntrSpeculatable, Throws]>;
   class RiscvZhmDTP_32
       : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty, llvm_i32_ty],
-              [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
+              [IntrNoMem, IntrWillReturn, IntrSpeculatable, Throws]>;
   class RiscvZhmLt_32
       : Intrinsic<[llvm_i32_ty], [llvm_ptr_ty],
-              [IntrReadMem, IntrWillReturn]>;
+              [IntrReadMem, IntrWillReturn, Throws]>;
   class RiscvZhmSt_32
       : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty],
-              [IntrWriteMem]>;
+              [IntrWriteMem, Throws]>;
   
   def int_riscv_alc_32    : RiscvZhmAlc_32;
   def int_riscv_alc_d_32  : RiscvZhmAlc_32;
@@ -2018,19 +2018,19 @@ let TargetPrefix = "riscv" in {
 
   class RiscvZhmAlc_64
       : Intrinsic<[llvm_ptr_ty], [llvm_i64_ty],
-              [IntrNoMem, IntrWillReturn]>;
+              [IntrNoMem, IntrHasSideEffects, IntrNoDuplicate, IntrNoMerge, Throws]>;
   class RiscvZhmReadObject_64
       : Intrinsic<[llvm_i64_ty], [llvm_ptr_ty],
-              [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
+              [IntrNoMem, IntrWillReturn, IntrSpeculatable, Throws]>;
   class RiscvZhmDTP_64
       : Intrinsic<[llvm_ptr_ty], [llvm_i64_ty, llvm_i64_ty],
-              [IntrNoMem, IntrWillReturn, IntrSpeculatable]>;
+              [IntrNoMem, IntrWillReturn, IntrSpeculatable, Throws]>;
   class RiscvZhmLt_64
       : Intrinsic<[llvm_i64_ty], [llvm_ptr_ty],
-              [IntrReadMem, IntrWillReturn]>;
+              [IntrReadMem, IntrWillReturn, Throws]>;
   class RiscvZhmSt_64
       : Intrinsic<[], [llvm_ptr_ty, llvm_i64_ty],
-              [IntrWriteMem]>;
+              [IntrWriteMem, Throws]>;
   
   def int_riscv_alc_64    : RiscvZhmAlc_64;
   def int_riscv_alc_d_64  : RiscvZhmAlc_64;

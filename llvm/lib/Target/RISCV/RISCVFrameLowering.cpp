@@ -36,6 +36,12 @@
 
 using namespace llvm;
 
+static cl::opt<bool> ZhmDisableExplicitSPSave(
+    "zhm-disable-explicit-sp-save",
+    cl::init(false),
+    cl::NotHidden,
+    cl::desc("Assume Register sp is implicitly saved at position 0 with alci sp"));
+
 static Align getABIStackAlignment(RISCVABI::ABI ABI) {
   if (ABI == RISCVABI::ABI_ILP32E)
     return Align(4);
@@ -867,12 +873,6 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
   CFIInstBuilder CFIBuilder(MBB, MBBI, MachineInstr::FrameSetup);
 
   if (STI.hasStdExtZhm()) {
-    //Space for SP
-    if (STI.is64Bit())
-      Offset += 8;
-    else
-      Offset += 4;
-
     if (Offset <= 4095) {
       // alci sp, size
       BuildMI(MBB, MBBI, DL, TII->get(RISCV::ALCI))
@@ -884,7 +884,7 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
 
     // li dest, size
     // alci sp, dest
-    Register DestReg = findScratchNonCalleeSaveRegister(&MBB, RISCV::X5);
+    Register DestReg = findScratchNonCalleeSaveRegister(&MBB, RISCV::X7);
     RI->adjustReg(MBB, MBBI, DL, DestReg, RISCV::X0, StackOffset::getFixed(Offset),
                   Flag, getStackAlign());
     BuildMI(MBB, MBBI, DL, TII->get(RISCV::ALC))
@@ -1193,11 +1193,13 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   bool DynAllocation =
       MF.getInfo<RISCVMachineFunctionInfo>()->hasDynamicAllocation();
   if (StackSize != 0) {
-    emitZhmSpCopy(MF, MBB, MBBI, DL);
+    if (!ZhmDisableExplicitSPSave)
+      emitZhmSpCopy(MF, MBB, MBBI, DL);
     allocateStack(MBB, MBBI, MF, StackSize, RealStackSize, NeedsDwarfCFI,
                   NeedProbe, ProbeSize, DynAllocation,
                   MachineInstr::FrameSetup);
-    emitZhmSpSave(MF, MBB, MBBI, DL);
+    if (!ZhmDisableExplicitSPSave)
+      emitZhmSpSave(MF, MBB, MBBI, DL);
     if (STI.hasStdExtZhm()) //FIXME: dirty!
       return;
   }
@@ -1711,6 +1713,7 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   assert((StackID == TargetStackID::Default ||
           StackID == TargetStackID::ScalableVector) &&
          "Unexpected stack ID for the frame object.");
+
   if (StackID == TargetStackID::Default) {
     assert(getOffsetOfLocalArea() == 0 && "LocalAreaOffset is not 0!");
     Offset = StackOffset::getFixed(MFI.getObjectOffset(FI) +
@@ -1729,7 +1732,11 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   if (FI >= MinCSFI && FI <= MaxCSFI) {
     FrameReg = SPReg;
 
-    if (FirstSPAdjustAmount)
+    if (STI.hasStdExtZhm() && STI.is64Bit())
+      Offset += StackOffset::getFixed(8);
+    else if (STI.hasStdExtZhm())
+      Offset += StackOffset::getFixed(4);
+    else if (FirstSPAdjustAmount)
       Offset += StackOffset::getFixed(FirstSPAdjustAmount);
     else
       Offset += StackOffset::getFixed(getStackSizeWithRVVPadding(MF));
@@ -2246,6 +2253,10 @@ void RISCVFrameLowering::processFunctionBeforeFrameFinalized(
 
     Size += MFI.getObjectSize(FrameIdx);
   }
+  if (STI.hasStdExtZhm() && Size > 0 && STI.is64Bit())
+    Size += 8;
+  else if (STI.hasStdExtZhm() && Size > 0)
+    Size += 4;
   RVFI->setCalleeSavedStackSize(Size);
 }
 

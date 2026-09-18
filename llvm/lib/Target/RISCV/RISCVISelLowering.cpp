@@ -10069,6 +10069,15 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
   SDLoc DL(N);
   EVT Ty = getPointerTy(DAG.getDataLayout());
 
+  if (Subtarget.hasStdExtZhm()){
+    SDValue GPReg = DAG.getRegister(RISCV::X3, Subtarget.getXLenVT());
+    SDValue Addr = getTargetNode(N, DL, Ty, DAG, RISCVII::MO_GOT_OFF);
+    SDValue Load =
+        SDValue(DAG.getMachineNode(Subtarget.is64Bit() ? RISCV::LD : RISCV::LW, DL, Ty, GPReg, Addr), 0);
+
+    return Load;
+  }
+
   // When HWASAN is used and tagging of global variables is enabled
   // they should be accessed via the GOT, since the tagged address of a global
   // is incompatible with existing code models. This also applies to non-pic
@@ -27574,6 +27583,19 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   SmallVector<std::pair<Register, SDValue>, 8> RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
   SDValue StackPtr;
+  if (Subtarget.hasStdExtZhm() && NumBytes > 0) {
+    SDVTList VTs = DAG.getVTList({MVT::i32, MVT::Other});
+    SDValue IntID =
+        DAG.getTargetConstant(Intrinsic::riscv_alci, DL, XLenVT);
+    SDValue Size =
+        DAG.getTargetConstant(NumBytes, DL, XLenVT);
+    SDValue Ops[] = {Chain,
+                      IntID,
+                      Size};
+    SDValue Result = DAG.getNode(ISD::INTRINSIC_W_CHAIN, DL, VTs, Ops);
+    Chain = Result.getValue(1);
+    StackPtr = Result.getValue(0);
+  }
   for (unsigned i = 0, j = 0, e = ArgLocs.size(), OutIdx = 0; i != e;
        ++i, ++OutIdx) {
     CCValAssign &VA = ArgLocs[i];
@@ -27869,7 +27891,17 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // TargetGlobalAddress/TargetExternalSymbol node so that legalize won't
   // split it and then direct call can be matched by PseudoCALL.
   bool CalleeIsLargeExternalSymbol = false;
-  if (getTargetMachine().getCodeModel() == CodeModel::Large) {
+  if (Subtarget.hasStdExtZhm()) {
+    if (auto *S = dyn_cast<GlobalAddressSDNode>(Callee))
+      Callee = getAddr(S, DAG);
+    else if (auto *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
+      EVT Ty = getPointerTy(DAG.getDataLayout());
+      SDValue GPReg = DAG.getRegister(RISCV::X3, Subtarget.getXLenVT());
+      SDValue Addr = DAG.getTargetExternalSymbol(S->getSymbol(), PtrVT, RISCVII::MO_GOT_OFF);//;getTargetNode(S, DL, Ty, DAG, RISCVII::MO_GOT_OFF);
+      MachineSDNode *Load = DAG.getMachineNode(Subtarget.is64Bit() ? RISCV::LD : RISCV::LW, DL, Ty, GPReg, Addr);
+      Callee = SDValue(Load, 0);
+    }
+  } else if (getTargetMachine().getCodeModel() == CodeModel::Large) {
     if (auto *S = dyn_cast<GlobalAddressSDNode>(Callee))
       Callee = getLargeGlobalAddress(S, DL, PtrVT, DAG);
     else if (auto *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {

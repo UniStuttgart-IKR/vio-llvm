@@ -40,6 +40,8 @@ private:
     bool visitReturnInst(ReturnInst *I);
     bool checkArgument(Value *Arg);
     void replaceAlloca(FunctionCallee Callee, Value *Size, AllocaInst *AI);
+    Value *escapeVarArgs(CallInst *CI, SmallVector<Value *> *VarArgs, SmallVector<Type *> *VarArgTys);
+    void replaceCall(CallInst *CI, SmallVector<Value *> *NewArgs, SmallVector<Type *> *NewArgTys);
 
     friend PassInfoMixin<RISCVZhmEscapeAlloca>;
 

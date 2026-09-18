@@ -16,6 +16,7 @@
 #include <cassert>
 #include "RISCVZhmEscapeAlloca.h"
 #include <cstdint>
+#include <utility>
 
 using namespace llvm;
 
@@ -96,6 +97,28 @@ static bool isDataOnly(Type *Ty) {
     return true; //unreachable?
 }
 
+static inline std::pair<SmallVector<Value *>, SmallVector<Type *>> extractVarArgs(CallInst *CI, unsigned Size) {
+    SmallVector<Value *> VarArgs = SmallVector<Value *>(Size);
+    SmallVector<Type *> VarArgTys = SmallVector<Type *>(Size);
+    for (unsigned i = CI->getFunctionType()->getNumParams(); i < CI->arg_size(); ++i){
+        VarArgs.push_back(CI->getArgOperand(i));
+        VarArgTys.push_back(CI->getArgOperand(i)->getType());
+    }
+    return {VarArgs, VarArgTys};
+}
+
+static inline std::pair<SmallVector<Value *>, SmallVector<Type *>> vectorizeNewArguments(CallInst *CI, unsigned NumParams, Value *NewVarArgs) {
+    SmallVector<Value *> NewArgs = SmallVector<Value *>(NumParams + 1);
+    SmallVector<Type *> NewArgTys = SmallVector<Type *>(NumParams + 1);
+    for (unsigned i = 0; i < NumParams; ++i){
+        NewArgs.push_back(CI->getArgOperand(i));
+        NewArgTys.push_back(CI->getArgOperand(i)->getType());
+    }
+    NewArgs.push_back(NewVarArgs);
+    NewArgTys.push_back(NewVarArgs->getType());
+    return {NewArgs, NewArgTys};
+}
+
 //Check if Alloca allocates a VLA
 bool RISCVZhmEscapeAlloca::visitAllocaInst(AllocaInst *AI){
     std::optional<TypeSize> Size = AI->getAllocationSize(*DL);
@@ -110,9 +133,29 @@ bool RISCVZhmEscapeAlloca::visitAllocaInst(AllocaInst *AI){
 bool RISCVZhmEscapeAlloca::visitCallInst(CallInst *I){
     //Intrinsics are skipped (TODO: can we safely do that?)
     if (I->getIntrinsicID() != Intrinsic::not_intrinsic)
-        return false;
+        if (I->getIntrinsicID() != Intrinsic::memset 
+            && I->getIntrinsicID() != Intrinsic::memcpy 
+            && I->getIntrinsicID() != Intrinsic::memmove)
+            return false;
 
     bool Changed = false;
+    //Handle VarArg Calls such that an Object is allocated for the Variable Arguments
+    if (I->getFunctionType()->isVarArg()) {
+        for (unsigned i = 0; i < I->getFunctionType()->getNumParams(); ++i){
+            Changed |= checkArgument(I->getArgOperand(i));
+        }
+        unsigned Size = I->arg_size()-I->getFunctionType()->getNumParams();
+        if (Size) {
+            auto VarArgs = extractVarArgs(I, Size);
+            Value *NewVarArgs = escapeVarArgs(I, &VarArgs.first, &VarArgs.second);
+            auto NewArgs = vectorizeNewArguments(I, I->getFunctionType()->getNumParams(), NewVarArgs);
+            replaceCall(I, &NewArgs.first, &NewArgs.second);
+            Changed = true;
+        }
+        return Changed;
+    }
+
+    //Keep old behaviour for our sanity's sake
     for (Value *Arg : I->operand_values()) 
         Changed |= checkArgument(Arg);
     return Changed;
@@ -182,4 +225,38 @@ void RISCVZhmEscapeAlloca::replaceAlloca(FunctionCallee Callee, Value *Size, All
     CI->takeName(AI);
     AI->replaceAllUsesWith(CI);
     RemoveFromParentList.push_back(AI);
+}
+
+void RISCVZhmEscapeAlloca::replaceCall(CallInst *CI, SmallVector<Value *> *NewArgs, SmallVector<Type *> *NewArgTys){
+    IRBuilder<> Builder(CI);
+
+    Type *RetType = CI->getFunctionType()->getReturnType();
+    FunctionType *NewFuncType = FunctionType::get(RetType, *NewArgTys, /*isVarArg=*/false);
+    Value *Callee = CI->getCalledOperand();
+    CallInst *NewCall = Builder.CreateCall(NewFuncType, Callee, *NewArgs);
+
+    NewCall->setCallingConv(CI->getCallingConv());
+    NewCall->setTailCallKind(CI->getTailCallKind());
+    
+    if (!CI->getType()->isVoidTy()) {
+        CI->replaceAllUsesWith(NewCall);
+    }
+    RemoveFromParentList.push_back(CI);
+}
+
+Value * RISCVZhmEscapeAlloca::escapeVarArgs(CallInst *I, SmallVector<Value *> *VarArgs, SmallVector<Type *> *VarArgTys){
+    FunctionCallee Callee = AlcidFn;
+    for (Type *Ty : *VarArgTys) {
+        if (!isDataOnly(Ty)) {
+            Callee = AlciFn;
+            break;
+        }
+    }
+    StructType *HelperTy = StructType::create(*VarArgTys);
+    unsigned SizeInt = DL->getTypeAllocSize(HelperTy) / DL->getPointerSize();
+    Value *Size = ConstantInt::get(
+                Type::getInt32Ty(I->getContext()),
+                SizeInt);
+    IRBuilder<> Builder(I);
+    return Builder.CreateCall(Callee, { Size });
 }

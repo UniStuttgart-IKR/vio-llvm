@@ -220,6 +220,14 @@ bool RISCVZhmEscapeAlloca::checkArgument(Value *Arg){
 }
 
 void RISCVZhmEscapeAlloca::replaceAlloca(FunctionCallee Callee, Value *Size, AllocaInst *AI){
+    // Remove Lifetime Intrinsics on this Alloca, because Verifier will throw an error otherwise
+    for (User *U : AI->users()) {
+        if (CallInst *UCI = dyn_cast<CallInst>(U)) {
+            if (UCI->getIntrinsicID() == Intrinsic::lifetime_start || UCI->getIntrinsicID() == Intrinsic::lifetime_end) {
+                RemoveFromParentList.push_back(UCI);
+            }
+        }
+    }
     IRBuilder<> Builder(AI);
     CallInst *CI = Builder.CreateCall(Callee, { Size });
     CI->takeName(AI);

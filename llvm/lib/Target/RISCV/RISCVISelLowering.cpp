@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVISelLowering.h"
+#include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "MCTargetDesc/RISCVMatInt.h"
 #include "RISCV.h"
 #include "RISCVConstantPoolValue.h"
@@ -27116,14 +27117,21 @@ static SDValue unpackFromMemLoc(SelectionDAG &DAG, SDValue Chain,
                                 const RISCVTargetLowering &TLI) {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
+  const RISCVSubtarget &Subtarget = DAG.getSubtarget<RISCVSubtarget>();
   EVT LocVT = VA.getLocVT();
   EVT PtrVT = MVT::getIntegerVT(DAG.getDataLayout().getPointerSizeInBits(0));
-  int FI = MFI.CreateFixedObject(LocVT.getStoreSize(), VA.getLocMemOffset(),
-                                 /*IsImmutable=*/true);
-  SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
-  SDValue Val = DAG.getLoad(
-      LocVT, DL, Chain, FIN,
-      MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI));
+  SDValue Val;
+  if (Subtarget.hasStdExtZhm()) {
+    SDValue A7 = DAG.getRegister(RISCV::X17, PtrVT);
+    Val = DAG.getLoad(LocVT, DL, Chain, A7, MachinePointerInfo().getWithOffset(VA.getLocMemOffset()));
+  } else {
+    int FI = MFI.CreateFixedObject(LocVT.getStoreSize(), VA.getLocMemOffset(),
+                                  /*IsImmutable=*/true);
+    SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
+    Val = DAG.getLoad(
+        LocVT, DL, Chain, FIN,
+        MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI));
+  }
 
   if (VA.getLocInfo() == CCValAssign::Indirect)
     return Val;

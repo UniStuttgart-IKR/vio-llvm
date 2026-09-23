@@ -30,17 +30,10 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <optional>
 
 #define DEBUG_TYPE "riscv-frame"
 
 using namespace llvm;
-
-static cl::opt<bool> ZhmDisableExplicitSPSave(
-    "zhm-disable-explicit-sp-save",
-    cl::init(false),
-    cl::NotHidden,
-    cl::desc("Assume Register sp is implicitly saved at position 0 with alci sp"));
 
 static Align getABIStackAlignment(RISCVABI::ABI ABI) {
   if (ABI == RISCVABI::ABI_ILP32E)
@@ -52,8 +45,7 @@ static Align getABIStackAlignment(RISCVABI::ABI ABI) {
 
 RISCVFrameLowering::RISCVFrameLowering(const RISCVSubtarget &STI)
     : TargetFrameLowering(
-          STI.hasStdExtZhm() ? StackGrowsUp : StackGrowsDown, 
-          getABIStackAlignment(STI.getTargetABI()),
+          StackGrowsDown, getABIStackAlignment(STI.getTargetABI()),
           /*LocalAreaOffset=*/0,
           /*TransientStackAlignment=*/getABIStackAlignment(STI.getTargetABI())),
       STI(STI) {}
@@ -236,36 +228,6 @@ static void emitSCSEpilogue(MachineFunction &MF, MachineBasicBlock &MBB,
     // Restore the SCS pointer
     CFIInstBuilder(MBB, MI, MachineInstr::FrameDestroy).buildRestore(SCSPReg);
   }
-}
-
-static void emitZhmSpCopy(MachineFunction &MF,
-                                           MachineBasicBlock &MBB,
-                                           MachineBasicBlock::iterator MBBI,
-                                           const DebugLoc &DL) {
-  const auto &STI = MF.getSubtarget<RISCVSubtarget>();
-
-  if (!STI.hasStdExtZhm())
-    return;
-
-  const RISCVRegisterInfo *RI = STI.getRegisterInfo();
-  RI->adjustReg(MBB, MBBI, DL, RISCV::X5, SPReg, StackOffset::getFixed(0), 
-            llvm::MachineInstr::NoFlags, std::nullopt);
-}
-
-static void emitZhmSpSave(MachineFunction &MF,
-                                           MachineBasicBlock &MBB,
-                                           MachineBasicBlock::iterator MBBI,
-                                           const DebugLoc &DL) {
-  const auto &STI = MF.getSubtarget<RISCVSubtarget>();
-
-  if (!STI.hasStdExtZhm())
-    return;
-
-  const RISCVInstrInfo *TII = STI.getInstrInfo();
-  BuildMI(MBB, MBBI, DL, TII->get(STI.is64Bit() ? RISCV::SD : RISCV::SW))
-      .addReg(RISCV::X5)
-      .addReg(SPReg)
-      .addImm(0);
 }
 
 // Insert instruction to swap mscratchsw with sp
@@ -872,28 +834,6 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
   bool IsRV64 = STI.is64Bit();
   CFIInstBuilder CFIBuilder(MBB, MBBI, MachineInstr::FrameSetup);
 
-  if (STI.hasStdExtZhm()) {
-    if (Offset <= 4095) {
-      // alci sp, size
-      BuildMI(MBB, MBBI, DL, TII->get(RISCV::ALCI))
-          .addReg(SPReg)
-          .addImm(Offset)
-          .setMIFlags(Flag);
-      return;
-    }
-
-    // li dest, size
-    // alci sp, dest
-    Register DestReg = findScratchNonCalleeSaveRegister(&MBB, RISCV::X7);
-    RI->adjustReg(MBB, MBBI, DL, DestReg, RISCV::X0, StackOffset::getFixed(Offset),
-                  Flag, getStackAlign());
-    BuildMI(MBB, MBBI, DL, TII->get(RISCV::ALC))
-        .addReg(SPReg)
-        .addReg(DestReg)
-        .setMIFlags(Flag);
-    return;
-  }
-
   // Simply allocate the stack if it's not big enough to require a probe.
   if (!NeedProbe || Offset <= ProbeSize) {
     RI->adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackOffset::getFixed(-Offset),
@@ -1192,17 +1132,10 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   uint64_t ProbeSize = TLI->getStackProbeSize(MF, getStackAlign());
   bool DynAllocation =
       MF.getInfo<RISCVMachineFunctionInfo>()->hasDynamicAllocation();
-  if (StackSize != 0) {
-    if (!ZhmDisableExplicitSPSave)
-      emitZhmSpCopy(MF, MBB, MBBI, DL);
+  if (StackSize != 0)
     allocateStack(MBB, MBBI, MF, StackSize, RealStackSize, NeedsDwarfCFI,
                   NeedProbe, ProbeSize, DynAllocation,
                   MachineInstr::FrameSetup);
-    if (!ZhmDisableExplicitSPSave)
-      emitZhmSpSave(MF, MBB, MBBI, DL);
-    if (STI.hasStdExtZhm()) //FIXME: dirty!
-      return;
-  }
 
   // Save SiFive CLIC CSRs into Stack
   emitSiFiveCLICPreemptibleSaves(MF, MBB, MBBI, DL);
@@ -1355,16 +1288,6 @@ void RISCVFrameLowering::deallocateStack(MachineFunction &MF,
                                          int64_t CFAOffset) const {
   const RISCVRegisterInfo *RI = STI.getRegisterInfo();
 
-  if (STI.hasStdExtZhm()) {
-    const RISCVInstrInfo *TII = STI.getInstrInfo();
-    bool IsRV64 = STI.is64Bit();
-    BuildMI(MBB, MBBI, DL, TII->get(IsRV64 ? RISCV::LD : RISCV::LW))
-        .addReg(SPReg)
-        .addReg(SPReg)
-        .addImm(0);
-    return;
-  }
-
   RI->adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackOffset::getFixed(StackSize),
                 MachineInstr::FrameDestroy, getStackAlign());
   StackSize = 0;
@@ -1412,7 +1335,6 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
       std::next(MBBI, getRVVCalleeSavedInfo(MF, CSI).size());
   CFIInstBuilder CFIBuilder(MBB, FirstScalarCSRRestoreInsn,
                             MachineInstr::FrameDestroy);
-
   bool NeedsDwarfCFI = needsDwarfCFI(MF);
 
   uint64_t FirstSPAdjustAmount = getFirstSPAdjustAmount(MF);
@@ -1713,7 +1635,6 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   assert((StackID == TargetStackID::Default ||
           StackID == TargetStackID::ScalableVector) &&
          "Unexpected stack ID for the frame object.");
-
   if (StackID == TargetStackID::Default) {
     assert(getOffsetOfLocalArea() == 0 && "LocalAreaOffset is not 0!");
     Offset = StackOffset::getFixed(MFI.getObjectOffset(FI) +
@@ -1732,11 +1653,7 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   if (FI >= MinCSFI && FI <= MaxCSFI) {
     FrameReg = SPReg;
 
-    if (STI.hasStdExtZhm() && STI.is64Bit())
-      Offset += StackOffset::getFixed(8);
-    else if (STI.hasStdExtZhm())
-      Offset += StackOffset::getFixed(4);
-    else if (FirstSPAdjustAmount)
+    if (FirstSPAdjustAmount)
       Offset += StackOffset::getFixed(FirstSPAdjustAmount);
     else
       Offset += StackOffset::getFixed(getStackSizeWithRVVPadding(MF));
@@ -2253,10 +2170,6 @@ void RISCVFrameLowering::processFunctionBeforeFrameFinalized(
 
     Size += MFI.getObjectSize(FrameIdx);
   }
-  if (STI.hasStdExtZhm() && Size > 0 && STI.is64Bit())
-    Size += 8;
-  else if (STI.hasStdExtZhm() && Size > 0)
-    Size += 4;
   RVFI->setCalleeSavedStackSize(Size);
 }
 

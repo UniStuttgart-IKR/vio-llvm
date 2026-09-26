@@ -479,6 +479,8 @@ bool RISCVMakeCompressibleOpt::runOnMachineFunction(MachineFunction &Fn) {
   // This optimization only makes sense if compressed instructions are emitted.
   if (!STI.hasStdExtZca())
     return false;
+  if (STI.hasStdExtZhm())
+    return false; //FIXME: This is a bit harsh
 
   for (MachineBasicBlock &MBB : Fn) {
     LLVM_DEBUG(dbgs() << "MBB: " << MBB.getName() << "\n");

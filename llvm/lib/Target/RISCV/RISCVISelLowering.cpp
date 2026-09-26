@@ -51,6 +51,7 @@
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cstdint>
 #include <optional>
 
 using namespace llvm;
@@ -25233,6 +25234,56 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
       // By default we do not combine any intrinsic.
     default:
       return SDValue();
+    case Intrinsic::riscv_alc_32:
+    case Intrinsic::riscv_alc_64:
+    case Intrinsic::riscv_alc_d_32:
+    case Intrinsic::riscv_alc_d_64: 
+      break; //TODO: How do we handle VLAs?
+    case Intrinsic::riscv_alci:
+    case Intrinsic::riscv_alci_d:{
+      //Check Users for Zero Initializers as they are not necessary
+      SmallVector<std::pair<SDNode*, int64_t>, 4> Worklist;
+      for (auto UI = N->use_begin(), UE = N->use_end(); UI != UE; ++UI) {
+        // Make sure the user is consuming the POINTER output (index 0), not the CHAIN
+        if (UI->getOperandNo() == 0) {
+          Worklist.push_back({UI->getUser(), 0}); // Offset starts at 0
+        }
+      }
+      while (!Worklist.empty()) {
+        auto [User, Offset] = Worklist.pop_back_val();
+
+        // Case A: The pointer is offset via an ADD node (GEP)
+        if (User->getOpcode() == ISD::ADD) {
+          if (auto *ConstOffset = dyn_cast<ConstantSDNode>(User->getOperand(1))) {
+            int64_t NewOffset = Offset + ConstOffset->getSExtValue();
+            // Push ADD's users to the worklist
+            for (auto UI = User->use_begin(), UE = User->use_end(); UI != UE; ++UI)
+              Worklist.push_back({UI->getUser(), NewOffset});
+          }
+          continue;
+        }
+        // Case B: The pointer reaches a STORE node
+        if (User->getOpcode() == ISD::STORE) {
+          StoreSDNode *Store = cast<StoreSDNode>(User);
+
+          // 1. Check if the value stored is zero
+          auto *ConstVal = dyn_cast<ConstantSDNode>(Store->getValue());
+          if (!ConstVal || !ConstVal->isZero())
+            continue; // Not a zero-store
+
+          // 2. Bounds check (Offset + StoreSize <= ALCSize)
+          uint64_t StoreSize = Store->getMemoryVT().getStoreSize();
+          uint64_t ALCSize = N->getOperand(2)->getAsZExtVal();
+          if (Offset < 0 || (Offset + StoreSize > ALCSize))
+            continue; // Out of bounds, this has to throw an EXCEPTION on execution
+
+          // 3. Safety Check: Verify Chain Integrity
+          DCI.CombineTo(Store, Store->getChain());
+          return SDValue(N, 0);
+        }
+      }
+      break;
+    }
     case Intrinsic::riscv_vcpop:
     case Intrinsic::riscv_vcpop_mask:
     case Intrinsic::riscv_vfirst:

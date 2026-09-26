@@ -1032,6 +1032,36 @@ struct NVPTX final : public VariadicABIInfo {
   }
 };
 
+
+struct RISCVZhm final : public VariadicABIInfo {
+  // Only reached when the pass is explicitly scheduled, i.e. for Zhm.
+  bool enableForTarget() override { return true; }
+
+  // va_list is a char*, passed by value.
+  bool vaListPassedInSSARegister() override { return true; }
+
+  Type *vaListType(LLVMContext &Ctx) override {
+    return PointerType::getUnqual(Ctx);
+  }
+
+  Type *vaListParameterType(Module &M) override {
+    return PointerType::getUnqual(M.getContext());
+  }
+
+  Value *initializeVaList(Module &M, LLVMContext &Ctx, IRBuilder<> &Builder,
+                          AllocaInst * /*va_list*/, Value *Buffer) override {
+    return Buffer;
+  }
+
+  VAArgSlotInfo slotInfo(const DataLayout &DL, Type *Parameter) override {
+    const Align XLen(DL.getPointerSize());
+    Align A = DL.getABITypeAlign(Parameter);
+    A = std::max(A, XLen);                   // every argument has its own slot
+    A = std::min(A, Align(2 * XLen.value())); // clang caps at 2*XLEN
+    return {A, /*Indirect=*/false};
+  }
+};
+
 struct SPIRV final : public VariadicABIInfo {
 
   bool enableForTarget() override { return true; }
@@ -1139,6 +1169,10 @@ std::unique_ptr<VariadicABIInfo> VariadicABIInfo::create(const Triple &T) {
   case Triple::nvptx64: {
     return std::make_unique<NVPTX>();
   }
+
+  case Triple::riscv32:
+  case Triple::riscv64:
+    return std::make_unique<RISCVZhm>();
 
   case Triple::spirv:
   case Triple::spirv32:

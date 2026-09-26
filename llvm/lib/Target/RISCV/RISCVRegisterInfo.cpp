@@ -24,6 +24,7 @@
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "Zhm/RISCVZhmFrameLowering.h"
 
 #define GET_REGINFO_TARGET_DESC
 #include "RISCVGenRegisterInfo.inc"
@@ -596,6 +597,11 @@ static unsigned getXqciloWideOpcode(unsigned Opc) {
   }
 }
 
+bool RISCVRegisterInfo::requiresFrameIndexReplacementScavenging(
+    const MachineFunction &MF) const {
+  return MF.getSubtarget<RISCVSubtarget>().hasStdExtZhm();
+}
+
 bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                             int SPAdj, unsigned FIOperandNum,
                                             RegScavenger *RS) const {
@@ -603,6 +609,14 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   MachineInstr &MI = *II;
   MachineFunction &MF = *MI.getParent()->getParent();
+
+  // Zhm frames are addressed only through sp; use its own elimination, which
+  // walks sp for large offsets instead of forming a base register.
+  const auto &STI = MF.getSubtarget<RISCVSubtarget>();
+  if (STI.hasStdExtZhm())
+    return static_cast<const RISCVZhmFrameLowering *>(STI.getFrameLowering())
+        ->eliminateFrameIndex(II, SPAdj, FIOperandNum, RS);
+
   MachineRegisterInfo &MRI = MF.getRegInfo();
   const RISCVSubtarget &ST = MF.getSubtarget<RISCVSubtarget>();
   const RISCVInstrInfo *TII = ST.getInstrInfo();
@@ -739,7 +753,7 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
 bool RISCVRegisterInfo::requiresVirtualBaseRegisters(
     const MachineFunction &MF) const {
-  return true;
+  return !MF.getSubtarget<RISCVSubtarget>().hasStdExtZhm();
 }
 
 // Returns true if the instruction's frame index reference would be better

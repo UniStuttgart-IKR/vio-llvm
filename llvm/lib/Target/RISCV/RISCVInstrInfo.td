@@ -2532,11 +2532,8 @@ include "RISCVInstrInfoSFB.td"
 // CHERI
 include "RISCVInstrInfoY.td"
 
-//===----------------------------------------------------------------------===//
-// Objective extensions
-//===----------------------------------------------------------------------===//
-
-include "RISCVInstrInfoZhm.td"
+// Heap Management
+include "Zhm/RISCVInstrInfoZhm.td"
 
 //===----------------------------------------------------------------------===//
 // Vendor extensions

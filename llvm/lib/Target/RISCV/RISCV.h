@@ -62,11 +62,20 @@ void initializeRISCVLateBranchOptPass(PassRegistry &);
 FunctionPass *createRISCVMakeCompressibleOptPass();
 void initializeRISCVMakeCompressibleOptPass(PassRegistry &);
 
-FunctionPass *createRISCVZhmTransformStackPass();
-void initializeRISCVZhmTransformStackPass(PassRegistry &);
+ModulePass *createRISCVZhmEscapeAllocaLegacyPass();
+void initializeRISCVZhmEscapeAllocaLegacyPass(PassRegistry &);
+
+ModulePass *createRISCVZhmLegalizeIRLegacyPass();
+void initializeRISCVZhmLegalizeIRLegacyPass(PassRegistry &);
+
+ModulePass *createRISCVZhmVerifyIRLegacyPass();
+void initializeRISCVZhmVerifyIRLegacyPass(PassRegistry &);
 
 FunctionPass *createRISCVZhmRemoveZeroInitsPass();
 void initializeRISCVZhmRemoveZeroInitsPass(PassRegistry &);
+
+FunctionPass *createRISCVZhmLegalizeFrameAddrPass();
+void initializeRISCVZhmLegalizeFrameAddrPass(PassRegistry &);
 
 class RISCVGatherScatterLoweringPass
     : public OptionalPassInfoMixin<RISCVGatherScatterLoweringPass> {

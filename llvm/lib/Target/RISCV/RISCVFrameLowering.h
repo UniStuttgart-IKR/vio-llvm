@@ -94,6 +94,10 @@ public:
   uint64_t getStackThreshold() const override;
 
 protected:
+  // For weird subclasses like Zhm.
+  RISCVFrameLowering(const RISCVSubtarget &STI, StackDirection D,
+                     int LocalAreaOffset);
+
   const RISCVSubtarget &STI;
 
   bool hasFPImpl(const MachineFunction &MF) const override;

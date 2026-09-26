@@ -11,7 +11,6 @@
 
 #include "RISCV.h"
 #include "RISCVAsmPrinter.h"
-#include "RISCVZhmEscapeAlloca.h"
 #include "RISCVTargetMachine.h"
 #include "llvm/CodeGen/AtomicExpand.h"
 #include "llvm/CodeGen/BranchRelaxation.h"
@@ -30,6 +29,9 @@
 #include "llvm/Target/CGPassBuilderOption.h"
 #include "llvm/Transforms/Scalar/LoopDataPrefetch.h"
 #include "llvm/Transforms/Vectorize/LoopIdiomVectorize.h"
+#include "Zhm/RISCVZhmEscapeAlloca.h"
+#include "Zhm/RISCVZhmLegalizeIR.h"
+#include "Zhm/RISCVZhmVerifyIR.h"
 
 using namespace llvm;
 
@@ -227,12 +229,12 @@ void RISCVTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
       LPM.addPass(LoopIdiomVectorizePass(LoopIdiomVectorizeStyle::Predicated));
   });
 
-  if (STI->hasFeature(RISCV::FeatureStdExtZhm)) {
+/*   if (STI->hasFeature(RISCV::FeatureStdExtZhm)) {
     PB.registerOptimizerLastEPCallback(
       [](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase T) {
           MPM.addPass(RISCVZhmEscapeAlloca());
       });
-  }
+  } */
 }
 
 Error RISCVTargetMachine::buildCodeGenPipeline(

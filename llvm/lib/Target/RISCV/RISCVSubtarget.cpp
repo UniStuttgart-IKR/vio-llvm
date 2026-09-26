@@ -25,6 +25,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+#include "Zhm/RISCVZhmFrameLowering.h"
 
 using namespace llvm;
 
@@ -116,6 +117,7 @@ RISCVSubtarget::initializeSubtargetDependencies(const Triple &TT, StringRef CPU,
   HasStdExtZcf = hasFeature(RISCV::FeatureStdExtZcf);
   HasStdExtC = hasFeature(RISCV::FeatureStdExtC);
   HasStdExtZce = hasFeature(RISCV::FeatureStdExtZce);
+  HasStdExtZhm = hasFeature(RISCV::FeatureStdExtZhm);
 
   // Can't be fatal: per-function subtargets mean this one may just be the
   // module-level default with no matching function, e.g. -target-abi ilp32f
@@ -131,6 +133,13 @@ RISCVSubtarget::initializeSubtargetDependencies(const Triple &TT, StringRef CPU,
   return *this;
 }
 
+static std::unique_ptr<RISCVFrameLowering>
+createRISCVFrameLowering(const RISCVSubtarget &STI) {
+  if (STI.hasStdExtZhm())
+    return std::make_unique<RISCVZhmFrameLowering>(STI);
+  return std::make_unique<RISCVFrameLowering>(STI);
+}
+
 RISCVSubtarget::RISCVSubtarget(const Triple &TT, StringRef CPU,
                                StringRef TuneCPU, StringRef FS,
                                StringRef ABIName, unsigned RVVVectorBitsMin,
@@ -139,8 +148,8 @@ RISCVSubtarget::RISCVSubtarget(const Triple &TT, StringRef CPU,
     : RISCVGenSubtargetInfo(TT, CPU, TuneCPU, FS),
       IsLittleEndian(TT.isLittleEndian()), RVVVectorBitsMin(RVVVectorBitsMin),
       RVVVectorBitsMax(RVVVectorBitsMax),
-      FrameLowering(
-          initializeSubtargetDependencies(TT, CPU, TuneCPU, FS, ABIName)),
+      FrameLowering(createRISCVFrameLowering(
+                initializeSubtargetDependencies(TT, CPU, TuneCPU, FS, ABIName))),
       InstrInfo(*this), TLInfo(TM, *this) {
   TSInfo = std::make_unique<RISCVSelectionDAGInfo>();
 }

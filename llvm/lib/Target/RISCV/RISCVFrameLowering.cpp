@@ -44,9 +44,12 @@ static Align getABIStackAlignment(RISCVABI::ABI ABI) {
 }
 
 RISCVFrameLowering::RISCVFrameLowering(const RISCVSubtarget &STI)
+    : RISCVFrameLowering(STI, StackGrowsDown, /*LocalAreaOffset=*/0) {}
+
+RISCVFrameLowering::RISCVFrameLowering(const RISCVSubtarget &STI,
+                                       StackDirection D, int LocalAreaOffset)
     : TargetFrameLowering(
-          StackGrowsDown, getABIStackAlignment(STI.getTargetABI()),
-          /*LocalAreaOffset=*/0,
+          D, getABIStackAlignment(STI.getTargetABI()), LocalAreaOffset,
           /*TransientStackAlignment=*/getABIStackAlignment(STI.getTargetABI())),
       STI(STI) {}
 

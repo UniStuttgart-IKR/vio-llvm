@@ -19,6 +19,10 @@
 MODULE_PASS("riscv-zhm-escape-alloca", RISCVZhmEscapeAlloca())
 MODULE_PASS("riscv-asm-printer-begin", RISCVAsmPrinterBeginPass())
 MODULE_PASS("riscv-asm-printer-end", RISCVAsmPrinterEndPass())
+
+MODULE_PASS("riscv-zhm-escape-alloca", RISCVZhmEscapeAlloca(this))
+MODULE_PASS("riscv-zhm-legalize-ir", RISCVZhmLegalizeIR(this))
+MODULE_PASS("riscv-zhm-verify-ir", RISCVZhmVerifyIR(this))
 #undef MODULE_PASS
 
 #ifndef FUNCTION_PASS

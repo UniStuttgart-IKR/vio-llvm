@@ -116,7 +116,7 @@ private:
   std::bitset<RISCV::NUM_TARGET_REGS> UserReservedRegister;
   const RISCVTuneInfoTable::RISCVTuneInfo *TuneInfo;
 
-  RISCVFrameLowering FrameLowering;
+  std::unique_ptr<RISCVFrameLowering> FrameLowering;
   RISCVInstrInfo InstrInfo;
   RISCVTargetLowering TLInfo;
 
@@ -141,7 +141,7 @@ public:
   void ParseSubtargetFeatures(StringRef CPU, StringRef TuneCPU, StringRef FS);
 
   const RISCVFrameLowering *getFrameLowering() const override {
-    return &FrameLowering;
+    return FrameLowering.get();
   }
   const RISCVInstrInfo *getInstrInfo() const override { return &InstrInfo; }
   const RISCVRegisterInfo *getRegisterInfo() const override {

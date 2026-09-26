@@ -36,6 +36,7 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/IPO.h"
+#include "llvm/Transforms/IPO/ExpandVariadics.h"
 #include "llvm/Transforms/Scalar.h"
 #include <optional>
 using namespace llvm;
@@ -151,7 +152,11 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   initializeRISCVRedundantCopyEliminationPass(*PR);
   initializeRISCVAsmPrinterPass(*PR);
   initializeRISCVPromoteConstantPass(*PR);
-  initializeRISCVZhmTransformStackPass(*PR);
+  initializeRISCVZhmEscapeAllocaLegacyPass(*PR);
+  initializeRISCVZhmLegalizeIRLegacyPass(*PR);
+  initializeRISCVZhmVerifyIRLegacyPass(*PR);
+  initializeRISCVZhmRemoveZeroInitsPass(*PR);
+  initializeRISCVZhmLegalizeFrameAddrPass(*PR);
 }
 
 static Reloc::Model getEffectiveRelocModel(const Triple &TT,
@@ -478,6 +483,9 @@ void RISCVPassConfig::addIRPasses() {
     addPass(createRISCVCodeGenPrepareLegacyPass());
   }
 
+  if (TM->getMCSubtargetInfo().hasFeature(RISCV::FeatureStdExtZhm))
+    addPass(createExpandVariadicsPass(ExpandVariadicsMode::Lowering));
+
   TargetPassConfig::addIRPasses();
 
   if (getOptLevel() == CodeGenOptLevel::Aggressive && EnableSelectOpt)
@@ -505,6 +513,10 @@ bool RISCVPassConfig::addPreISel() {
                                   /* OnlyOptimizeForSize */ false,
                                   /* MergeExternalByDefault */ true));
   }
+  
+  addPass(createRISCVZhmEscapeAllocaLegacyPass());
+  addPass(createRISCVZhmLegalizeIRLegacyPass());
+  addPass(createRISCVZhmVerifyIRLegacyPass());
 
   return false;
 }
@@ -580,8 +592,6 @@ void RISCVPassConfig::addPreEmitPass() {
   addPass(createRISCVIndirectBranchTrackingPass());
   addPass(&BranchRelaxationPassID);
   addPass(createRISCVMakeCompressibleOptPass());
-
-  addPass(createRISCVZhmTransformStackPass());
 }
 
 void RISCVPassConfig::addPreEmitPass2() {
@@ -652,6 +662,11 @@ void RISCVPassConfig::addPreRegAlloc() {
     addPass(&MachinePipelinerID);
 
   addPass(createRISCVVMV0EliminationPass());
+
+  if (TM->getOptLevel() != CodeGenOptLevel::None)
+    addPass(createRISCVZhmRemoveZeroInitsPass());
+
+  addPass(createRISCVZhmLegalizeFrameAddrPass());
 }
 
 void RISCVPassConfig::addFastRegAlloc() {

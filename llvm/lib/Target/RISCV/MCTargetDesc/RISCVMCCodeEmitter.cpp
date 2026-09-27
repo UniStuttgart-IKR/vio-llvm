@@ -209,8 +209,17 @@ void RISCVMCCodeEmitter::expandFunctionCall(const MCInst &MI,
     support::endian::write(CB, Binary, llvm::endianness::little);
     return;
   }
+
+  // Zhm: the auipc may not write ra. Use t1 (caller-saved, never an
+  // argument register, so dead at every call) as the temporary and ra only
+  // as the link register:  auipc t1, hi ; jalr ra, lo(t1)
+  MCRegister Tmp = Ra;
+  if (MI.getOpcode() == RISCV::PseudoCALL &&
+      STI.hasFeature(RISCV::FeatureStdExtZhm))
+    Tmp = RISCV::X6;
+
   // Emit AUIPC Ra, Func with R_RISCV_CALL relocation type.
-  TmpInst = MCInstBuilder(RISCV::AUIPC).addReg(Ra).addExpr(CallExpr);
+  TmpInst = MCInstBuilder(RISCV::AUIPC).addReg(Tmp).addExpr(CallExpr);
   Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
   support::endian::write(CB, Binary, llvm::endianness::little);
 
@@ -221,7 +230,7 @@ void RISCVMCCodeEmitter::expandFunctionCall(const MCInst &MI,
     TmpInst = MCInstBuilder(RISCV::JALR).addReg(RISCV::X0).addReg(Ra).addImm(0);
   else
     // Emit JALR Ra, Ra, 0
-    TmpInst = MCInstBuilder(RISCV::JALR).addReg(Ra).addReg(Ra).addImm(0);
+    TmpInst = MCInstBuilder(RISCV::JALR).addReg(Ra).addReg(Tmp).addImm(0);
   Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
   support::endian::write(CB, Binary, llvm::endianness::little);
 }

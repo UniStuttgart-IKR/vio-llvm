@@ -12,7 +12,10 @@
 //      inttoptr(ptrtoint p +/- n)-> gep p, +/-n
 //      inttoptr(ptrtoint p)      -> p
 //    This covers __builtin_is_aligned / __builtin_align_{up,down} and the
-//    usual hand-written alignment idioms.
+//    usual hand-written alignment idioms. The rewrite is required, not just
+//    an optimisation: `(uintptr_t)p & 7` in hardware is a pointer, and a
+//    pointer never compares equal to the integer 0, so an unrewritten
+//    `((uintptr_t)p & 7) == 0` would always be false.
 //
 //    In supervisor functions (attribute "riscv-zhm-supervisor" or
 //    -riscv-zhm-supervisor), integers that are dereferenced as pointers
@@ -29,15 +32,25 @@
 //    time via itd. The calls are nobuiltin, so SelectionDAG never expands
 //    them bytewise.
 //
+// 3. Object-type queries (riscv_zhm.h). A call to __zhm_type_flags(p)
+//    becomes
+//      supervisor code   a call to __zhm_supervisor_type_flags(p), which
+//                        reads the header with `lt`;
+//      user code         an ecall to the supervisor
+//                          a0 = p, a7 = service number -> a0 = flags
+//                        if -riscv-zhm-type-traps is given, otherwise an
+//                        error (the supervisor must provide the service).
+//
 //===----------------------------------------------------------------------===//
 
 #include "RISCV.h"
-#include "RISCVZhmLegalizeIR.h"
 #include "RISCVZhmIRUtils.h"
+#include "RISCVZhmLegalizeIR.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/ReplaceConstant.h"
@@ -62,6 +75,15 @@ static cl::opt<bool> ZhmSupervisor(
 bool llvm::RISCVZhm::isZhmSupervisorFunction(const Function &F) {
   return ZhmSupervisor || F.hasFnAttribute("riscv-zhm-supervisor");
 }
+
+static cl::opt<bool> ZhmTypeTraps(
+    "riscv-zhm-type-traps", cl::init(false), cl::Hidden,
+    cl::desc("Allow user code to query object types (riscv_zhm.h) through "
+             "an ecall to the supervisor"));
+
+static cl::opt<unsigned> ZhmTypeTrapNumber(
+    "riscv-zhm-type-trap-number", cl::init(0x7a68), cl::Hidden,
+    cl::desc("ecall service number (in a7) of the object-type query"));
 
 static cl::opt<unsigned> ZhmInlineCopyWords(
     "riscv-zhm-inline-copy-words", cl::init(8), cl::Hidden,
@@ -345,7 +367,7 @@ static bool legalizeMemTransfers(Function &F) {
       Changed = true;
       continue;
     }
-    if (isa<AnyMemCpyInst>(MT) && cast<AnyMemCpyInst>(MT)->getIntrinsicID() != Intrinsic::memcpy_inline)
+    if (MT->getIntrinsicID() == Intrinsic::memcpy_inline)
       continue; // must not become a call; the verifier reports it
 
     StringRef Name = isa<MemMoveInst>(MT) ? "__zhm_memmove" : "__zhm_memcpy";
@@ -363,6 +385,53 @@ static bool legalizeMemTransfers(Function &F) {
 }
 
 //===----------------------------------------------------------------------===//
+// Object-type queries
+//===----------------------------------------------------------------------===//
+
+static bool lowerTypeQueries(Function &F) {
+  SmallVector<CallInst *, 4> Calls;
+  for (Instruction &I : instructions(F))
+    if (auto *CI = dyn_cast<CallInst>(&I))
+      if (const Function *Callee = CI->getCalledFunction())
+        if (Callee->getName() == "__zhm_type_flags" && CI->arg_size() == 1)
+          Calls.push_back(CI);
+  if (Calls.empty())
+    return false;
+
+  Module &M = *F.getParent();
+  const bool Supervisor = isZhmSupervisorFunction(F);
+  IntegerType *IntTy = M.getDataLayout().getIntPtrType(M.getContext());
+
+  for (CallInst *CI : Calls) {
+    if (Supervisor) {
+      // The supervisor reads the header itself; an ecall from supervisor
+      // mode would go to the wrong privilege level.
+      CI->setCalledFunction(M.getOrInsertFunction(
+          "__zhm_supervisor_type_flags", CI->getFunctionType()));
+      continue;
+    }
+    if (!ZhmTypeTraps) {
+      error(*CI, "object-type queries in user code need the supervisor "
+                 "trap; compile with -mllvm -riscv-zhm-type-traps");
+      continue;
+    }
+    // ecall: a0 = pointer, a7 = service number; result in a0. The
+    // supervisor preserves every other register.
+    IRBuilder<> B(CI);
+    Value *Ptr = CI->getArgOperand(0);
+    auto *AsmTy = FunctionType::get(IntTy, {Ptr->getType(), IntTy}, false);
+    InlineAsm *Ecall = InlineAsm::get(AsmTy, "ecall",
+                                      "={x10},{x10},{x17},~{memory}",
+                                      /*hasSideEffects=*/true);
+    Value *Flags = B.CreateCall(
+        Ecall, {Ptr, ConstantInt::get(IntTy, ZhmTypeTrapNumber)});
+    CI->replaceAllUsesWith(B.CreateZExtOrTrunc(Flags, CI->getType()));
+    CI->eraseFromParent();
+  }
+  return true;
+}
+
+//===----------------------------------------------------------------------===//
 // Driver
 //===----------------------------------------------------------------------===//
 
@@ -373,6 +442,7 @@ bool llvm::runRISCVZhmLegalizeIR(Module &M, const TargetMachine *TM) {
       continue;
     Changed |= legalizePointerBits(F);
     Changed |= legalizeMemTransfers(F);
+    Changed |= lowerTypeQueries(F);
   }
   return Changed;
 }

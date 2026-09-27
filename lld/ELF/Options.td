@@ -854,3 +854,11 @@ defm load_pass_plugins: EEq<"load-pass-plugin", "Load passes from plugin library
 defm android_memtag_note
     : BB<"android-memtag-note", "Emit the Android-specific legacy memtag note",
          "">;
+
+def zhm_no_direct_calls: F<"zhm-no-direct-calls">,
+  HelpText<"Zhm: call every function through the GOT">;
+defm zhm_got_call: EEq<"zhm-got-call",
+  "Zhm: call functions matching this glob through the GOT">;
+defm zhm_verify_regs: BB<"zhm-verify-regs",
+  "Zhm: reject code that writes ra, sp or gp by hand (default)",
+  "Zhm: do not check code for hand-written ra, sp or gp accesses">;

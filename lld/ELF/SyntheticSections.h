@@ -438,9 +438,7 @@ public:
 
   uint64_t getOffset() const;
   uint32_t getSymIndex(SymbolTableBaseSection *symTab) const;
-  bool needsDynSymIndex() const {
-    return isAgainstSymbol || sym->getInOtherObject();
-  }
+  bool needsDynSymIndex() const { return isAgainstSymbol; }
 
   /// Computes the addend of the dynamic relocation. Note that this is not the
   /// same as the #addend member variable as it may also include the symbol

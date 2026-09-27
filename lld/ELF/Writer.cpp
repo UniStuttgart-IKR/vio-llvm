@@ -282,9 +282,9 @@ static void demoteSymbolsAndComputeIsPreemptible(Ctx &ctx) {
           sym->versionId = VER_NDX_GLOBAL;
         }
       }
-      sym->isExported = sym->getInOtherObject();
+
       sym->isPreemptible = (sym->isUndefined() || sym->isExported) &&
-                          computeIsPreemptible(ctx, *sym);
+                           computeIsPreemptible(ctx, *sym);
     }
   });
 }
@@ -444,8 +444,6 @@ bool elf::includeInSymtab(Ctx &ctx, const Symbol &b) {
       return s->getSectionPiece(d->value).live;
     return true;
   }
-  if (b.getInOtherObject())
-    return true;
   return b.hasFlag(USED) || !ctx.arg.gcSections;
 }
 
@@ -2005,15 +2003,12 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   }
 
   {
-    //auto diag = Err(ctx);
     llvm::TimeTraceScope timeScope("Add symbols to symtabs");
     if (ctx.in.symTab)
       ctx.in.symTab->markGlobalPart();
     // Now that we have defined all possible global symbols including linker-
     // synthesized ones. Visit all symbols to give the finishing touches.
     for (Symbol *sym : ctx.symtab->getSymbols()) {
-      //auto diag = Err(ctx);
-      //diag << "finalise: sym : " << sym->getName() << " in other obj:" << sym->getInOtherObject() << "\n";
       if (!sym->isUsedInRegularObj || !includeInSymtab(ctx, *sym))
         continue;
       if (!ctx.arg.relocatable)

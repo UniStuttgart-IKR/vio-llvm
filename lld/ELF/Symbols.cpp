@@ -20,14 +20,13 @@
 #include "llvm/Support/Compiler.h"
 #include <cstring>
 
-
 using namespace llvm;
 using namespace llvm::object;
 using namespace llvm::ELF;
 using namespace lld;
 using namespace lld::elf;
 
-static_assert(sizeof(SymbolUnion) <= 72, "SymbolUnion too large");
+static_assert(sizeof(SymbolUnion) <= 64, "SymbolUnion too large");
 
 template <typename T> struct AssertSymbol {
   static_assert(std::is_trivially_destructible<T>(),
@@ -157,9 +156,6 @@ static uint64_t getSymVA(Ctx &ctx, const Symbol &sym, int64_t addend) {
 }
 
 uint64_t Symbol::getVA(Ctx &ctx, int64_t addend) const {
-  if (inOtherObject)
-    return 0;
-
   return getSymVA(ctx, *this, addend) + addend;
 }
 
@@ -290,14 +286,11 @@ void Symbol::extract(Ctx &ctx) const {
 }
 
 uint8_t Symbol::computeBinding(Ctx &ctx) const {
-  if (inOtherObject)
-    return STB_GLOBAL;
   auto v = visibility();
   if ((v != STV_DEFAULT && v != STV_PROTECTED) || versionId == VER_NDX_LOCAL)
     return STB_LOCAL;
   if (binding == STB_GNU_UNIQUE && !ctx.arg.gnuUnique)
     return STB_GLOBAL;
-
   return binding;
 }
 
@@ -432,8 +425,6 @@ void Symbol::resolve(Ctx &ctx, const Undefined &other) {
     uint8_t v = visibility(), ov = other.visibility();
     setVisibility(v == STV_DEFAULT ? ov : std::min(v, ov));
   }
-
-
   // An undefined symbol with non default visibility must be satisfied
   // in the same DSO.
   //
@@ -614,7 +605,6 @@ void Symbol::checkDuplicate(Ctx &ctx, const Defined &other) const {
 }
 
 void Symbol::resolve(Ctx &ctx, const CommonSymbol &other) {
-
   if (other.visibility() != STV_DEFAULT) {
     uint8_t v = visibility(), ov = other.visibility();
     setVisibility(v == STV_DEFAULT ? ov : std::min(v, ov));
@@ -651,7 +641,6 @@ void Symbol::resolve(Ctx &ctx, const CommonSymbol &other) {
 }
 
 void Symbol::resolve(Ctx &ctx, const Defined &other) {
-  
   if (other.visibility() != STV_DEFAULT) {
     uint8_t v = visibility(), ov = other.visibility();
     setVisibility(v == STV_DEFAULT ? ov : std::min(v, ov));
@@ -661,7 +650,6 @@ void Symbol::resolve(Ctx &ctx, const Defined &other) {
 }
 
 void Symbol::resolve(Ctx &ctx, const LazySymbol &other) {
-  
   if (isPlaceholder()) {
     other.overwrite(*this);
     return;
@@ -699,9 +687,6 @@ void Symbol::resolve(Ctx &ctx, const LazySymbol &other) {
 }
 
 void Symbol::resolve(Ctx &ctx, const SharedSymbol &other) {
-  if(inOtherObject)
-    return;
-  
   isExported = true;
   if (isPlaceholder()) {
     other.overwrite(*this);

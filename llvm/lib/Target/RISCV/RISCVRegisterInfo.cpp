@@ -201,6 +201,9 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   if (TFI->hasBP(MF))
     markSuperRegs(Reserved, RISCVABI::getBPReg()); // bp
 
+  if (MF.getSubtarget<RISCVSubtarget>().hasStdExtZhm())
+    markSuperRegs(Reserved, RISCV::X1);
+
   // Additionally reserve dummy register used to form the register pair
   // beginning with 'x0' for instructions that take register pairs.
   markSuperRegs(Reserved, RISCV::DUMMY_REG_PAIR_WITH_X0);

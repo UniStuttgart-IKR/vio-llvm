@@ -13,12 +13,12 @@
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "llvm/Support/ELFAttributes.h"
+#include "llvm/Support/GlobPattern.h"
 #include "llvm/Support/LEB128.h"
 #include "llvm/Support/RISCVAttributeParser.h"
 #include "llvm/Support/RISCVAttributes.h"
 #include "llvm/Support/TimeProfiler.h"
 #include "llvm/TargetParser/RISCVISAInfo.h"
-
 
 using namespace llvm;
 using namespace llvm::object;
@@ -93,6 +93,7 @@ enum Op {
 enum Reg {
   X_X0 = 0,
   X_RA = 1,
+  X_SP = 2,
   X_GP = 3,
   X_TP = 4,
   X_T0 = 5,
@@ -127,6 +128,170 @@ static uint32_t setLO12_I(uint32_t insn, uint32_t imm) {
 static uint32_t setLO12_S(uint32_t insn, uint32_t imm) {
   return (insn & 0x1fff07f) | (extractBits(imm, 11, 5) << 25) |
          (extractBits(imm, 4, 0) << 7);
+}
+
+// Zhm: a call stays pc-relative (auipc+jalr, relaxable to jal) only if the
+// callee ends up in this program's own code. Everything resolved elsewhere
+// is called through the GOT:
+//   * undefined symbols (other processes, the runtime, loaded libraries),
+//     including undefined weak ones (GOT entry 0),
+//   * preemptible symbols (exported from a shared library),
+//   * symbols matching --zhm-got-call,
+//   * anything not in an executable section.
+static bool zhmCallIsDirect(Ctx &ctx, const Symbol &s) {
+  if (ctx.arg.zhmNoDirectCalls || !s.isDefined() || s.isPreemptible)
+    return false;
+  for (const GlobPattern &p : ctx.arg.zhmGotCall)
+    if (p.match(s.getName()))
+      return false;
+  auto *sec = dyn_cast_or_null<InputSectionBase>(cast<Defined>(s).section);
+  return sec && (sec->flags & SHF_EXECINSTR);
+}
+
+// Zhm: sp, gp and ra must not be written by hand, and ra may only be the
+// source or destination of a jump (plus the hardware-supervised save and
+// restore of ra in its frame slot at offset XLEN).
+//
+// The standard call sequence `auipc ra, hi; jalr ra, lo(ra)` uses ra as its
+// temporary, so the auipc writes ra. Rewrite it to use t1, which is dead at
+// every call site under the calling convention (caller-saved, never an
+// argument register):
+//     auipc t1, hi ; jalr ra, lo(t1)
+// Other shapes that write ra outside a jump are reported.
+static void zhmFixCallTemp(Ctx &ctx, uint8_t *loc) {
+  const uint32_t auipc = read32le(loc), jalr = read32le(loc + 4);
+  const uint32_t tmp = extractBits(auipc, 11, 7);
+  if (tmp != X_RA)
+    return;
+  const uint32_t jalrRd = extractBits(jalr, 11, 7);
+  const uint32_t jalrRs1 = extractBits(jalr, 19, 15);
+  if (jalrRd != X_RA || jalrRs1 != X_RA) {
+    Err(ctx) << getErrorLoc(ctx, loc)
+             << "Zhm: call sequence writes ra outside a jump";
+    return;
+  }
+  write32le(loc, (auipc & ~(0x1fu << 7)) | (X_T1 << 7));
+  write32le(loc + 4, (jalr & ~(0x1fu << 15)) | (X_T1 << 15));
+}
+
+// Registers a GOT load may not target on Zhm.
+static bool zhmIsProtectedReg(uint32_t r) {
+  return r == X_RA || r == X_SP || r == X_GP;
+}
+
+// Checks every instruction of an executable output section after relocation.
+//
+//   ra  written only by jal/jalr, or restored by `l[wd] ra, XLEN(sp)`;
+//       read only by jalr (e.g. ret), or saved by `s[wd] ra, XLEN(sp)`
+//   sp  written only by alc[i] sp, `l[wd] sp, 0(sp)` (frame release),
+//       `addi sp, sp, imm` and `add/sub sp, sp, rX` (sp walk)
+//   gp  never written
+//
+// Data inside code is skipped using the $d/$x mapping symbols. 16-bit
+// (compressed) instructions are skipped, not checked.
+static void zhmVerifyRegisters(Ctx &ctx, const InputSection &sec,
+                               const uint8_t *buf) {
+  // Data ranges from mapping symbols: offset -> is data.
+  SmallVector<std::pair<uint64_t, bool>, 0> map;
+  if (sec.file)
+    for (Symbol *sym : sec.file->getSymbols())
+      if (auto *d = dyn_cast<Defined>(sym))
+        if (d->section == &sec && (d->getName().starts_with("$d") ||
+                                   d->getName().starts_with("$x")))
+          map.push_back({d->value, d->getName().starts_with("$d")});
+  llvm::sort(map, [](auto &a, auto &b) { return a.first < b.first; });
+
+  const uint64_t xlen = ctx.arg.wordsize;
+  const uint64_t size = sec.getSize();
+  size_t m = 0;
+  bool inData = false;
+
+  auto report = [&](uint64_t off, const char *what) {
+    Err(ctx) << sec.getLocation(off) << ": Zhm: " << what;
+  };
+
+  for (uint64_t off = 0; off + 2 <= size;) {
+    while (m < map.size() && map[m].first <= off)
+      inData = map[m++].second;
+    if (inData) {
+      off = m < map.size() ? map[m].first : size;
+      continue;
+    }
+    const uint16_t lo = read16le(buf + off);
+    if ((lo & 3) != 3) { // compressed
+      off += 2;
+      continue;
+    }
+    if (off + 4 > size)
+      break;
+    const uint32_t insn = read32le(buf + off);
+    const uint32_t opcode = insn & 0x7f;
+    const uint32_t rd = extractBits(insn, 11, 7);
+    const uint32_t funct3 = extractBits(insn, 14, 12);
+    const uint32_t rs1 = extractBits(insn, 19, 15);
+    const uint32_t rs2 = extractBits(insn, 24, 20);
+    const uint32_t funct7 = extractBits(insn, 31, 25);
+    const int64_t immI = SignExtend64<12>(insn >> 20);
+    const int64_t immS =
+        SignExtend64<12>((extractBits(insn, 31, 25) << 5) | rd);
+    const bool isWordLoad = opcode == 0x03 && funct3 == (xlen == 8 ? 3 : 2);
+    const bool isWordStore = opcode == 0x23 && funct3 == (xlen == 8 ? 3 : 2);
+
+    // Does the instruction have a GPR destination / read rs1 / read rs2?
+    bool writesRd = false, readsRs1 = false, readsRs2 = false;
+    switch (opcode) {
+    case 0x37: case 0x17: case 0x6f: // lui, auipc, jal
+      writesRd = true;
+      break;
+    case 0x67: case 0x03: case 0x13: case 0x1b: // jalr, load, op-imm(-32)
+      writesRd = readsRs1 = true;
+      break;
+    case 0x33: case 0x3b: case 0x2f: // op, op-32, amo
+      writesRd = readsRs1 = readsRs2 = true;
+      break;
+    case 0x23: case 0x63: // store, branch
+      readsRs1 = readsRs2 = true;
+      break;
+    case 0x0b: // Zhm custom: alc/alc.d (rs2), alci/alci.d, qsz (rs1)
+      writesRd = true;
+      readsRs2 = funct3 <= 1;
+      readsRs1 = funct3 == 4;
+      break;
+    case 0x73: // system: csr ops, and Zhm itd/btd/sep/dtp (funct3 000)
+      writesRd = rd != X_X0;
+      readsRs1 = funct3 == 0 ? rd != X_X0 : funct3 <= 3;
+      readsRs2 = funct3 == 0 && funct7 == 0b0111111; // dtp
+      break;
+    case 0x53: // FP ops whose destination is a GPR:
+      writesRd = (funct7 & 0x7c) == 0x50 ||  // feq/flt/fle
+                 (funct7 & 0x78) == 0x60 ||  // fcvt.{w,l}[u].<fp>
+                 (funct7 & 0x7c) == 0x70;    // fmv.x.<fp>, fclass
+      break;
+    default:
+      break;
+    }
+
+    if (writesRd && rd == X_RA &&
+        !(opcode == 0x6f || opcode == 0x67 ||
+          (isWordLoad && rs1 == X_SP && immI == (int64_t)xlen)))
+      report(off, "instruction writes ra outside a jump");
+    if (writesRd && rd == X_GP)
+      report(off, "instruction writes gp");
+    if (writesRd && rd == X_SP &&
+        !((opcode == 0x0b && funct3 <= 3) ||                 // alc[i][.d] sp
+          (isWordLoad && rs1 == X_SP && immI == 0) ||         // release
+          (opcode == 0x13 && funct3 == 0 && rs1 == X_SP) ||   // addi sp, sp
+          (opcode == 0x33 && funct3 == 0 && rs1 == X_SP &&
+           (funct7 == 0 || funct7 == 0x20))))                  // add/sub
+      report(off, "instruction writes sp outside the frame protocol");
+    if (readsRs1 && rs1 == X_RA && opcode != 0x67)
+      report(off, "instruction reads ra outside a jump");
+    if (readsRs2 && rs2 == X_RA &&
+        !(isWordStore && rs1 == X_SP && immS == (int64_t)xlen))
+      report(off, "instruction reads ra outside a jump");
+
+    off += 4;
+  }
 }
 
 RISCV::RISCV(Ctx &ctx) : TargetInfo(ctx) {
@@ -319,8 +484,7 @@ RelType RISCV::getDynRel(RelType type) const {
 // preprocessRelocs.
 RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
                           const uint8_t *loc) const {
-
-    switch (type) {
+  switch (type) {
   case R_RISCV_NONE:
     return R_NONE;
   case R_RISCV_32:
@@ -342,11 +506,11 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
     return RE_RISCV_ADD;
   case R_RISCV_32_PCREL:
     return R_PC;
+  case R_RISCV_GOT_OFF: // Zhm
+    return R_GOT_OFF;
   case R_RISCV_SET_ULEB128:
   case R_RISCV_SUB_ULEB128:
     return RE_RISCV_LEB128;
-  case R_RISCV_GOT_OFF:
-    return RE_RISCV_GOT_OFF;
   default:
     Err(ctx) << getErrorLoc(ctx, loc) << "unknown relocation (" << type.v
              << ") against symbol " << &s;
@@ -405,6 +569,15 @@ void RISCV::scanSectionImpl(InputSectionBase &sec, Relocs<RelTy> rels,
     // PLT-generating relocations:
     case R_RISCV_CALL:
     case R_RISCV_CALL_PLT:
+      // Zhm, callee outside this program: call through the GOT instead of a
+      // PLT. R_GOT_OFF creates the GOT entry; relocate() rewrites the
+      // auipc+jalr pair into a gp-relative load + jalr.
+      if (ctx.arg.zhm && !zhmCallIsDirect(ctx, sym)) {
+        expr = R_GOT_OFF;
+        break;
+      }
+      rs.processR_PLT_PC(type, offset, addend, sym);
+      continue;
     case R_RISCV_PLT32:
       rs.processR_PLT_PC(type, offset, addend, sym);
       continue;
@@ -413,6 +586,9 @@ void RISCV::scanSectionImpl(InputSectionBase &sec, Relocs<RelTy> rels,
     case R_RISCV_GOT_HI20:
     case R_RISCV_GOT32_PCREL:
       expr = R_GOT_PC;
+      break;
+    case R_RISCV_GOT_OFF: // Zhm: l[wd] rd, %got_off(sym)(gp)
+      expr = R_GOT_OFF;
       break;
 
     // TLS relocations:
@@ -601,6 +777,22 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   // auipc + jalr pair
   case R_RISCV_CALL:
   case R_RISCV_CALL_PLT: {
+    // Zhm: never use ra as the temporary of a call sequence.
+    if (ctx.arg.zhm)
+      zhmFixCallTemp(ctx, loc);
+    if (rel.expr == R_GOT_OFF) {
+      // Zhm GOT call. val = offset of the symbol's GOT entry from the start
+      // of the GOT, which gp points to.
+      //   auipc rX, hi      ->  l[wd] rX, off(gp)   (rX = t1 after the
+      //   jalr  rd, lo(rX)  ->  jalr  rd, 0(rX)    temp fix above)
+      checkInt(ctx, loc, val, 12, rel);
+      const uint32_t rX = (read32le(loc) >> 7) & 0x1f; // auipc's rd
+      const uint32_t funct3 = ctx.arg.is64 ? 0b011 : 0b010; // ld : lw
+      const uint32_t load = 0x03 | (rX << 7) | (funct3 << 12) | (3u << 15);
+      write32le(loc, setLO12_I(load, val & 0xfff));
+      write32le(loc + 4, setLO12_I(read32le(loc + 4), 0));
+      return;
+    }
     int64_t hi = SignExtend64(val + 0x800, bits) >> 12;
     checkInt(ctx, loc, hi, 20, rel);
     if (isInt<20>(hi)) {
@@ -609,6 +801,18 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     }
     return;
   }
+
+  // Zhm: l[wd] rd, %got_off(sym)(gp). val = offset of the symbol's GOT
+  // entry from the start of the GOT, which gp points to.
+  case R_RISCV_GOT_OFF:
+    if (zhmIsProtectedReg(extractBits(read32le(loc), 11, 7))) {
+      Err(ctx) << getErrorLoc(ctx, loc)
+               << "Zhm: GOT load into ra, sp or gp";
+      return;
+    }
+    checkInt(ctx, loc, val, 12, rel);
+    write32le(loc, setLO12_I(read32le(loc), val & 0xfff));
+    return;
 
   case R_RISCV_GOT_HI20:
   case R_RISCV_PCREL_HI20:
@@ -620,12 +824,6 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     uint64_t hi = val + 0x800;
     checkInt(ctx, loc, SignExtend64(hi, bits) >> 12, 20, rel);
     write32le(loc, (read32le(loc) & 0xFFF) | (hi & 0xFFFFF000));
-    return;
-  }
-  
-  case R_RISCV_GOT_OFF: {
-    uint64_t got_ix = rel.sym->getGotOffset(ctx);
-    write32le(loc, (read32le(loc) & 0xFFFFF) | ((got_ix << 20) & 0xFFF00000));
     return;
   }
 
@@ -875,6 +1073,10 @@ void RISCV::relocateAlloc(InputSection &sec, uint8_t *buf) const {
     }
     relocate(loc, rel, val);
   }
+
+  // Zhm: check the finished code for hand-written ra/sp/gp accesses.
+  if (ctx.arg.zhm && ctx.arg.zhmVerifyRegs && (sec.flags & SHF_EXECINSTR))
+    zhmVerifyRegisters(ctx, sec, buf);
 }
 
 void elf::initSymbolAnchors(Ctx &ctx) {
@@ -1076,6 +1278,9 @@ static bool relax(Ctx &ctx, int pass, InputSection &sec) {
     }
     case R_RISCV_CALL:
     case R_RISCV_CALL_PLT:
+      // Zhm GOT calls are not pc-relative; never shrink them to jal.
+      if (r.expr == R_GOT_OFF)
+        break;
       // Prevent oscillation between states by disallowing the increment of
       // `remove` after a few passes. The previous `remove` value is
       // `cur-delta`.
@@ -1616,6 +1821,10 @@ mergeAttributesSection(Ctx &ctx,
     if (auto result = RISCVISAInfo::createFromExtMap(xlen, exts)) {
       merged.strAttr.try_emplace(RISCVAttrs::ARCH,
                                  ctx.saver.save((*result)->toString()));
+      // The merged arch is the union of all inputs: enable Zhm handling if
+      // any object was built for it. This runs before relocation scanning.
+      if ((*result)->hasExtension("zhm"))
+        ctx.arg.zhm = true;
     } else {
       Err(ctx) << result.takeError();
     }

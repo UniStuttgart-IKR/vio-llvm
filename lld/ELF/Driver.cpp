@@ -1697,6 +1697,17 @@ static void readConfigs(Ctx &ctx, opt::InputArgList &args) {
   ctx.arg.branchToBranch = args.hasFlag(
       OPT_branch_to_branch, OPT_no_branch_to_branch, ctx.arg.optimize >= 2);
 
+  ctx.arg.zhm = hasZOption(args, "zhm");
+  ctx.arg.zhmNoDirectCalls = args.hasArg(OPT_zhm_no_direct_calls);
+  ctx.arg.zhmVerifyRegs =
+      args.hasFlag(OPT_zhm_verify_regs, OPT_no_zhm_verify_regs, true);
+  for (auto *arg : args.filtered(OPT_zhm_got_call)) {
+    if (Expected<GlobPattern> pat = GlobPattern::create(arg->getValue()))
+      ctx.arg.zhmGotCall.push_back(std::move(*pat));
+    else
+      ErrAlways(ctx) << arg->getSpelling() << ": " << pat.takeError();
+  }
+
   if (opt::Arg *arg = args.getLastArg(OPT_eb, OPT_el)) {
     if (arg->getOption().matches(OPT_eb))
       ctx.arg.optEB = true;

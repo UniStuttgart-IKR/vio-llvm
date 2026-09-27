@@ -137,7 +137,7 @@ static bool needsPlt(RelExpr expr) {
 
 bool lld::elf::needsGot(RelExpr expr) {
   return oneof<R_GOT, R_GOT_OFF, RE_MIPS_GOT_LOCAL_PAGE, RE_MIPS_GOT_OFF,
-               RE_MIPS_GOT_OFF32, RE_AARCH64_GOT_PAGE_PC, R_GOT_PC, RE_RISCV_GOT_OFF, R_GOTPLT,
+               RE_MIPS_GOT_OFF32, RE_AARCH64_GOT_PAGE_PC, R_GOT_PC, R_GOTPLT,
                RE_AARCH64_GOT_PAGE, RE_LOONGARCH_GOT, RE_LOONGARCH_GOT_PAGE_PC>(
       expr);
 }
@@ -752,7 +752,7 @@ static void addRelativeReloc(Ctx &ctx, InputSectionBase &isec,
 
 template <class PltSection, class GotPltSection>
 static void addPltEntry(Ctx &ctx, PltSection &plt, GotPltSection &gotPlt,
-                        RelocationBaseSection &rel, RelType type, Symbol &sym) {               
+                        RelocationBaseSection &rel, RelType type, Symbol &sym) {
   plt.addEntry(sym);
   bool isPreemptible = sym.isPreemptible;
   RelExpr expr = isPreemptible ? R_ADDEND : R_ABS;
@@ -771,7 +771,7 @@ void elf::addGotEntry(Ctx &ctx, Symbol &sym) {
   uint64_t off = sym.getGotOffset(ctx);
 
   // If preemptible, emit a GLOB_DAT relocation.
-  if (sym.isPreemptible && !(sym.getInOtherObject())) {
+  if (sym.isPreemptible) {
     ctx.in.relaDyn->addReloc(
         {ctx.target->gotRel, ctx.in.got.get(), off, true, sym, 0, R_ADDEND});
     return;
@@ -779,14 +779,11 @@ void elf::addGotEntry(Ctx &ctx, Symbol &sym) {
 
   // Otherwise, the value is either a link-time constant or the load base
   // plus a constant.
-  if ((!ctx.arg.isPic || isAbsolute(sym)) && !(sym.getInOtherObject())){
-        ctx.in.got->addConstant({R_ABS, ctx.target->symbolicRel, off, 0, &sym});
-  }
+  if (!ctx.arg.isPic || isAbsolute(sym))
+    ctx.in.got->addConstant({R_ABS, ctx.target->symbolicRel, off, 0, &sym});
   else
     addRelativeReloc(ctx, *ctx.in.got, off, sym, 0, R_ABS,
                      ctx.target->symbolicRel);
-
-  
 }
 
 static void addGotAuthEntry(Ctx &ctx, Symbol &sym) {
@@ -930,13 +927,6 @@ void RelocScan::process(RelExpr expr, RelType type, uint64_t offset,
                         Symbol &sym, int64_t addend) const {
   // If non-ifunc non-preemptible, change PLT to direct call and optimize GOT
   // indirection.
-
-  // local symbols which are used with %got_off need to included in .dynsym in order for the linker to fill them in at load time
- if(sym.getInOtherObject()){
-    //if(sym.isExported == 0)
-      //ctx.symtab->addSymbol(sym);//FIXME: IS THIS CORRECT?!
-  }
-
   const bool isIfunc = sym.isGnuIFunc();
   if (!sym.isPreemptible && !isIfunc) {
     if (expr != R_GOT_PC) {
@@ -994,7 +984,7 @@ void RelocScan::processAux(RelExpr expr, RelType type, uint64_t offset,
   // If the relocation is known to be a link-time constant, we know no dynamic
   // relocation will be created, pass the control to relocateAlloc() or
   // relocateNonAlloc() to resolve it.
-  if (isStaticLinkTimeConstant(expr, type, sym, offset) || (!ctx.arg.isPic && sym.isUndefWeak())) {
+  if (isStaticLinkTimeConstant(expr, type, sym, offset)) {
     sec->addReloc({expr, type, offset, addend, &sym});
     return;
   }
@@ -1122,9 +1112,7 @@ void RelocScan::processAux(RelExpr expr, RelType type, uint64_t offset,
              << "' cannot be preempted; recompile with -fPIE";
         printLocation(diag, *sec, sym, offset);
       }
-      if(!sym.getInOtherObject())
-        sym.setFlags(NEEDS_COPY | NEEDS_PLT);
-
+      sym.setFlags(NEEDS_COPY | NEEDS_PLT);
       sec->addReloc({expr, type, offset, addend, &sym});
       return;
     }

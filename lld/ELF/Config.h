@@ -568,6 +568,12 @@ struct Config {
   // If an input file matches a wildcard pattern, remap it to the value.
   llvm::SmallVector<std::pair<llvm::GlobPattern, llvm::StringRef>, 0>
       remapInputsWildcards;
+
+  bool zhm = false;                  // -z zhm, or zhm in the merged arch
+  bool zhmNoDirectCalls = false;     // --zhm-no-direct-calls
+  SmallVector<llvm::GlobPattern, 0> zhmGotCall; // --zhm-got-call=<glob>
+  bool zhmVerifyRegs = true;
+  
 };
 
 // Some index properties of a symbol are stored separately in this auxiliary

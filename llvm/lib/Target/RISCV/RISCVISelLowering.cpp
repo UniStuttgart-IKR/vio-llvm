@@ -27168,22 +27168,16 @@ static SDValue unpackFromMemLoc(SelectionDAG &DAG, SDValue Chain,
                                 const RISCVTargetLowering &TLI) {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  const RISCVSubtarget &Subtarget = DAG.getSubtarget<RISCVSubtarget>();
   EVT LocVT = VA.getLocVT();
   EVT PtrVT = MVT::getIntegerVT(DAG.getDataLayout().getPointerSizeInBits(0));
-  SDValue Val;
-  if (Subtarget.hasStdExtZhm()) {
-    SDValue A7 = DAG.getRegister(RISCV::X17, PtrVT);
-    Val = DAG.getLoad(LocVT, DL, Chain, A7, MachinePointerInfo().getWithOffset(VA.getLocMemOffset()));
-  } else {
-    int FI = MFI.CreateFixedObject(LocVT.getStoreSize(), VA.getLocMemOffset(),
-                                  /*IsImmutable=*/true);
-    SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
-    Val = DAG.getLoad(
-        LocVT, DL, Chain, FIN,
-        MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI));
-  }
 
+  int FI = MFI.CreateFixedObject(LocVT.getStoreSize(), VA.getLocMemOffset(),
+                                  /*IsImmutable=*/true);
+  SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
+  SDValue Val = DAG.getLoad(
+      LocVT, DL, Chain, FIN,
+      MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI));
+  
   if (VA.getLocInfo() == CCValAssign::Indirect)
     return Val;
 
@@ -27256,6 +27250,35 @@ static SDValue unpackGPRVecOnRV32(SelectionDAG &DAG, SDValue Chain,
   }
 
   return DAG.getNode(RISCVISD::BuildPairGPRVec, DL, VA.getValVT(), Lo, Hi);
+}
+
+// Zhm: load a memory-assigned argument from the argument object. Same
+// extension handling as unpackFromMemLoc, but through a register pointer
+// instead of a fixed stack object.
+static SDValue unpackFromZhmArgObject(SelectionDAG &DAG, SDValue Chain,
+                                      const CCValAssign &VA, const SDLoc &DL,
+                                      SDValue ArgObj) {
+  EVT LocVT = VA.getLocVT();
+  EVT ValVT = VA.getValVT();
+  EVT PtrVT = MVT::getIntegerVT(DAG.getDataLayout().getPointerSizeInBits(0));
+  if (VA.getLocInfo() == CCValAssign::Indirect)
+    ValVT = LocVT; // the object holds the pointer to the real value
+
+  ISD::LoadExtType ExtType;
+  switch (VA.getLocInfo()) {
+  default:
+    llvm_unreachable("Unexpected CCValAssign::LocInfo");
+  case CCValAssign::Full:
+  case CCValAssign::Indirect:
+  case CCValAssign::BCvt:
+    ExtType = ISD::NON_EXTLOAD;
+    break;
+  }
+
+  SDValue Addr = DAG.getNode(ISD::ADD, DL, PtrVT, ArgObj,
+                             DAG.getIntPtrConstant(VA.getLocMemOffset(), DL));
+  return DAG.getExtLoad(ExtType, DL, LocVT, Chain, Addr, MachinePointerInfo(),
+                        ValVT);
 }
 
 // Transform physical registers into virtual registers.
@@ -27356,6 +27379,16 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
   // Used with vargs to accumulate store chains.
   std::vector<SDValue> OutChains;
 
+  // Zhm: pointer to the argument object, read from a7 on first use.
+  SDValue ZhmArgObj;
+  auto GetZhmArgObj = [&]() {
+    if (!ZhmArgObj) {
+      Register VReg = MF.addLiveIn(RISCV::X17, &RISCV::GPRRegClass);
+      ZhmArgObj = DAG.getCopyFromReg(Chain, DL, VReg, XLenVT);
+    }
+    return ZhmArgObj;
+  };
+
   // Assign locations to all of the incoming arguments.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
@@ -27375,10 +27408,13 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
                VA.getLocInfo() != CCValAssign::Indirect) {
       assert(VA.needsCustom());
       ArgValue = unpackGPRVecOnRV32(DAG, Chain, VA, ArgLocs[++i], DL);
-    } else if (VA.isRegLoc())
+    } else if (VA.isRegLoc()) {
       ArgValue = unpackFromRegLoc(DAG, Chain, VA, DL, Ins[InsIdx], *this);
-    else
+    } else if (Subtarget.hasStdExtZhm()) {
+      ArgValue = unpackFromZhmArgObject(DAG, Chain, VA, DL, GetZhmArgObj());
+    } else {
       ArgValue = unpackFromMemLoc(DAG, Chain, VA, DL, *this);
+    }
 
     if (VA.getLocInfo() == CCValAssign::Indirect) {
       // If the original argument was split and passed by reference (e.g. i128
@@ -27562,6 +27598,28 @@ static Align getPrefTypeAlign(EVT VT, SelectionDAG &DAG) {
       VT.getTypeForEVT(*DAG.getContext()));
 }
 
+static SDValue emitZhmAlloc(SelectionDAG &DAG, const SDLoc &DL, SDValue &Chain,
+                            uint64_t Size, const RISCVSubtarget &STI) {
+  MVT XLenVT = STI.getXLenVT();
+  SDVTList VTs = DAG.getVTList(XLenVT, MVT::Other);
+  SDValue Node;
+  if (isUInt<12>(Size))
+    Node = DAG.getNode(ISD::INTRINSIC_W_CHAIN, DL, VTs,
+                       {Chain,
+                        DAG.getTargetConstant(Intrinsic::riscv_alci, DL, XLenVT),
+                        DAG.getTargetConstant(Size, DL, MVT::i32)});
+  else
+    Node = DAG.getNode(
+        ISD::INTRINSIC_W_CHAIN, DL, VTs,
+        {Chain,
+         DAG.getTargetConstant(STI.is64Bit() ? Intrinsic::riscv_alc_64
+                                             : Intrinsic::riscv_alc_32,
+                               DL, XLenVT),
+         DAG.getConstant(Size, DL, XLenVT)});
+  Chain = Node.getValue(1);
+  return Node;
+}
+
 // Lower a call to a callseq_start + CALL + callseq_end chain, and add input
 // and output parameter nodes.
 SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
@@ -27612,6 +27670,13 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // Get a count of how many bytes are to be pushed on the stack.
   unsigned NumBytes = ArgCCInfo.getStackSize();
 
+  // Zhm: the "stack" arguments go into an argument object instead. There is
+  // no outgoing argument area, so the call frame is empty.
+  const unsigned ZhmArgObjSize =
+      Subtarget.hasStdExtZhm() ? NumBytes : 0;
+  if (Subtarget.hasStdExtZhm())
+    NumBytes = 0;
+
   // Create local copies for byval args
   SmallVector<SDValue, 8> ByValArgs;
   for (unsigned i = 0, e = Outs.size(); i != e; ++i) {
@@ -27638,23 +27703,17 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (!IsTailCall)
     Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, CLI.DL);
 
+
+  SDValue ZhmArgObj;
+  if (ZhmArgObjSize)
+    ZhmArgObj = emitZhmAlloc(DAG, DL, Chain,
+                             alignTo(ZhmArgObjSize, 2 * Subtarget.getXLen() / 8),
+                             Subtarget);
+
   // Copy argument values to their designated locations.
   SmallVector<std::pair<Register, SDValue>, 8> RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
   SDValue StackPtr;
-  if (Subtarget.hasStdExtZhm() && NumBytes > 0) {
-    SDVTList VTs = DAG.getVTList({MVT::i32, MVT::Other});
-    SDValue IntID =
-        DAG.getTargetConstant(Intrinsic::riscv_alci, DL, XLenVT);
-    SDValue Size =
-        DAG.getTargetConstant(NumBytes, DL, XLenVT);
-    SDValue Ops[] = {Chain,
-                      IntID,
-                      Size};
-    SDValue Result = DAG.getNode(ISD::INTRINSIC_W_CHAIN, DL, VTs, Ops);
-    Chain = Result.getValue(1);
-    StackPtr = Result.getValue(0);
-  }
   for (unsigned i = 0, j = 0, e = ArgLocs.size(), OutIdx = 0; i != e;
        ++i, ++OutIdx) {
     CCValAssign &VA = ArgLocs[i];
@@ -27911,11 +27970,16 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       assert((!IsTailCall || (CLI.CB && CLI.CB->isMustTailCall())) &&
              "Tail call not allowed if stack is used for passing parameters");
 
-      // Work out the address of the stack slot.
-      if (!StackPtr.getNode())
-        StackPtr = DAG.getCopyFromReg(Chain, DL, RISCV::X2, PtrVT);
+      // Work out the address: the argument object under Zhm, the stack
+      // otherwise.
+      SDValue Base = ZhmArgObj;
+      if (!Base) {
+        if (!StackPtr.getNode())
+          StackPtr = DAG.getCopyFromReg(Chain, DL, RISCV::X2, PtrVT);
+        Base = StackPtr;
+      }
       SDValue Address =
-          DAG.getNode(ISD::ADD, DL, PtrVT, StackPtr,
+          DAG.getNode(ISD::ADD, DL, PtrVT, Base,
                       DAG.getIntPtrConstant(VA.getLocMemOffset(), DL));
 
       // Emit the store.
@@ -27936,6 +28000,10 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     Chain = DAG.getCopyToReg(Chain, DL, Reg.first, Reg.second, Glue);
     Glue = Chain.getValue(1);
   }
+  
+  // Pass the argument object in a7.
+  if (ZhmArgObj)
+    RegsToPass.push_back(std::make_pair(Register(RISCV::X17), ZhmArgObj));
 
   // Validate that none of the argument registers have been marked as
   // reserved, if so report an error. Do the same for the return address if this
@@ -27950,17 +28018,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // TargetGlobalAddress/TargetExternalSymbol node so that legalize won't
   // split it and then direct call can be matched by PseudoCALL.
   bool CalleeIsLargeExternalSymbol = false;
-  if (Subtarget.hasStdExtZhm()) {
-    if (auto *S = dyn_cast<GlobalAddressSDNode>(Callee))
-      Callee = getAddr(S, DAG);
-    else if (auto *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-      EVT Ty = getPointerTy(DAG.getDataLayout());
-      SDValue GPReg = DAG.getRegister(RISCV::X3, Subtarget.getXLenVT());
-      SDValue Addr = DAG.getTargetExternalSymbol(S->getSymbol(), PtrVT, RISCVII::MO_GOT_OFF);//;getTargetNode(S, DL, Ty, DAG, RISCVII::MO_GOT_OFF);
-      MachineSDNode *Load = DAG.getMachineNode(Subtarget.is64Bit() ? RISCV::LD : RISCV::LW, DL, Ty, GPReg, Addr);
-      Callee = SDValue(Load, 0);
-    }
-  } else if (getTargetMachine().getCodeModel() == CodeModel::Large) {
+  if (getTargetMachine().getCodeModel() == CodeModel::Large) {
     if (auto *S = dyn_cast<GlobalAddressSDNode>(Callee))
       Callee = getLargeGlobalAddress(S, DL, PtrVT, DAG);
     else if (auto *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
@@ -28892,6 +28950,10 @@ bool RISCVTargetLowering::shouldConvertFpToSat(unsigned Op, EVT FPVT,
 }
 
 unsigned RISCVTargetLowering::getJumpTableEncoding() const {
+  // Zhm: always relative entries; absolute ones would be integers.
+  if (Subtarget.hasStdExtZhm())
+    return MachineJumpTableInfo::EK_LabelDifference32;
+
   // If we are using the small code model, we can reduce size of jump table
   // entry to 4 bytes.
   if (Subtarget.is64Bit() && !isPositionIndependent() &&
@@ -28899,6 +28961,25 @@ unsigned RISCVTargetLowering::getJumpTableEncoding() const {
     return MachineJumpTableInfo::EK_Custom32;
   }
   return TargetLowering::getJumpTableEncoding();
+}
+
+SDValue RISCVTargetLowering::getPICJumpTableRelocBase(SDValue Table,
+                                                      SelectionDAG &DAG) const {
+  if (!Subtarget.hasStdExtZhm())
+    return TargetLowering::getPICJumpTableRelocBase(Table, DAG);
+  const Function &F = DAG.getMachineFunction().getFunction();
+  SDLoc DL(Table);
+  EVT Ty = getPointerTy(DAG.getDataLayout());
+  return DAG.getNode(RISCVISD::LLA, DL, Ty,
+                     DAG.getTargetGlobalAddress(&F, DL, Ty));
+}
+
+const MCExpr *RISCVTargetLowering::getPICJumpTableRelocBaseExpr(
+    const MachineFunction *MF, unsigned JTI, MCContext &Ctx) const {
+  if (!Subtarget.hasStdExtZhm())
+    return TargetLowering::getPICJumpTableRelocBaseExpr(MF, JTI, Ctx);
+  return MCSymbolRefExpr::create(
+      getTargetMachine().getSymbol(&MF->getFunction()), Ctx);
 }
 
 const MCExpr *RISCVTargetLowering::LowerCustomJumpTableEntry(

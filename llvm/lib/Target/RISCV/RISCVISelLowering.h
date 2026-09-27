@@ -207,6 +207,13 @@ public:
                                 const Value *RHS,
                                 const Function *F) const override;
 
+  SDValue getPICJumpTableRelocBase(SDValue Table,
+                                   SelectionDAG &DAG) const override;
+                                   
+  const MCExpr *getPICJumpTableRelocBaseExpr(const MachineFunction *MF,
+                                             unsigned JTI,
+                                             MCContext &Ctx) const override;
+
   bool shouldFormOverflowOp(unsigned Opcode, EVT VT,
                             bool MathUsed) const override {
     if (VT == MVT::i8 || VT == MVT::i16)

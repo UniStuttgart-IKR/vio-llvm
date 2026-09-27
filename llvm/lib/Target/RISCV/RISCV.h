@@ -71,6 +71,9 @@ void initializeRISCVZhmLegalizeIRLegacyPass(PassRegistry &);
 ModulePass *createRISCVZhmVerifyIRLegacyPass();
 void initializeRISCVZhmVerifyIRLegacyPass(PassRegistry &);
 
+FunctionPass *createRISCVZhmVerifySpecialRegsPass();
+void initializeRISCVZhmVerifySpecialRegsPass(PassRegistry &);
+
 FunctionPass *createRISCVZhmRemoveZeroInitsPass();
 void initializeRISCVZhmRemoveZeroInitsPass(PassRegistry &);
 

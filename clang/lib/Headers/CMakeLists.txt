@@ -135,6 +135,7 @@ set(riscv_files
   riscv_bitmanip.h
   riscv_crypto.h
   riscv_ntlh.h
+  riscv_zhm.h
   # Vendor headers
   andes_vector.h
   riscv_corev_alu.h

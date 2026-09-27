@@ -7,14 +7,20 @@
 //   [..., Size)      all other objects
 //
 //   prologue:  alci sp, Size          (Size > 4095: li tmp, Size; alc sp, tmp)
-//              sd   sp, 0(sp)         fused pair, stores the caller's sp
+//                                     alc[i] sp stores the caller's sp at
+//                                     offset 0 of the new frame by itself
 //   epilogue:  ld   sp, 0(sp)
 //
+// With -riscv-zhm-explicit-sp-store the old sp is saved explicitly instead:
+//              addi t0, sp, 0
+//              alci sp, Size
+//              sw   t0, 0(sp)
+// This is the only place where sp is copied into another register.
+//
 // Zhm rules, enforced in processFunctionBeforeFrameIndicesReplaced():
-//   * the frame is only accessed sp-relative with a 12-bit immediate,
-//   * sp is never copied into another register,
-//   * sp is only stored by the fused store directly after alc(i),
-//   * sp is only written by alc(i) and the epilogue load.
+//   * the frame is only accessed sp-relative (large offsets walk sp),
+//   * sp is never copied into another register (except the explicit save),
+//   * sp is only written by alc(i), the sp walk and the epilogue load.
 // Violations are reported as regular compiler errors with source location.
 //
 // Assumptions: alc/alci return an sp aligned to the ABI stack alignment,
@@ -22,7 +28,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Zhm/RISCVZhmFrameLowering.h"
+#include "RISCVZhmFrameLowering.h"
 #include "RISCVInstrInfo.h"
 #include "RISCVMachineFunctionInfo.h"
 #include "RISCVRegisterInfo.h"
@@ -37,23 +43,17 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/MC/MCDwarf.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/LEB128.h"
 #include "llvm/Support/MathExtras.h"
 #include <algorithm>
 
 using namespace llvm;
 
-
-//===----------------------------------------------------------------------===//
-// Options
-//===----------------------------------------------------------------------===//
-
-static cl::opt<bool>
-    EnableExplicitSPStore("riscv-zhm-explicit-sp-store",
-                          cl::desc("Enables that the stack pointer is moved and then "
-                            "explicitly saved onto the stack instead of "
-                            "implictly with the alc-instruction."),
-                          cl::init(false), cl::NotHidden);
+static cl::opt<bool> ZhmExplicitSpStore(
+    "riscv-zhm-explicit-sp-store", cl::init(false), cl::Hidden,
+    cl::desc("Save the caller's sp explicitly (addi t0, sp, 0; alc[i] sp; "
+             "sw t0, 0(sp)) instead of relying on alc[i] sp storing it"));
 
 //===----------------------------------------------------------------------===//
 // Helpers
@@ -91,23 +91,25 @@ static bool isAlloc(const MachineInstr *MI) {
 
 // The instructions of the Zhm frame protocol itself.
 static bool isZhmFrameInstr(const MachineInstr &MI) {
-  const Register SP = RISCV::X2;
+  const Register SP = RISCV::X2, T0 = RISCV::X5;
   const unsigned Opc = MI.getOpcode();
   if (isAlloc(&MI))
     return true;
-  if (MI.getNumExplicitOperands() < 3)
+  if (MI.getNumExplicitOperands() < 3 || !MI.getOperand(0).isReg() ||
+      !MI.getOperand(1).isReg() || !MI.getOperand(2).isImm() ||
+      MI.getOperand(2).getImm() != 0)
     return false;
-  const bool IsSPAtZeroOfSP =
-      MI.getOperand(0).isReg() && MI.getOperand(0).getReg() == SP &&
-      MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == SP &&
-      MI.getOperand(2).isImm() && MI.getOperand(2).getImm() == 0;
-  if (!IsSPAtZeroOfSP)
-    return false;
-  // sd sp, 0(sp) -- only as second half of the fused pair.
-  if (Opc == RISCV::SD || Opc == RISCV::SW)
-    return isAlloc(MI.getPrevNode());
+  const Register R0 = MI.getOperand(0).getReg(), R1 = MI.getOperand(1).getReg();
+
+  // Explicit save: addi t0, sp, 0 ; alc[i] sp ; sw t0, 0(sp)
+  if (ZhmExplicitSpStore && MI.getFlag(MachineInstr::FrameSetup)) {
+    if (Opc == RISCV::ADDI && R0 == T0 && R1 == SP)
+      return true;
+    if ((Opc == RISCV::SW || Opc == RISCV::SD) && R0 == T0 && R1 == SP)
+      return isAlloc(MI.getPrevNode());
+  }
   // ld sp, 0(sp) -- epilogue.
-  if (Opc == RISCV::LD || Opc == RISCV::LW)
+  if ((Opc == RISCV::LD || Opc == RISCV::LW) && R0 == SP && R1 == SP)
     return MI.getFlag(MachineInstr::FrameDestroy);
   return false;
 }
@@ -121,7 +123,7 @@ static void emitCFI(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
       .setMIFlag(Flag);
 }
 
-// CFA = *(sp + 0): the fused alc(i)/sd pair stored the caller's sp there.
+// CFA = *(sp + 0): alc[i] sp (or the explicit save) put the caller's sp there.
 static MCCFIInstruction createDefCfaDeref(unsigned DwarfSP) {
   SmallString<8> Expr;
   raw_svector_ostream E(Expr);
@@ -251,13 +253,19 @@ void RISCVZhmFrameLowering::emitPrologue(MachineFunction &MF,
       (uint64_t)(getOffsetOfLocalArea() + MFI.getStackSize()), getStackAlign());
   MFI.setStackSize(Size); // for -Wframe-larger-than and the epilogue
 
-  if (EnableExplicitSPStore)
-    BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADDI), RISCV::X5)
+  // --- Allocation. alc[i] sp stores the caller's sp at 0(sp) itself. ------
+  const Register T0 = RISCV::X5;
+  if (ZhmExplicitSpStore) {
+    if (MBB.isLiveIn(T0)) {
+      zhmError(MF, "-riscv-zhm-explicit-sp-store needs t0, which is live into "
+                   "the prologue");
+      return;
+    }
+    BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADDI), T0)
         .addReg(SP)
         .addImm(0)
         .setMIFlag(MachineInstr::FrameSetup);
-
-  // --- alc(i) + old-sp store, adjacent so the pipeline can fuse them ------
+  }
   if (isUInt<12>(Size)) {
     BuildMI(MBB, MBBI, DL, TII->get(RISCV::ALCI), SP)
         .addImm(Size)
@@ -273,10 +281,10 @@ void RISCVZhmFrameLowering::emitPrologue(MachineFunction &MF,
         .addReg(Tmp, RegState::Kill)
         .setMIFlag(MachineInstr::FrameSetup);
   }
-  if (EnableExplicitSPStore)
+  if (ZhmExplicitSpStore)
     BuildMI(MBB, MBBI, DL,
             TII->get(Subtarget.is64Bit() ? RISCV::SD : RISCV::SW))
-        .addReg(RISCV::X5, RegState::Kill)
+        .addReg(T0, RegState::Kill)
         .addReg(SP)
         .addImm(0)
         .setMIFlag(MachineInstr::FrameSetup);
@@ -397,9 +405,9 @@ void RISCVZhmFrameLowering::processFunctionBeforeFrameIndicesReplaced(
 //     sub  sp, sp, t          ; sp -> frame base
 //
 // The restore uses itd instead of the saved Off so it needs no value kept
-// across the access. Two independent one-point scavenges supply the scratch:
-// before the access (dead once sp is moved; may even be a load's result reg)
-// and after it (avoids the loaded value, which the scavenger sees live).
+// across the access. Two one-point scavenges supply the scratch, both at real
+// instructions (the access, and the `sub` inserted first as an anchor), so
+// no scavenge point is ever the end of the block.
 
 bool RISCVZhmFrameLowering::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                                int SPAdj, unsigned FIOperandNum,
@@ -440,24 +448,34 @@ bool RISCVZhmFrameLowering::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   assert(RS && "frame index scavenging must be enabled for Zhm");
 
-  // Pre-part with a scratch valid up to II.
+  // Pre: sp -> slot. The scratch is only needed up to II (it is dead once
+  // `add sp, sp, T1` has run), so RestoreAfter=false.
   Register T1 = RS->scavengeRegisterBackwards(RISCV::GPRRegClass, II,
-                                              /*RestoreAfter=*/false, 0);
+                                              /*RestoreAfter=*/false,
+                                              /*SPAdj=*/0);
   TII->movImm(MBB, II, DL, T1, Off, MachineInstr::NoFlags);
-  BuildMI(MBB, II, DL, TII->get(RISCV::ADD), SP).addReg(SP).addReg(T1, RegState::Kill);
+  BuildMI(MBB, II, DL, TII->get(RISCV::ADD), SP)
+      .addReg(SP)
+      .addReg(T1, RegState::Kill);
 
-  MI.getOperand(FIOperandNum).ChangeToRegister(SP, false);
+  // The access itself: 0(sp).
+  MI.getOperand(FIOperandNum).ChangeToRegister(SP, /*isDef=*/false);
   MI.getOperand(FIOperandNum + 1).setImm(0);
 
-  // Post-part: build sub first as an anchor, scavenge at it, then itd before it.
-  MachineInstr *Sub =
-      BuildMI(MBB, std::next(II), DL, TII->get(RISCV::SUB), SP)
-          .addReg(SP).addReg(SP).getInstr();      // placeholder second operand
-  //Register T2 = RS->scavengeRegisterBackwards(RISCV::GPRRegClass,
-  //                                            Sub->getIterator(),
-  //                                            /*RestoreAfter=*/false, 0);
-  //BuildMI(MBB, Sub->getIterator(), DL, TII->get(RISCV::ITD), T2).addReg(SP);
-  Sub->getOperand(2).setReg(T1);
+  // Post: sp -> frame base. Build the `sub` first as an anchor so every
+  // scavenge point is a real instruction, never MBB.end() (the access may
+  // be the last instruction of its block). Then scavenge at the anchor and
+  // put `itd` in front of it.
+  MachineInstr *Sub = BuildMI(MBB, std::next(II), DL, TII->get(RISCV::SUB), SP)
+                          .addReg(SP)
+                          .addReg(SP) // placeholder, replaced below
+                          .getInstr();
+  Register T2 = RS->scavengeRegisterBackwards(RISCV::GPRRegClass,
+                                              Sub->getIterator(),
+                                              /*RestoreAfter=*/false,
+                                              /*SPAdj=*/0);
+  BuildMI(MBB, Sub->getIterator(), DL, TII->get(RISCV::ITD), T2).addReg(SP);
+  Sub->getOperand(2).setReg(T2);
   Sub->getOperand(2).setIsKill(true);
   return false;
 }

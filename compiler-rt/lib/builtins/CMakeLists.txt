@@ -1018,6 +1018,31 @@ set(riscv64_SOURCES
   ${riscv_SOURCES}
 )
 
+# RISC-V Zhm (hardware-managed objects).
+include(CheckCSourceCompiles)
+check_c_source_compiles("
+#if !defined(__riscv) || !defined(__riscv_zhm)
+#error not a Zhm target
+#endif
+int compiler_rt_zhm_probe;" COMPILER_RT_HAS_RISCV_ZHM)
+option(COMPILER_RT_BUILTINS_RISCV_ZHM
+       "Build the RISC-V builtins for the Zhm extension"
+       ${COMPILER_RT_HAS_RISCV_ZHM})
+
+if(COMPILER_RT_BUILTINS_RISCV_ZHM)
+  foreach(list riscv_SOURCES riscv32_SOURCES riscv64_SOURCES)
+    # __riscv_save_N / __riscv_restore_N write sp and store ra outside its
+    # frame slot. Only used with -msave-restore, which Zhm disables.
+    list(REMOVE_ITEM ${list} riscv/save.S riscv/restore.S)
+    # Tests alignment by combining pointers bitwise, which traps on Zhm.
+    # memcpy comes from the C library.
+    list(REMOVE_ITEM ${list} riscv/memcpy.S)
+  endforeach()
+  # Pointer-safe copies called by the backend (RISCVZhmLegalizeIR).
+  list(APPEND riscv32_SOURCES riscv/zhm_mem.c)
+  list(APPEND riscv64_SOURCES riscv/zhm_mem.c)
+endif()
+
 set(sparc_SOURCES ${GENERIC_SOURCES} ${GENERIC_TF_SOURCES})
 set(sparcv9_SOURCES ${GENERIC_SOURCES} ${GENERIC_TF_SOURCES})
 

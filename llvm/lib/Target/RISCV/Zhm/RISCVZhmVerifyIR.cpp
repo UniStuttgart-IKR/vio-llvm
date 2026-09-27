@@ -9,7 +9,8 @@
 //   * any operation on a pointer other than +/- an integer (and, or, xor,
 //     mul, div, rem, shifts, int - p, truncation, extension); the offset is
 //     available through llvm.riscv.itd,
-//   * ordered comparisons between a pointer and an integer or null,
+//   * ordered comparisons between a pointer and an integer or null, and
+//     between pointers that provably point into different objects,
 //   * llvm.ptrmask that masks more than the 16-byte object alignment,
 //   * integer constants dereferenced as pointers outside supervisor code
 //     (sentinels like (void *)-1 that are only compared are fine), and
@@ -137,8 +138,11 @@ static void verifyInstruction(Instruction &I, bool Supervisor) {
       return isa<ConstantPointerNull>(V) || isa<ConstantInt>(V);
     };
     const Value *A = IC->getOperand(0), *B = IC->getOperand(1);
-    if ((isPointerDerived(A) && IsInt(B)) || (IsInt(A) && isPointerDerived(B)))
+    const bool PA = isPointerDerived(A), PB = isPointerDerived(B);
+    if ((PA && IsInt(B)) || (IsInt(A) && PB))
       error(I, "ordered comparison between a pointer and an integer");
+    else if (PA && PB && provablyDifferentObjects(A, B))
+      error(I, "ordered comparison of pointers into different objects");
     return;
   }
 

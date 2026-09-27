@@ -25,7 +25,6 @@
 #include <optional>
 #include <vector>
 
-
 using namespace llvm;
 using namespace llvm::ELF;
 using namespace llvm::object;
@@ -817,8 +816,6 @@ uint64_t InputSectionBase::getRelocTargetVA(Ctx &ctx, const Relocation &r,
   case RE_RISCV_ADD:
   case RE_RISCV_LEB128:
     return r.sym->getVA(ctx, a);
-  case RE_RISCV_GOT_OFF:
-    return 0;
   case R_ADDEND:
     return a;
   case R_ADDEND_NEG:
@@ -1080,8 +1077,6 @@ void InputSection::relocateNonAlloc(Ctx &ctx, uint8_t *buf,
       addend += target.getImplicitAddend(bufLoc, type);
 
     Symbol &sym = f->getRelocTargetSym(rel);
-    if(type == R_RISCV_GOT_OFF)
-      sym.setInOtherObject();
     RelExpr expr = target.getRelExpr(type, sym, bufLoc);
     if (expr == R_NONE)
       continue;

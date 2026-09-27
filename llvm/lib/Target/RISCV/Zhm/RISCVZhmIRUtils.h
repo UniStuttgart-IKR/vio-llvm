@@ -3,15 +3,18 @@
 // Hardware model shared by all Zhm IR passes:
 //   * every object (alc, alci, frames) is 16-byte aligned;
 //   * itd(p) = index of p within its object, qsz(p) = size of the object,
-//     btd(p) = base of the object (all integers);
-//     dtp(a, b) = integers -> pointer, unchecked (supervisor only);
+//     btd(p) = base of the object (all integers; btd is privileged);
+//     dtp(base, index) = pointer base + index, unchecked (supervisor only);
 //     sep(x) = 1 if x is a pointer (supervisor only);
 //   * pointer +/- integer   -> pointer
 //     pointer - pointer     -> integer if both are in the same object,
 //                              trap otherwise
 //     any other arithmetic involving a pointer is not allowed;
-//   * pointers compare with beq/bne/blt/... and seq/sne; an ordered compare
-//     between a pointer and an integer traps;
+//   * equality: pointer vs pointer compares normally; pointer vs integer is
+//     never equal (beq always false, bne always true), so `p == NULL` is
+//     false for every real pointer;
+//   * ordered compares (blt, bltu, ...): pointer vs pointer only within the
+//     same object, pointer vs integer always trap;
 //   * a pointer fills a whole aligned XLEN word; a sub-XLEN load of a
 //     pointer slot traps, XLEN ld/sd work on pointer and data slots;
 //   * storing a pointer into .d memory traps.

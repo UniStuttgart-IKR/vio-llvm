@@ -42,7 +42,6 @@
 #include <cinttypes>
 #include <cstdlib>
 
-
 using namespace llvm;
 using namespace llvm::dwarf;
 using namespace llvm::ELF;
@@ -2069,8 +2068,8 @@ void SymbolTableBaseSection::maybeAddSttFile() {
 }
 
 void SymbolTableBaseSection::addSymbol(Symbol *b) {
-  // Adding a local symbol to a .dynsym is a bug when the symbol is not used with a %got_off
-  assert((this->type != SHT_DYNSYM || !b->isLocal()) || b->getInOtherObject());
+  // Adding a local symbol to a .dynsym is a bug.
+  assert(this->type != SHT_DYNSYM || !b->isLocal());
   symbols.push_back({b, strTabSec.addString(b->getName(), false)});
 }
 
@@ -2131,7 +2130,6 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *buf) {
   bool relocatable = ctx.arg.relocatable;
   for (SymbolTableEntry &ent : symbols) {
     Symbol *sym = ent.sym;
-
     // Set st_name, st_info and st_other.
     eSym->st_name = ent.strTabOffset;
     eSym->setBindingAndType(sym->binding, sym->type);

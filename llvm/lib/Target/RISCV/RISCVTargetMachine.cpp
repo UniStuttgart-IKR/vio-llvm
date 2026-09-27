@@ -152,9 +152,11 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   initializeRISCVRedundantCopyEliminationPass(*PR);
   initializeRISCVAsmPrinterPass(*PR);
   initializeRISCVPromoteConstantPass(*PR);
+
   initializeRISCVZhmEscapeAllocaLegacyPass(*PR);
   initializeRISCVZhmLegalizeIRLegacyPass(*PR);
   initializeRISCVZhmVerifyIRLegacyPass(*PR);
+  initializeRISCVZhmVerifySpecialRegsPass(*PR);
   initializeRISCVZhmRemoveZeroInitsPass(*PR);
   initializeRISCVZhmLegalizeFrameAddrPass(*PR);
 }
@@ -620,6 +622,8 @@ void RISCVPassConfig::addPreEmitPass2() {
 
   if (EnableCFIInstrInserter)
     addPass(createCFIInstrInserterLegacy());
+
+  addPass(createRISCVZhmVerifySpecialRegsPass());
 }
 
 void RISCVPassConfig::addMachineSSAOptimization() {

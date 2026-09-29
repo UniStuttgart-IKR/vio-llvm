@@ -10,6 +10,7 @@
 #define LLVM_LIBC_SRC_STDIO_SCANF_CORE_PTR_CONVERTER_H
 
 #include "src/__support/ctype_utils.h"
+#include "src/__support/zhm.h"
 #include "src/__support/macros/config.h"
 #include "src/stdio/scanf_core/core_structs.h"
 #include "src/stdio/scanf_core/int_converter.h"

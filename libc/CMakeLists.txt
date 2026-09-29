@@ -424,6 +424,25 @@ if(LLVM_LIBC_INCLUDE_SCUDO)
   endif()
 endif()
 
+# RISC-V Zhm (hardware-managed objects): detected from the compiler flags,
+# like compiler-rt (clang defines __riscv_zhm for -march=..._zhm).
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_QUIET ON)
+check_cxx_source_compiles("
+#if !defined(__riscv) || !defined(__riscv_zhm)
+#error not a Zhm target
+#endif
+int libc_zhm_probe;" LIBC_TARGET_HAS_ZHM)
+option(LIBC_ZHM_TYPE_TRAPS
+       "Zhm: allow object-type queries through the supervisor (shared libc only)"
+       OFF)
+option(LIBC_ZHM_CHECKED_STRINGS
+       "Zhm: abort when a string function would overflow its destination object"
+       OFF)
+if(LIBC_TARGET_HAS_ZHM)
+  message(STATUS "llvm-libc: Zhm target (type traps: ${LIBC_ZHM_TYPE_TRAPS})")
+endif()
+
 option(LIBC_INCLUDE_DOCS "Build the libc documentation." ${LLVM_INCLUDE_DOCS})
 
 include(LLVMLibCCheckCpuFeatures)

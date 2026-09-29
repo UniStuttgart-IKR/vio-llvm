@@ -27,6 +27,7 @@ add_header_library(
     riscv/inline_memcpy.h
     riscv/inline_memmove.h
     riscv/inline_memset.h
+    riscv/inline_zhm_mem.h
     utils.h
     x86_64/inline_bcmp.h
     x86_64/inline_memcmp.h
@@ -35,6 +36,7 @@ add_header_library(
     x86_64/inline_memset.h
   DEPENDS
     libc.hdr.stdint_proxy
+    libc.src.__support.zhm
     libc.src.__support.common
     libc.src.__support.CPP.bit
     libc.src.__support.CPP.cstddef

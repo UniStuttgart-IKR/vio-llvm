@@ -481,6 +481,15 @@ add_header_library(
     libc.src.__support.macros.config
 )
 
+add_header_library(
+  zhm
+  HDRS
+    zhm.h
+  DEPENDS
+    libc.src.__support.macros.attributes
+    libc.src.__support.macros.config
+)
+
 add_subdirectory(FPUtil)
 add_subdirectory(OSUtil)
 add_subdirectory(StringUtil)

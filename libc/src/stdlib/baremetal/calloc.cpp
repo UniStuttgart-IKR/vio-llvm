@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "src/stdlib/calloc.h"
+#include "src/__support/zhm.h"
 #include "src/__support/freelist_heap.h"
 #include "src/__support/macros/config.h"
 
@@ -15,7 +16,14 @@
 namespace LIBC_NAMESPACE_DECL {
 
 LLVM_LIBC_FUNCTION(void *, calloc, (size_t num, size_t size)) {
+#if defined(LIBC_TARGET_HAS_ZHM)
+  size_t total;
+  if (__builtin_mul_overflow(num, size, &total))
+    return nullptr;
+  return zhm::alloc(total); // already zeroed
+#else
   return freelist_heap->calloc(num, size);
+#endif
 }
 
 } // namespace LIBC_NAMESPACE_DECL

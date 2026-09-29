@@ -1,3 +1,78 @@
+if(LIBC_TARGET_HAS_ZHM)
+  set(TARGET_LIBC_ENTRYPOINTS
+    # string and memory
+    #libc.src.string.bcmp
+    #libc.src.string.bzero
+    libc.src.string.memchr
+    libc.src.string.memcmp
+    libc.src.string.memcpy
+    libc.src.string.memmove
+    libc.src.string.memrchr
+    libc.src.string.memset
+    libc.src.string.strcat
+    libc.src.string.strchr
+    libc.src.string.strcmp
+    libc.src.string.strcpy
+    libc.src.string.strdup
+    libc.src.string.strlen
+    libc.src.string.strncat
+    libc.src.string.strncmp
+    libc.src.string.strncpy
+    libc.src.string.strndup
+    libc.src.string.strnlen
+    libc.src.string.strrchr
+    libc.src.string.strstr
+    libc.src.string.strtok
+    libc.src.string.strtok_r
+    # strings
+    libc.src.strings.bcmp
+    libc.src.strings.bzero
+    # ctype
+    libc.src.ctype.isalnum
+    libc.src.ctype.isalpha
+    libc.src.ctype.isdigit
+    libc.src.ctype.isspace
+    libc.src.ctype.isupper
+    libc.src.ctype.islower
+    libc.src.ctype.tolower
+    libc.src.ctype.toupper
+    # errno
+    libc.src.errno.errno
+    # stdlib
+    libc.src.stdlib.abort
+    libc.src.stdlib.abs
+    libc.src.stdlib.aligned_alloc
+    libc.src.stdlib.atexit
+    libc.src.stdlib.atoi
+    libc.src.stdlib.atol
+    libc.src.stdlib.calloc
+    libc.src.stdlib.exit
+    libc.src.stdlib._Exit
+    libc.src.stdlib.free
+    libc.src.stdlib.malloc
+    libc.src.stdlib.qsort
+    libc.src.stdlib.realloc
+    libc.src.stdlib.strtol
+    libc.src.stdlib.strtoul
+    # stdio (output first)
+    libc.src.stdio.stderr
+    libc.src.stdio.stdin
+    libc.src.stdio.stdout
+    libc.src.stdio.printf
+    libc.src.stdio.putchar
+    libc.src.stdio.puts
+    libc.src.stdio.snprintf
+    libc.src.stdio.sprintf
+    libc.src.stdio.vprintf
+    libc.src.stdio.vsnprintf
+    libc.src.stdio.vsprintf
+  )
+  
+  set(TARGET_LIBM_ENTRYPOINTS "")
+  set(TARGET_LLVMLIBC_ENTRYPOINTS ${TARGET_LIBC_ENTRYPOINTS})
+  return()
+endif()
+
 set(TARGET_LIBC_ENTRYPOINTS
     # assert.h entrypoints
     libc.src.assert.__assert_fail

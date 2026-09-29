@@ -11,11 +11,18 @@
 
 #include "src/__support/common.h"
 #include "src/__support/macros/config.h"
+#include "src/__support/zhm.h"
 
 namespace LIBC_NAMESPACE_DECL {
 
 namespace abort_utils {
-[[noreturn]] LIBC_INLINE void abort() { __builtin_trap(); }
+[[noreturn]] LIBC_INLINE void abort() { 
+#if defined(LIBC_TARGET_HAS_ZHM)
+  zhm::abort();
+#else
+  __builtin_trap();
+#endif
+}
 } // namespace abort_utils
 
 } // namespace LIBC_NAMESPACE_DECL

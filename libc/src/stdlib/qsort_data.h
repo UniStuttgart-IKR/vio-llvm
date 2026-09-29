@@ -15,6 +15,7 @@
 #define LLVM_LIBC_SRC_STDLIB_QSORT_DATA_H
 
 #include "hdr/stdint_proxy.h"
+#include "src/__support/zhm.h"
 #include "src/__support/CPP/cstddef.h"
 #include "src/__support/CPP/utility/swap.h"
 #include "src/__support/macros/config.h"
@@ -42,6 +43,20 @@ public:
   LIBC_INLINE void *get(size_t i) const { return get_internal(i); }
 
   LIBC_INLINE void swap(size_t i, size_t j) const {
+#if defined(LIBC_TARGET_HAS_ZHM)
+    void *e1 = get(i), *e2 = get(j);
+    if (elem_size % zhm::WORD == 0 && zhm::word_aligned(e1) &&
+        zhm::word_aligned(e2)) {
+      auto *w1 = reinterpret_cast<zhm::PtrWord *>(e1);
+      auto *w2 = reinterpret_cast<zhm::PtrWord *>(e2);
+      for (size_t k = 0; k < elem_size / zhm::WORD; ++k) {
+        zhm::PtrWord tmp = w1[k];
+        w1[k] = w2[k];
+        w2[k] = tmp;
+      }
+      return;
+    }
+#endif
     // It's possible to use 8 byte blocks with `uint64_t`, but that
     // generates more machine code as the remainder loop gets
     // unrolled, plus 4 byte operations are more likely to be

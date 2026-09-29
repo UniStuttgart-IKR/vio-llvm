@@ -9,6 +9,7 @@
 #ifndef LLVM_LIBC_SRC___SUPPORT_PRINTF_CORE_PTR_CONVERTER_H
 #define LLVM_LIBC_SRC___SUPPORT_PRINTF_CORE_PTR_CONVERTER_H
 
+#include "src/__support/zhm.h"
 #include "src/__support/macros/config.h"
 #include "src/__support/printf_core/core_structs.h"
 #include "src/__support/printf_core/int_converter.h"
@@ -33,7 +34,11 @@ LIBC_INLINE int convert_pointer(Writer<mode> *writer,
   new_conv.flags =
       static_cast<FormatFlags>(to_conv.flags | FormatFlags::ALTERNATE_FORM);
   new_conv.length_modifier = LengthModifier::t;
+#if defined(LIBC_TARGET_HAS_ZHM)
+  new_conv.conv_val_raw = zhm::itd(to_conv.conv_val_ptr);
+#else
   new_conv.conv_val_raw = reinterpret_cast<uintptr_t>(to_conv.conv_val_ptr);
+#endif
   return convert_int(writer, new_conv);
 }
 

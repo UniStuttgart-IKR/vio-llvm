@@ -16,6 +16,7 @@
 #include "src/__support/arg_list.h"
 #include "src/__support/common.h"
 #include "src/__support/libc_errno.h"
+#include "src/__support/zhm.h"
 #include "src/__support/macros/config.h"
 #include "src/__support/printf_core/core_structs.h"
 #include "src/__support/printf_core/error_mapper.h"
@@ -43,7 +44,7 @@ LIBC_INLINE int vfprintf_internal(::FILE *__restrict stream,
                                   const char *__restrict format,
                                   internal::ArgList &args) {
   static constexpr size_t BUFF_SIZE = 1024;
-  char buffer[BUFF_SIZE];
+  LIBC_ZHM_DATA_ONLY char buffer[BUFF_SIZE];
 
   printf_core::Writer writer = printf_core::make_writer(
       buffer, BUFF_SIZE,

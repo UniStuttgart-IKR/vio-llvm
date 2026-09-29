@@ -15,6 +15,7 @@
 #define LLVM_LIBC_SRC_STRING_STRING_UTILS_H
 
 #include "hdr/types/size_t.h"
+#include "src/__support/zhm.h"
 #include "src/__support/CPP/bitset.h"
 #include "src/__support/macros/attributes.h"
 #include "src/__support/macros/config.h"

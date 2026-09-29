@@ -10,6 +10,7 @@
 #include "src/__support/CPP/new.h"
 #include "src/__support/alloc-checker.h"
 #include "src/__support/common.h"
+#include "src/__support/zhm.h"
 #include "src/__support/macros/config.h"
 #include "src/string/memory_utils/inline_memcpy.h"
 #include "src/string/string_utils.h"
@@ -25,7 +26,11 @@ LLVM_LIBC_FUNCTION(char *, strndup, (const char *src, size_t size)) {
   if (len > size)
     len = size;
   AllocChecker ac;
+#ifdef LIBC_TARGET_HAS_ZHM
+  char *dest = (char *) zhm::alloc_data(len + 1);
+#else
   char *dest = new (ac) char[len + 1];
+#endif
   if (!ac)
     return nullptr;
   inline_memcpy(dest, src, len + 1);

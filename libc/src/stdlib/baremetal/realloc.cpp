@@ -7,15 +7,28 @@
 //===----------------------------------------------------------------------===//
 
 #include "src/stdlib/realloc.h"
+#include "src/__support/zhm.h"
 #include "src/__support/freelist_heap.h"
 #include "src/__support/macros/config.h"
+#include "src/string/memory_utils/riscv/inline_zhm_mem.h"
 
 #include <stddef.h>
 
 namespace LIBC_NAMESPACE_DECL {
 
 LLVM_LIBC_FUNCTION(void *, realloc, (void *ptr, size_t size)) {
+#if defined(LIBC_TARGET_HAS_ZHM)
+  if (!ptr)
+    return zhm::alloc(size);
+  // Shared libc: keep data-only memory data-only. Static libc: cannot ask.
+  void *fresh = zhm::is_data_only(ptr) ? zhm::alloc_data(size)
+                                       : zhm::alloc(size);
+  const size_t old = zhm::qsz(ptr);
+  inline_memcpy_zhm(fresh, ptr, old < size ? old : size);
+  return fresh;
+#else
   return freelist_heap->realloc(ptr, size);
+#endif
 }
 
 } // namespace LIBC_NAMESPACE_DECL

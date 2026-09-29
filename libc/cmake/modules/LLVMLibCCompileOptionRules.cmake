@@ -97,6 +97,16 @@ function(_get_compile_options_from_flags output_var)
     libc_add_definition(compile_options "__LIBC_EXPLICIT_SIMD_OPT")
   endif()
 
+  if(LIBC_TARGET_HAS_ZHM)
+    if(LIBC_ZHM_TYPE_TRAPS)
+      list(APPEND compile_options "SHELL:-mllvm -riscv-zhm-type-traps"
+                                  "-DLIBC_ZHM_TYPE_TRAPS=1")
+    endif()
+    if(LIBC_ZHM_CHECKED_STRINGS)
+      list(APPEND compile_options "-DLIBC_ZHM_CHECKED_STRINGS=1")
+    endif()
+  endif()
+
   set(${output_var} ${compile_options} PARENT_SCOPE)
 endfunction()
 

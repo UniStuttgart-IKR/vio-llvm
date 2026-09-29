@@ -8,6 +8,8 @@
 #ifndef LLVM_LIBC_SRC_STRING_MEMORY_UTILS_RISCV_INLINE_MEMMOVE_H
 #define LLVM_LIBC_SRC_STRING_MEMORY_UTILS_RISCV_INLINE_MEMMOVE_H
 
+#include "src/__support/zhm.h"
+#include "src/string/memory_utils/riscv/inline_zhm_mem.h"
 #include "src/__support/macros/attributes.h"               // LIBC_INLINE
 #include "src/__support/macros/config.h" // LIBC_NAMESPACE_DECL
 #include "src/__support/macros/properties/architectures.h" // LIBC_TARGET_ARCH_IS_RISCV64
@@ -20,7 +22,11 @@ namespace LIBC_NAMESPACE_DECL {
 
 [[maybe_unused]] LIBC_INLINE void
 inline_memmove_riscv(Ptr __restrict dst, CPtr __restrict src, size_t count) {
+#if defined(LIBC_TARGET_HAS_ZHM)
+  return inline_memmove_zhm(dst, src, count);
+#else
   return inline_memmove_byte_per_byte(dst, src, count);
+#endif
 }
 
 } // namespace LIBC_NAMESPACE_DECL

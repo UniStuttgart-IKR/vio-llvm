@@ -10,7 +10,13 @@
 // so the frame stays within the 12-bit offset range.
 //
 // .d memory traps on pointer stores, so .d is only used if it is PROVEN that
-// no pointer can ever be stored into the object.
+// no pointer can ever be stored into the object. Two sources of knowledge
+// beyond the use walk:
+//   * standard functions that only ever store bytes through an argument
+//     (strcpy, snprintf, fgets, read, ...), recognized by name;
+//   * the source annotation ZHM_DATA_ONLY (riscv_zhm.h), i.e.
+//     __attribute__((annotate("zhm_data_only"))) on a local variable, which
+//     is the programmer's promise that it never holds pointers.
 //
 // alc memory lives as long as a pointer to it exists, so objects allocated
 // in loops (former VLAs, vararg buffers) are reclaimed once unreachable.
@@ -23,6 +29,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -41,6 +48,11 @@ static cl::opt<unsigned> ZhmMaxFrameObject(
     "riscv-zhm-max-frame-object", cl::init(256), cl::Hidden,
     cl::desc("Allocas larger than this (bytes) are moved to alc memory"));
 
+static cl::opt<bool> ZhmTrustByteOnlyLibcalls(
+    "riscv-zhm-trust-byte-only-libcalls", cl::init(true), cl::Hidden,
+    cl::desc("Treat buffers passed to standard functions that only store "
+             "bytes (strcpy, snprintf, fgets, read, ...) as data-only"));
+
 static cl::opt<unsigned> ZhmFrameBudget(
     "riscv-zhm-frame-budget", cl::init(1024), cl::Hidden,
     cl::desc("Bytes of allocas kept in the sp frame; the rest of the 2 KiB "
@@ -54,6 +66,45 @@ struct AllocaInfo {
   bool MayHoldPointers = false;
 };
 } // end anonymous namespace
+
+// Standard functions that only ever store bytes through argument ArgNo.
+// Recognized by name and a pointer-typed argument; the functions of the same
+// name in a hosted or freestanding environment behave the same.
+static bool storesOnlyBytesThrough(const CallBase &CB, unsigned ArgNo) {
+  if (!ZhmTrustByteOnlyLibcalls)
+    return false;
+  const Function *F = CB.getCalledFunction();
+  if (!F || !CB.getArgOperand(ArgNo)->getType()->isPointerTy())
+    return false;
+  static const struct {
+    const char *Name;
+    unsigned Arg;
+  } ByteOnly[] = {
+      {"strcpy", 0},       {"strncpy", 0},    {"stpcpy", 0},  {"stpncpy", 0},
+      {"strcat", 0},       {"strncat", 0},    {"strlcpy", 0}, {"strlcat", 0},
+      {"sprintf", 0},      {"snprintf", 0},  {"vsprintf", 0}, {"vsnprintf", 0},
+      {"fgets", 0},      {"gets", 0},      {"fread", 0},      {"read", 1},
+      {"pread", 1},      {"strftime", 0},  {"strtok", 0},     {"strtok_r", 0},
+      {"strerror_r", 1}, {"getcwd", 0},    {"memset", 0},     {"bzero", 0},
+  };
+  const StringRef Name = F->getName();
+  for (const auto &E : ByteOnly)
+    if (Name == E.Name && ArgNo == E.Arg)
+      return true;
+  return false;
+}
+
+// llvm.var.annotation(%var, "zhm_data_only", ...)
+static bool isDataOnlyAnnotation(const Instruction &I) {
+  if (!isIntrinsicCall(&I, Intrinsic::var_annotation))
+    return false;
+  const auto *GV = dyn_cast<GlobalVariable>(
+      getUnderlyingObject(cast<CallBase>(I).getArgOperand(1)));
+  if (!GV || !GV->hasInitializer())
+    return false;
+  const auto *Str = dyn_cast<ConstantDataArray>(GV->getInitializer());
+  return Str && Str->isCString() && Str->getAsCString() == "zhm_data_only";
+}
 
 static AllocaInfo analyzeAlloca(AllocaInst *AI, const DataLayout &DL) {
   AllocaInfo Info;
@@ -70,6 +121,7 @@ static AllocaInfo analyzeAlloca(AllocaInst *AI, const DataLayout &DL) {
 
   auto Escape = [&] { Info.CanStayInFrame = false; };
   auto Taint = [&] { Info.MayHoldPointers = true; };
+  bool Annotated = false;
 
   // Walk all (transitive) users of the address. The walk continues after an
   // escape so that everything stored through derived pointers is still seen.
@@ -117,6 +169,13 @@ static AllocaInfo analyzeAlloca(AllocaInst *AI, const DataLayout &DL) {
         continue;
       }
 
+      // ZHM_DATA_ONLY: the programmer's promise; not an escape either.
+      if (isa<IntrinsicInst>(I) &&
+          cast<IntrinsicInst>(I)->getIntrinsicID() == Intrinsic::var_annotation) {
+        Annotated |= isDataOnlyAnnotation(*I);
+        continue;
+      }
+
       if (I->isLifetimeStartOrEnd() || isa<DbgInfoIntrinsic>(I) ||
           I->isDroppable())
         continue;
@@ -155,6 +214,8 @@ static AllocaInfo analyzeAlloca(AllocaInst *AI, const DataLayout &DL) {
           unsigned ArgNo = CB->getArgOperandNo(&U);
           if (CB->onlyReadsMemory(ArgNo) && CB->doesNotCapture(ArgNo))
             continue;
+          if (storesOnlyBytesThrough(*CB, ArgNo))
+            continue; // e.g. char buf[64]; snprintf(buf, ...)
         }
         Taint();
         continue;
@@ -164,6 +225,8 @@ static AllocaInfo analyzeAlloca(AllocaInst *AI, const DataLayout &DL) {
       Taint();
     }
   }
+  if (Annotated)
+    Info.MayHoldPointers = false;
   return Info;
 }
 

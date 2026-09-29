@@ -12,6 +12,7 @@
 #include "src/__support/CPP/new.h"
 #include "src/__support/CPP/optional.h"
 #include "src/__support/alloc-checker.h"
+#include "src/__support/zhm.h"
 #include "src/__support/macros/config.h" // LIBC_NAMESPACE_DECL
 #include "src/string/memory_utils/inline_memcpy.h"
 #include "src/string/string_utils.h"
@@ -25,10 +26,14 @@ template <typename T> LIBC_INLINE cpp::optional<T *> strdup(const T *src) {
   if (src == nullptr)
     return cpp::nullopt;
   size_t len = string_length(src) + 1;
+#if defined(LIBC_TARGET_HAS_ZHM)
+  T *newstr = static_cast<T *>(zhm::alloc_data(len + 1));
+#else
   AllocChecker ac;
   T *newstr = new (ac) T[len];
   if (!ac)
     return cpp::nullopt;
+#endif
   inline_memcpy(newstr, src, len * sizeof(T));
   return newstr;
 }

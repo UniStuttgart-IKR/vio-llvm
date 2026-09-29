@@ -14,6 +14,12 @@
 
 namespace LIBC_NAMESPACE_DECL {
 
-LLVM_LIBC_FUNCTION(void, free, (void *ptr)) { return freelist_heap->free(ptr); }
+LLVM_LIBC_FUNCTION(void, free, (void *ptr)) { 
+#if defined(LIBC_TARGET_HAS_ZHM)
+  (void)ptr; // unreachable objects are reclaimed by the hardware
+#else
+  return freelist_heap->free(ptr);
+#endif
+}
 
 } // namespace LIBC_NAMESPACE_DECL

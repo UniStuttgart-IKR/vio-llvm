@@ -4,6 +4,12 @@ add_header_library(
     abort_utils.h
 )
 
+if(LIBC_TARGET_HAS_ZHM)
+  set(heap_dep libc.src.__support.zhm)
+else()
+  set(heap_dep libc.src.__support.freelist_heap)
+endif()
+
 add_entrypoint_object(
   malloc
   SRCS
@@ -11,7 +17,7 @@ add_entrypoint_object(
   HDRS
     ../malloc.h
   DEPENDS
-    libc.src.__support.freelist_heap
+    ${heap_dep}
 )
 
 add_entrypoint_object(
@@ -21,7 +27,7 @@ add_entrypoint_object(
   HDRS
     ../free.h
   DEPENDS
-    libc.src.__support.freelist_heap
+    ${heap_dep}
 )
 
 add_entrypoint_object(
@@ -31,7 +37,7 @@ add_entrypoint_object(
   HDRS
     ../calloc.h
   DEPENDS
-    libc.src.__support.freelist_heap
+    ${heap_dep}
 )
 
 add_entrypoint_object(
@@ -41,7 +47,7 @@ add_entrypoint_object(
   HDRS
     ../realloc.h
   DEPENDS
-    libc.src.__support.freelist_heap
+    ${heap_dep}
 )
 
 add_entrypoint_object(
@@ -51,7 +57,7 @@ add_entrypoint_object(
   HDRS
     ../aligned_alloc.h
   DEPENDS
-    libc.src.__support.freelist_heap
+    ${heap_dep}
 )
 
 add_entrypoint_object(
@@ -61,5 +67,5 @@ add_entrypoint_object(
   HDRS
     ../malloc_usable_size.h
   DEPENDS
-    libc.src.__support.freelist_heap
+    ${heap_dep}
 )

@@ -98,6 +98,9 @@ function(_get_compile_options_from_flags output_var)
   endif()
 
   if(LIBC_TARGET_HAS_ZHM)
+    # No pattern initialization of local variables
+    list(APPEND compile_options "-ftrivial-auto-var-init=uninitialized")
+    
     if(LIBC_ZHM_TYPE_TRAPS)
       list(APPEND compile_options "SHELL:-mllvm -riscv-zhm-type-traps"
                                   "-DLIBC_ZHM_TYPE_TRAPS=1"

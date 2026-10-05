@@ -18,6 +18,9 @@
 //   * alignment comes from itd (objects are 16-byte aligned);
 //   * ordered compares of pointers into different objects trap: memmove
 //     decides the direction from bases and indices;
+//   * the five functions are [[gnu::noinline]]: they have three loops
+//     each, and the printf writer alone uses them at a dozen places. As
+//     out-of-line inline functions, the linker keeps one copy of each.
 //   * memcmp: if both objects are known to be data-only (shared libc),
 //     words are loaded and ordered as integers; otherwise they are loaded
 //     as pointer words and the first difference is ordered by the
@@ -108,13 +111,13 @@ LIBC_INLINE int data_word_order(DataWord x, DataWord y) {
 
 } // namespace zhm_detail
 
-LIBC_INLINE void inline_memcpy_zhm(void *__restrict dst,
+[[gnu::noinline]] LIBC_INLINE void inline_memcpy_zhm(void *__restrict dst,
                                    const void *__restrict src, size_t n) {
   zhm_detail::copy_forward(static_cast<unsigned char *>(dst),
                            static_cast<const unsigned char *>(src), n);
 }
 
-LIBC_INLINE void inline_memmove_zhm(void *dst, const void *src, size_t n) {
+[[gnu::noinline]] LIBC_INLINE void inline_memmove_zhm(void *dst, const void *src, size_t n) {
   auto *d = static_cast<unsigned char *>(dst);
   const auto *s = static_cast<const unsigned char *>(src);
   // Only ranges in the same object can overlap; there, the indices order
@@ -127,7 +130,7 @@ LIBC_INLINE void inline_memmove_zhm(void *dst, const void *src, size_t n) {
 
 // sb into a pointer slot clears the pointer, which is the correct result of
 // overwriting it with data; word stores are only a speed-up.
-LIBC_INLINE void inline_memset_zhm(void *dst, unsigned char value, size_t n) {
+[[gnu::noinline]] LIBC_INLINE void inline_memset_zhm(void *dst, unsigned char value, size_t n) {
   auto *d = static_cast<unsigned char *>(dst);
   while (n && !zhm::word_aligned(d)) {
     *d++ = value;
@@ -144,7 +147,7 @@ LIBC_INLINE void inline_memset_zhm(void *dst, unsigned char value, size_t n) {
 }
 
 // Equality only: word equality works for pointers and data alike.
-LIBC_INLINE int inline_bcmp_zhm(const void *lhs, const void *rhs, size_t n) {
+[[gnu::noinline]] LIBC_INLINE int inline_bcmp_zhm(const void *lhs, const void *rhs, size_t n) {
   const auto *a = static_cast<const unsigned char *>(lhs);
   const auto *b = static_cast<const unsigned char *>(rhs);
   if (zhm::misalignment(a) == zhm::misalignment(b)) {
@@ -167,7 +170,7 @@ LIBC_INLINE int inline_bcmp_zhm(const void *lhs, const void *rhs, size_t n) {
   return 0;
 }
 
-LIBC_INLINE int inline_memcmp_zhm(const void *lhs, const void *rhs, size_t n) {
+[[gnu::noinline]] LIBC_INLINE int inline_memcmp_zhm(const void *lhs, const void *rhs, size_t n) {
   const auto *a = static_cast<const unsigned char *>(lhs);
   const auto *b = static_cast<const unsigned char *>(rhs);
   if (zhm::misalignment(a) == zhm::misalignment(b)) {

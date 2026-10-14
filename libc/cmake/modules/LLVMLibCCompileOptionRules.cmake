@@ -104,7 +104,8 @@ function(_get_compile_options_from_flags output_var)
     if(LIBC_ZHM_TYPE_TRAPS)
       list(APPEND compile_options "SHELL:-mllvm -riscv-zhm-type-traps"
                                   "-DLIBC_ZHM_TYPE_TRAPS=1"
-                                  "-DLLVM_LIBC_FUNCTION_ATTR=__attribute__((visibility(\"default\")))")
+                                  "-DLLVM_LIBC_FUNCTION_ATTR=__attribute__((visibility(\"default\")))"
+                                  "-DLLVM_LIBC_VARIABLE_ATTR=__attribute__((visibility(\"default\")))")
     endif()
     if(LIBC_ZHM_CHECKED_STRINGS)
       list(APPEND compile_options "-DLIBC_ZHM_CHECKED_STRINGS=1")

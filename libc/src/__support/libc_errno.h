@@ -77,11 +77,12 @@ LIBC_ERRNO_MODE_SYSTEM_INLINE.
 #else // !LIBC_ERRNO_MODE_SYSTEM_INLINE
 
 #include "hdr/errno_macros.h"
+#include "src/__support/common.h"
 #include "src/__support/macros/config.h"
 
 namespace LIBC_NAMESPACE_DECL {
 
-extern "C" int *__llvm_libc_errno() noexcept;
+extern "C" LLVM_LIBC_FUNCTION_ATTR int *__llvm_libc_errno() noexcept;
 
 struct Errno {
   void operator=(int);

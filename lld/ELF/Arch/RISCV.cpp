@@ -189,32 +189,60 @@ static bool zhmIsProtectedReg(uint32_t r) {
 //
 // Data inside code is skipped using the $d/$x mapping symbols. 16-bit
 // (compressed) instructions are skipped, not checked.
+//
+// Hand-written code that must touch ra/sp/gp (a context switch, stack
+// setup, ...) marks the region with local symbols of the same kind as the
+// mapping symbols, placed by the macros in zhm_regs.inc:
+//   $zhm_allow[.*]   from here on, no ra/sp/gp checks
+//   $zhm_check[.*]   from here on, checked again
+// A region without $zhm_check lasts to the end of its input section. The
+// suffix only makes each name unique (a symbol cannot be defined twice).
+// --no-zhm-verify-regs turns the whole check off.
 static void zhmVerifyRegisters(Ctx &ctx, const InputSection &sec,
                                const uint8_t *buf) {
-  // Data ranges from mapping symbols: offset -> is data.
-  SmallVector<std::pair<uint64_t, bool>, 0> map;
+  enum Mark { Code, Data, Allow, Check };
+  SmallVector<std::pair<uint64_t, Mark>, 0> marks;
   if (sec.file)
     for (Symbol *sym : sec.file->getSymbols())
-      if (auto *d = dyn_cast<Defined>(sym))
-        if (d->section == &sec && (d->getName().starts_with("$d") ||
-                                   d->getName().starts_with("$x")))
-          map.push_back({d->value, d->getName().starts_with("$d")});
-  llvm::sort(map, [](auto &a, auto &b) { return a.first < b.first; });
+      if (auto *d = dyn_cast<Defined>(sym)) {
+        if (d->section != &sec)
+          continue;
+        const StringRef name = d->getName();
+        if (name.starts_with("$zhm_allow"))
+          marks.push_back({d->value, Allow});
+        else if (name.starts_with("$zhm_check"))
+          marks.push_back({d->value, Check});
+        else if (name.starts_with("$d"))
+          marks.push_back({d->value, Data});
+        else if (name.starts_with("$x"))
+          marks.push_back({d->value, Code});
+      }
+  llvm::stable_sort(marks, [](auto &a, auto &b) { return a.first < b.first; });
 
   const uint64_t xlen = ctx.arg.wordsize;
   const uint64_t size = sec.getSize();
   size_t m = 0;
-  bool inData = false;
+  bool inData = false, allowed = false;
 
   auto report = [&](uint64_t off, const char *what) {
-    Err(ctx) << sec.getLocation(off) << ": Zhm: " << what;
+    if (allowed)
+      return;
+    Err(ctx) << sec.getLocation(off) << ": Zhm: " << what
+             << " (intended? mark the region with ZHM_ALLOW_REGS from "
+                "zhm_regs.inc, or link with --no-zhm-verify-regs)";
   };
 
   for (uint64_t off = 0; off + 2 <= size;) {
-    while (m < map.size() && map[m].first <= off)
-      inData = map[m++].second;
+    for (; m < marks.size() && marks[m].first <= off; ++m) {
+      switch (marks[m].second) {
+      case Code:  inData = false;   break;
+      case Data:  inData = true;    break;
+      case Allow: allowed = true;   break;
+      case Check: allowed = false;  break;
+      }
+    }
     if (inData) {
-      off = m < map.size() ? map[m].first : size;
+      off = m < marks.size() ? marks[m].first : size;
       continue;
     }
     const uint16_t lo = read16le(buf + off);
@@ -1567,7 +1595,7 @@ void RISCV::finalizeRelax(int passes) const {
             break;
           case R_RISCV_32:
             // Used by relaxTlsLe to write a uint32_t then suppress the handling
-            // in relocateAlloc
+            // in relocateAlloc.
             skip = 4;
             write32le(p, aux.writes[writesIdx++]);
             aux.relocTypes[i] = R_RISCV_NONE;

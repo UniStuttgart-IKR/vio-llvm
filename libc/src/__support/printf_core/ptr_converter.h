@@ -35,7 +35,7 @@ LIBC_INLINE int convert_pointer(Writer<mode> *writer,
       static_cast<FormatFlags>(to_conv.flags | FormatFlags::ALTERNATE_FORM);
   new_conv.length_modifier = LengthModifier::t;
 #if defined(LIBC_TARGET_HAS_ZHM)
-  new_conv.conv_val_raw = zhm::itd(to_conv.conv_val_ptr);
+  new_conv.conv_val_raw = zhm::index_of(to_conv.conv_val_ptr);
 #else
   new_conv.conv_val_raw = reinterpret_cast<uintptr_t>(to_conv.conv_val_ptr);
 #endif

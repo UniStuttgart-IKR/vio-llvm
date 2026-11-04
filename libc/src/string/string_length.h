@@ -30,13 +30,15 @@
 #include "src/string/memory_utils/aarch64/inline_strlen.h"
 #endif
 
-// Zhm: always the object-bounded implementation (zhm_bounded below). The
-// others would read past the end of an object when a terminator is missing.
+// Zhm: always byte by byte (element). A missing terminator then traps at
+// the first byte beyond the object (IndexOutBounds), like the program's own
+// access would; the word and vector variants would load words that may hold
+// pointers and do bit arithmetic on them.
 #ifdef LIBC_TARGET_HAS_ZHM
 #undef LIBC_COPT_STRING_LENGTH_IMPL
-#define LIBC_COPT_STRING_LENGTH_IMPL zhm_bounded
+#define LIBC_COPT_STRING_LENGTH_IMPL element
 #undef LIBC_COPT_FIND_FIRST_CHARACTER_IMPL
-#define LIBC_COPT_FIND_FIRST_CHARACTER_IMPL zhm_bounded
+#define LIBC_COPT_FIND_FIRST_CHARACTER_IMPL element
 #endif
 
 // Set sensible defaults
@@ -195,33 +197,11 @@ find_first_character(const unsigned char *src, unsigned char ch,
 
 } // namespace word
 
-#ifdef LIBC_TARGET_HAS_ZHM
-namespace zhm_bounded {
-// Zhm: NUL-terminated strings, bounded by their object. qsz/itd give the
-// bytes left in the object, so these never read past its end: a missing
-// terminator stops at the object's end instead of overrunning.
-// (Named zhm_bounded rather than zhm: inside `internal`, a nested `zhm`
-// would hide LIBC_NAMESPACE::zhm.)
-
-// Length up to the first NUL, or the rest of the object if there is none.
-LIBC_INLINE size_t string_length(const char *src) {
-  return LIBC_NAMESPACE::zhm::bounded_strlen(src);
-}
-
-// First occurrence of ch among the first n bytes, never beyond the object.
-LIBC_INLINE void *find_first_character(const unsigned char *src,
-                                       unsigned char ch, size_t n) {
-  const size_t left = LIBC_NAMESPACE::zhm::remaining(src);
-  return element::find_first_character(src, ch, n < left ? n : left);
-}
-} // namespace zhm_bounded
-#endif // LIBC_TARGET_HAS_ZHM
-
 // Dispatch mechanism for implementations of performance-sensitive
 // functions. Always measure, but generally from lower- to higher-performance
 // order:
 //
-// 0. zhm_bounded - Zhm only, always selected there: bounded by the object
+// (Zhm: always element, see above.)
 // 1. element - read char-by-char or wchar-by-wchar
 // 3. word - read word-by-word
 // 3. clang_vector - read using clang's internal vector types

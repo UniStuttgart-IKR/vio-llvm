@@ -14,11 +14,19 @@
 //                             header.
 //   LIBC_ZHM_TYPE_TRAPS       option, always defined (0/1), test with #if:
 //                             1 for the shared libc only (object-type queries
-//                             through the supervisor are allowed).
-//   LIBC_ZHM_CHECKED_STRINGS  option, always defined (0/1), test with #if:
-//                             abort when a string write overflows its object.
+//                             through compiler-rt's __vio_type are allowed).
 //   LIBC_ZHM_DATA_ONLY        marks a local buffer as never holding pointers,
 //                             so the compiler gives it data-only memory.
+//
+// Spec V0.3.2: itd, btd, sep and lt are privileged, so user code (the libc
+// runs in user mode) splits pointers with ordinary instructions: `andi t, p,
+// 0` yields the pointer's base (index 0), `sub i, p, t` its index. bso checks
+// whether two pointers reference the same object.
+//
+// No function here or in the Zhm memory/string code checks object bounds
+// itself: an access beyond an object traps in the hardware (IndexOutBounds)
+// at exactly that access, as the program's own access would. Checking sizes
+// up front would turn that crash into different behaviour.
 //
 //===----------------------------------------------------------------------===//
 
@@ -37,9 +45,6 @@
 #ifndef LIBC_ZHM_TYPE_TRAPS
 #define LIBC_ZHM_TYPE_TRAPS 0
 #endif
-#ifndef LIBC_ZHM_CHECKED_STRINGS
-#define LIBC_ZHM_CHECKED_STRINGS 0
-#endif
 
 #ifdef LIBC_TARGET_HAS_ZHM
 #define LIBC_ZHM_DATA_ONLY __attribute__((annotate("zhm_data_only")))
@@ -50,8 +55,10 @@
 #ifdef LIBC_TARGET_HAS_ZHM
 
 #if LIBC_ZHM_TYPE_TRAPS
-// Lowered by the compiler to the supervisor's type query (riscv_zhm.h).
-extern "C" unsigned __zhm_type_flags(const void *p) __attribute__((pure));
+// Lowered by the compiler to a call of compiler-rt's __vio_type (type query
+// service); same declaration as in riscv_zhm.h.
+extern "C" unsigned long __zhm_type_flags(const void *p)
+    __attribute__((pure));
 #endif
 
 namespace LIBC_NAMESPACE_DECL {
@@ -64,33 +71,42 @@ LIBC_INLINE_VAR constexpr size_t WORD = sizeof(void *);
 typedef void *PtrWord __attribute__((may_alias));
 typedef size_t DataWord __attribute__((may_alias));
 
-// Index of p within its object.
-LIBC_INLINE size_t itd(const void *p) {
+// Index of p within its object (for a primitive, the value itself), without
+// the privileged itd.
+LIBC_INLINE size_t index_of(const void *p) {
   size_t idx;
-  asm("itd %0, %1" : "=r"(idx) : "r"(p));
+  const void *b;
+  asm("andi %1, %2, 0\n\t"
+      "sub  %0, %2, %1"
+      : "=r"(idx), "=&r"(b)
+      : "r"(p));
   return idx;
 }
 
-// Size of p's object in bytes.
+// Size of p's object in bytes. Information (e.g. for realloc), never a
+// bounds check.
 LIBC_INLINE size_t qsz(const void *p) {
   size_t n;
   asm("qsz %0, %1" : "=r"(n) : "r"(p));
   return n;
 }
 
-// Bytes from p to the end of its object: the bound for string functions.
-LIBC_INLINE size_t remaining(const void *p) { return qsz(p) - itd(p); }
-
 // Objects are 16-byte aligned, so the low bits of the index are the low
 // bits of the address.
 LIBC_INLINE bool word_aligned(const void *p) {
-  return (itd(p) & (WORD - 1)) == 0;
+  return (index_of(p) & (WORD - 1)) == 0;
 }
-LIBC_INLINE size_t misalignment(const void *p) { return itd(p) & (WORD - 1); }
+LIBC_INLINE size_t misalignment(const void *p) {
+  return index_of(p) & (WORD - 1);
+}
 
-// Pointer to index 0 of p's object (pointer minus integer: always legal).
-LIBC_INLINE const unsigned char *base(const void *p) {
-  return static_cast<const unsigned char *>(p) - itd(p);
+// Do a and b reference the same object? Both must be pointers: bso traps on
+// a primitive, as any access through it would.
+LIBC_INLINE bool same_object(const void *a, const void *b) {
+  asm goto("bso %0, %1, %l[same]" : : "r"(a), "r"(b) : : same);
+  return false;
+same:
+  return true;
 }
 
 // New zeroed objects. `alloc` may hold pointers, `alloc_data` may not.
@@ -137,26 +153,6 @@ LIBC_INLINE bool is_data_only([[maybe_unused]] const void *p) {
   return (__zhm_type_flags(p) & 0x04u) != 0;
 #else
   return false;
-#endif
-}
-
-// strlen bounded by the object: never reads past its end. Without a
-// terminator in the object, the remaining size is returned.
-LIBC_INLINE size_t bounded_strlen(const char *s) {
-  const size_t max = remaining(s);
-  size_t n = 0;
-  while (n < max && s[n])
-    ++n;
-  return n;
-}
-
-// Hardening mode (LIBC_ZHM_CHECKED_STRINGS): abort if `needed` bytes do not
-// fit into dst's object.
-LIBC_INLINE void check_capacity([[maybe_unused]] const void *dst,
-                                [[maybe_unused]] size_t needed) {
-#if LIBC_ZHM_CHECKED_STRINGS
-  if (needed > remaining(dst))
-    abort();
 #endif
 }
 

@@ -434,10 +434,7 @@ check_cxx_source_compiles("
 #endif
 int libc_zhm_probe;" LIBC_TARGET_HAS_ZHM)
 option(LIBC_ZHM_TYPE_TRAPS
-       "Zhm: allow object-type queries through the supervisor (shared libc only)"
-       OFF)
-option(LIBC_ZHM_CHECKED_STRINGS
-       "Zhm: abort when a string function would overflow its destination object"
+       "Zhm: allow object-type queries through __vio_type (shared libc only)"
        OFF)
 if(LIBC_TARGET_HAS_ZHM)
   message(STATUS "llvm-libc: Zhm target (type traps: ${LIBC_ZHM_TYPE_TRAPS})")

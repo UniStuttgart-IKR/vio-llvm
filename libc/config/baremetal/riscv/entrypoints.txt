@@ -1,8 +1,6 @@
 if(LIBC_TARGET_HAS_ZHM)
   set(TARGET_LIBC_ENTRYPOINTS
     # string and memory
-    #libc.src.string.bcmp
-    #libc.src.string.bzero
     libc.src.string.memchr
     libc.src.string.memcmp
     libc.src.string.memcpy
@@ -54,7 +52,8 @@ if(LIBC_TARGET_HAS_ZHM)
     libc.src.stdlib.realloc
     libc.src.stdlib.strtol
     libc.src.stdlib.strtoul
-    # stdio (output first)
+    # stdio (output first); the FILE objects are entrypoints too, and the
+    # baremetal printf/puts/... depend on them
     libc.src.stdio.stderr
     libc.src.stdio.stdin
     libc.src.stdio.stdout
@@ -67,7 +66,7 @@ if(LIBC_TARGET_HAS_ZHM)
     libc.src.stdio.vsnprintf
     libc.src.stdio.vsprintf
   )
-  
+  # FIXME: setjmp/longjmp need a supervisor service (checkpoint 5.4).
   set(TARGET_LIBM_ENTRYPOINTS "")
   set(TARGET_LLVMLIBC_ENTRYPOINTS ${TARGET_LIBC_ENTRYPOINTS})
   return()

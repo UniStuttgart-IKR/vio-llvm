@@ -1038,9 +1038,10 @@ if(COMPILER_RT_BUILTINS_RISCV_ZHM)
     # memcpy comes from the C library.
     list(REMOVE_ITEM ${list} riscv/memcpy.S)
   endforeach()
-  # Pointer-safe copies called by the backend (RISCVZhmLegalizeIR).
-  list(APPEND riscv32_SOURCES riscv/zhm_mem.c)
-  list(APPEND riscv64_SOURCES riscv/zhm_mem.c)
+  # Pointer-safe copies called by the backend (RISCVZhmLegalizeIR), and the
+  # RISC-ViO runtime functions (__vio_type, __vio_identity, weak cells).
+  list(APPEND riscv32_SOURCES riscv/zhm_mem.c riscv/vio_runtime.c)
+  list(APPEND riscv64_SOURCES riscv/zhm_mem.c riscv/vio_runtime.c)
 endif()
 
 set(sparc_SOURCES ${GENERIC_SOURCES} ${GENERIC_TF_SOURCES})

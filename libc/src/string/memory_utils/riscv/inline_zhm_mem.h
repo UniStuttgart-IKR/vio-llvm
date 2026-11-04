@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 //
 // memcpy, memmove, memset, bcmp and memcmp for Zhm, selected in the
-// riscv/inline_*.h headers when LIBC_TARGET_HAS_ZHM is defined.
+// inline_*.h dispatch headers when LIBC_TARGET_HAS_ZHM is defined.
 //
 // Rules:
 //   * a pointer fills a whole XLEN-aligned word and may only be read with a
@@ -15,9 +15,13 @@
 //     copied and compared whole; bytes are used only where no pointer can be
 //     (before the operands are aligned, in the tail, or when the operands are
 //     misaligned against each other);
-//   * alignment comes from itd (objects are 16-byte aligned);
-//   * ordered compares of pointers into different objects trap: memmove
-//     decides the direction from bases and indices;
+//   * alignment comes from the index (zhm::index_of: andi/sub, not the
+//     privileged itd; objects are 16-byte aligned);
+//   * ordered compares of pointers into different objects trap: memmove asks
+//     bso whether both are in the same object, and only then compares their
+//     indices;
+//   * no bounds checks of their own: an access beyond an object traps in the
+//     hardware at exactly that access;
 //   * the five functions are [[gnu::noinline]]: they have three loops
 //     each, and the printf writer alone uses them at a dozen places. As
 //     out-of-line inline functions, the linker keeps one copy of each.
@@ -32,8 +36,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIBC_SRC_STRING_MEMORY_UTILS_RISCV_ZHM_MEM_H
-#define LLVM_LIBC_SRC_STRING_MEMORY_UTILS_RISCV_ZHM_MEM_H
+#ifndef LLVM_LIBC_SRC_STRING_MEMORY_UTILS_ZHM_INLINE_MEM_H
+#define LLVM_LIBC_SRC_STRING_MEMORY_UTILS_ZHM_INLINE_MEM_H
 
 #include "src/__support/macros/attributes.h"
 #include "src/__support/macros/config.h"
@@ -120,9 +124,10 @@ LIBC_INLINE int data_word_order(DataWord x, DataWord y) {
 [[gnu::noinline]] LIBC_INLINE void inline_memmove_zhm(void *dst, const void *src, size_t n) {
   auto *d = static_cast<unsigned char *>(dst);
   const auto *s = static_cast<const unsigned char *>(src);
-  // Only ranges in the same object can overlap; there, the indices order
-  // the pointers without an ordered pointer compare.
-  if (n && zhm::base(d) == zhm::base(s) && zhm::itd(d) > zhm::itd(s))
+  // Only ranges in the same object can overlap (bso); there, the indices
+  // order the pointers without an ordered pointer compare. n == 0 touches
+  // nothing and must not trap (memmove(0, 0, 0)).
+  if (n && zhm::same_object(d, s) && zhm::index_of(d) > zhm::index_of(s))
     zhm_detail::copy_backward(d, s, n);
   else
     zhm_detail::copy_forward(d, s, n);
@@ -205,4 +210,4 @@ LIBC_INLINE int data_word_order(DataWord x, DataWord y) {
 } // namespace LIBC_NAMESPACE_DECL
 
 #endif // LIBC_TARGET_HAS_ZHM
-#endif // LLVM_LIBC_SRC_STRING_MEMORY_UTILS_RISCV_ZHM_MEM_H
+#endif // LLVM_LIBC_SRC_STRING_MEMORY_UTILS_ZHM_INLINE_MEM_H

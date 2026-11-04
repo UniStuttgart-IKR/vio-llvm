@@ -24,7 +24,6 @@ LLVM_LIBC_FUNCTION(char *, strncat,
     LIBC_CRASH_ON_NULLPTR(src);
   }
   size_t dest_length = internal::string_length(dest);
-  zhm::check_capacity(dest + dest_length, count + 1);
   size_t i;
   for (i = 0; i < count && src[i] != '\0'; ++i)
     dest[dest_length + i] = src[i];

@@ -11,24 +11,30 @@
 // operands are not known to be word-aligned or whose size is not a small
 // constant.
 //
-// Zhm rules this code follows:
+// Zhm rules this code follows (spec V0.3.2):
 //   * a pointer fills a whole XLEN-aligned word and may only be read with an
 //     XLEN load; a narrower load of a pointer slot traps. So whole words are
-//     copied as pointer-sized values (ld/sd keep pointers intact and work for
-//     data too), and bytes only where no pointer can be: before dst is
-//     aligned, in the tail, or when src and dst are misaligned against each
-//     other (then a pointer could not be copied anyway, and the byte load
-//     traps, which is the right outcome);
-//   * alignment comes from itd: objects are 16-byte aligned, so the low bits
-//     of a pointer's index equal the low bits of its address;
-//   * ordered compares and subtraction between pointers into different
-//     objects trap. memmove therefore first checks whether both pointers are
-//     in the same object (same base: p - itd(p)), and only then compares
-//     their indices. Different objects never overlap.
+//     copied as pointer-sized values (l[wd]/s[wd] keep pointers intact and
+//     work for data too), and bytes only where no pointer can be: before dst
+//     is aligned, in the tail, or when src and dst are misaligned against
+//     each other (then a pointer could not be copied anyway, and the byte
+//     load traps, which is the right outcome);
+//   * no bounds checks of their own: a copy that leaves an object traps in
+//     the hardware at exactly the access that leaves it (IndexOutBounds),
+//     just like the program's own access would. Checking sizes up front
+//     (qsz) would turn that crash into different behaviour;
+//   * the index of a pointer comes from `andi t, p, 0` (the pointer's base,
+//     index 0) and `sub i, p, t` (spec: runtime functions), not from the
+//     privileged itd. Objects are 16-byte aligned, so the low bits of the
+//     index are the low bits of the address;
+//   * ordered compares between pointers into different objects trap. memmove
+//     therefore first asks bso whether both pointers reference the same
+//     object, and only then compares their indices. Different objects never
+//     overlap.
 //
 // Built only for Zhm targets (see lib/builtins/CMakeLists.txt); the #if keeps
-// the file empty anywhere else. -ffreestanding / no_builtin keep the loops
-// from being turned back into memcpy calls.
+// the file empty anywhere else. no_builtin keeps the loops from being turned
+// back into memcpy calls.
 //
 //===----------------------------------------------------------------------===//
 
@@ -39,20 +45,28 @@
 #define ZHM_WORD sizeof(void *)
 #define ZHM_NO_BUILTIN __attribute__((no_builtin))
 
-// Index of p within its object.
-static inline size_t zhm_itd(const void *p) {
+// Index of p within its object. For a primitive, the value itself.
+static inline size_t zhm_index(const void *p) {
   size_t idx;
-  __asm__("itd %0, %1" : "=r"(idx) : "r"(p));
+  const void *base;
+  __asm__("andi %1, %2, 0\n\t"
+          "sub  %0, %2, %1"
+          : "=r"(idx), "=&r"(base)
+          : "r"(p));
   return idx;
 }
 
-static inline int zhm_word_aligned(const void *p) {
-  return (zhm_itd(p) & (ZHM_WORD - 1)) == 0;
+// Do a and b reference the same object? Both must be pointers (bso traps on
+// a primitive, as any access through it would).
+static inline int zhm_same_object(const void *a, const void *b) {
+  __asm__ goto("bso %0, %1, %l[same]" : : "r"(a), "r"(b) : : same);
+  return 0;
+same:
+  return 1;
 }
 
-// Pointer to index 0 of p's object: pointer minus integer, always legal.
-static inline const unsigned char *zhm_base(const void *p) {
-  return (const unsigned char *)p - zhm_itd(p);
+static inline int zhm_word_aligned(const void *p) {
+  return (zhm_index(p) & (ZHM_WORD - 1)) == 0;
 }
 
 // Forward copy. Also correct for overlapping ranges with dst before src.
@@ -107,9 +121,10 @@ ZHM_NO_BUILTIN
 void *__zhm_memmove(void *dst, const void *src, size_t n) {
   unsigned char *d = (unsigned char *)dst;
   const unsigned char *s = (const unsigned char *)src;
-  // Only ranges inside the same object can overlap; there, indices order
-  // the pointers without an ordered pointer compare.
-  if (n && zhm_base(d) == zhm_base(s) && zhm_itd(d) > zhm_itd(s))
+  // n == 0 touches nothing, so it must not trap either (memmove(0, 0, 0)).
+  // Only ranges inside the same object can overlap; there, the indices
+  // order the pointers without an ordered pointer compare.
+  if (n && zhm_same_object(d, s) && zhm_index(d) > zhm_index(s))
     zhm_copy_backward(d, s, n);
   else
     zhm_copy_forward(d, s, n);

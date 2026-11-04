@@ -10381,6 +10381,12 @@ static bool isSimm12Constant(SDValue V) {
   return isa<ConstantSDNode>(V) && V->getAsAPIntVal().isSignedIntN(12);
 }
 
+// Zhm: may Y be combined bitwise with a mask? Only if it is certainly not a
+// pointer: a constant. See lowerSelectToBinOp.
+static bool zhmMaskFoldOK(SDValue Y, const RISCVSubtarget &Subtarget) {
+  return !Subtarget.hasStdExtZhm() || isa<ConstantSDNode>(Y);
+}
+
 static SDValue lowerSelectToBinOp(SDNode *N, SelectionDAG &DAG,
                                   const RISCVSubtarget &Subtarget) {
   SDValue CondV = N->getOperand(0);
@@ -10391,12 +10397,12 @@ static SDValue lowerSelectToBinOp(SDNode *N, SelectionDAG &DAG,
 
   if (!Subtarget.hasConditionalMoveFusion()) {
     // (select c, -1, y) -> -c | y
-    if (isAllOnesConstant(TrueV)) {
+    if (isAllOnesConstant(TrueV) && zhmMaskFoldOK(FalseV, Subtarget)) {
       SDValue Neg = DAG.getNegative(CondV, DL, VT);
       return DAG.getNode(ISD::OR, DL, VT, Neg, DAG.getFreeze(FalseV));
     }
     // (select c, y, -1) -> (c-1) | y
-    if (isAllOnesConstant(FalseV)) {
+    if (isAllOnesConstant(FalseV) && zhmMaskFoldOK(TrueV, Subtarget)) {
       SDValue Neg = DAG.getNode(ISD::ADD, DL, VT, CondV,
                                 DAG.getAllOnesConstant(DL, VT));
       return DAG.getNode(ISD::OR, DL, VT, Neg, DAG.getFreeze(TrueV));
@@ -10405,7 +10411,8 @@ static SDValue lowerSelectToBinOp(SDNode *N, SelectionDAG &DAG,
     const bool HasZicond = VT.isScalarInteger() && Subtarget.hasStdExtZicond();
 
     // (select c, 0, y) -> (c-1) & y
-    if (isNullConstant(TrueV) && (!HasZicond || isSimm12Constant(FalseV))) {
+    if (isNullConstant(TrueV) && (!HasZicond || isSimm12Constant(FalseV)) &&
+        zhmMaskFoldOK(FalseV, Subtarget)) {
       SDValue Neg =
           DAG.getNode(ISD::ADD, DL, VT, CondV, DAG.getAllOnesConstant(DL, VT));
       return DAG.getNode(ISD::AND, DL, VT, Neg, DAG.getFreeze(FalseV));
@@ -10429,7 +10436,8 @@ static SDValue lowerSelectToBinOp(SDNode *N, SelectionDAG &DAG,
         }
       }
       // (select c, y, 0) -> -c & y
-      if (!HasZicond || isSimm12Constant(TrueV)) {
+      if ((!HasZicond || isSimm12Constant(TrueV)) &&
+          zhmMaskFoldOK(TrueV, Subtarget)) {
         SDValue Neg = DAG.getNegative(CondV, DL, VT);
         return DAG.getNode(ISD::AND, DL, VT, Neg, DAG.getFreeze(TrueV));
       }
@@ -24651,13 +24659,13 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
 
     if (!Subtarget.hasConditionalMoveFusion()) {
       // (select c, -1, y) -> -c | y
-      if (isAllOnesConstant(TrueV)) {
+      if (isAllOnesConstant(TrueV) && zhmMaskFoldOK(FalseV, Subtarget)) {
         SDValue C = DAG.getSetCC(DL, VT, LHS, RHS, CCVal);
         SDValue Neg = DAG.getNegative(C, DL, VT);
         return DAG.getNode(ISD::OR, DL, VT, Neg, FalseV);
       }
       // (select c, y, -1) -> -!c | y
-      if (isAllOnesConstant(FalseV)) {
+      if (isAllOnesConstant(FalseV) && zhmMaskFoldOK(TrueV, Subtarget)) {
         SDValue C =
             DAG.getSetCC(DL, VT, LHS, RHS, ISD::getSetCCInverse(CCVal, VT));
         SDValue Neg = DAG.getNegative(C, DL, VT);
@@ -24665,14 +24673,14 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
       }
 
       // (select c, 0, y) -> -!c & y
-      if (isNullConstant(TrueV)) {
+      if (isNullConstant(TrueV) && zhmMaskFoldOK(FalseV, Subtarget)) {
         SDValue C =
             DAG.getSetCC(DL, VT, LHS, RHS, ISD::getSetCCInverse(CCVal, VT));
         SDValue Neg = DAG.getNegative(C, DL, VT);
         return DAG.getNode(ISD::AND, DL, VT, Neg, FalseV);
       }
       // (select c, y, 0) -> -c & y
-      if (isNullConstant(FalseV)) {
+      if (isNullConstant(FalseV) && zhmMaskFoldOK(TrueV, Subtarget)) {
         SDValue C = DAG.getSetCC(DL, VT, LHS, RHS, CCVal);
         SDValue Neg = DAG.getNegative(C, DL, VT);
         return DAG.getNode(ISD::AND, DL, VT, Neg, TrueV);

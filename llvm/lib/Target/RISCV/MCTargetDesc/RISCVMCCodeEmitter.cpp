@@ -60,6 +60,10 @@ public:
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const;
 
+  void expandZhmLGA(const MCInst &MI, SmallVectorImpl<char> &CB,
+                    SmallVectorImpl<MCFixup> &Fixups,
+                    const MCSubtargetInfo &STI) const;
+
   void expandAddTPRel(const MCInst &MI, SmallVectorImpl<char> &CB,
                       SmallVectorImpl<MCFixup> &Fixups,
                       const MCSubtargetInfo &STI) const;
@@ -301,6 +305,46 @@ void RISCVMCCodeEmitter::expandTLSDESCCall(const MCInst &MI,
 
   uint32_t Binary = getBinaryCodeForInstr(Call, Fixups, STI);
   support::endian::write(CB, Binary, llvm::endianness::little);
+}
+
+// Zhm (spec V0.3.2): lga rd, sym loads the GOT entry of sym relative to the
+// GOT pointer in gp, for any GOT size:
+//   lui   rd, 0            R_RISCV_GOT_OFF sym (+ R_RISCV_RELAX)
+//   add   rd, gp, rd       rd = gp + upper part of the GOT offset
+//   l[wd] rd, 0(rd)        lower part, filled in by the linker
+// One relocation covers the fixed 12-byte sequence, like R_RISCV_CALL_PLT
+// covers auipc+jalr. lld writes the GOT offset into the lui and the load and,
+// when the offset fits 12 bits, relaxes the sequence to `l[wd] rd, off(gp)`.
+// rd holds a GOT reference only between the add and the load that
+// overwrites it.
+void RISCVMCCodeEmitter::expandZhmLGA(const MCInst &MI,
+                                      SmallVectorImpl<char> &CB,
+                                      SmallVectorImpl<MCFixup> &Fixups,
+                                      const MCSubtargetInfo &STI) const {
+  const MCRegister Rd = MI.getOperand(0).getReg();
+  const MCExpr *Sym = MI.getOperand(1).getExpr();
+  // Codegen passes a plain symbol; drop a %got_off(...) wrapper written by
+  // hand, the fixup kind carries the meaning.
+  if (const auto *SE = dyn_cast<MCSpecifierExpr>(Sym))
+    if (SE->getSpecifier() == ELF::R_RISCV_GOT_OFF)
+      Sym = SE->getSubExpr();
+
+  addFixup(Fixups, 0, Sym, RISCV::fixup_riscv_got_off);
+  if (STI.hasFeature(RISCV::FeatureRelax))
+    Fixups.back().setLinkerRelaxable();
+
+  const bool Is64 = STI.hasFeature(RISCV::Feature64Bit);
+  const MCInst Insts[] = {
+      MCInstBuilder(RISCV::LUI).addReg(Rd).addImm(0),
+      MCInstBuilder(RISCV::ADD).addReg(Rd).addReg(RISCV::X3).addReg(Rd),
+      MCInstBuilder(Is64 ? RISCV::LD : RISCV::LW)
+          .addReg(Rd)
+          .addReg(Rd)
+          .addImm(0)};
+  for (const MCInst &I : Insts) {
+    uint32_t Binary = getBinaryCodeForInstr(I, Fixups, STI);
+    support::endian::write(CB, Binary, llvm::endianness::little);
+  }
 }
 
 // Expand PseudoAddTPRel to a simple ADD with the correct relocation.
@@ -603,6 +647,10 @@ void RISCVMCCodeEmitter::encodeInstruction(const MCInst &MI,
   case RISCV::PseudoAddTPRel:
     expandAddTPRel(MI, CB, Fixups, STI);
     MCNumEmitted += 1;
+    return;
+  case RISCV::PseudoZhmLGA:
+    expandZhmLGA(MI, CB, Fixups, STI);
+    MCNumEmitted += 3; // LUI + ADD + L[WD]
     return;
   case RISCV::PseudoLongBEQ:
   case RISCV::PseudoLongBNE:

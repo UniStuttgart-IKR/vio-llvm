@@ -159,6 +159,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   initializeRISCVZhmVerifySpecialRegsPass(*PR);
   initializeRISCVZhmRemoveZeroInitsPass(*PR);
   initializeRISCVZhmLegalizeFrameAddrPass(*PR);
+  initializeRISCVZhmGOTPointerPass(*PR);
 }
 
 static Reloc::Model getEffectiveRelocModel(const Triple &TT,
@@ -588,6 +589,9 @@ void RISCVPassConfig::addPreEmitPass() {
     addPass(createMachineCopyPropagationPass(true));
   if (TM->getOptLevel() >= CodeGenOptLevel::Default)
     addPass(createRISCVLateBranchOptPass());
+
+  addPass(createRISCVZhmGOTPointerPass());
+  
   // The IndirectBranchTrackingPass inserts lpad and could have changed the
   // basic block alignment. It must be done before Branch Relaxation to
   // prevent the adjusted offset exceeding the branch range.

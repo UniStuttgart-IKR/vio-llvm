@@ -872,6 +872,18 @@ template <class ELFT> void Writer<ELFT>::setReservedSymbolSections() {
       lastRO = p->lastSec;
   }
 
+  // Zhm: __got_slot lies XLEN/8 bytes in front of the code segment. The
+  // segment starts at its first section, so the symbol is that section's
+  // start minus XLEN/8 (an offset that wraps around, which getVA adds back).
+  if (ctx.sym.zhmGotSlot) {
+    for (auto &p : ctx.phdrs)
+      if (p->p_type == PT_LOAD && (p->p_flags & PF_X) && p->firstSec) {
+        ctx.sym.zhmGotSlot->section = p->firstSec;
+        ctx.sym.zhmGotSlot->value = -(uint64_t)ctx.arg.wordsize;
+        break;
+      }
+  }
+
   if (lastRO) {
     // _etext is the first location after the last read-only loadable segment
     // that does not contain large sections.
@@ -1861,6 +1873,11 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
             ctx.sym.riscvGlobalPointer = cast<Defined>(s);
         }
       }
+      // Zhm: placeholder section; setReservedSymbolSections moves it in
+      // front of the first executable segment once the layout is known.
+      if (ctx.arg.zhm)
+        ctx.sym.zhmGotSlot = addOptionalRegular(
+            ctx, "__got_slot", ctx.out.elfHeader.get(), 0, STV_HIDDEN);
     }
 
     if (ctx.arg.emachine == EM_386 || ctx.arg.emachine == EM_X86_64) {

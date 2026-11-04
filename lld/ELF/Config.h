@@ -711,6 +711,9 @@ struct Ctx : CommonLinkerContext {
     // __global_pointer$ for RISC-V.
     Defined *riscvGlobalPointer;
 
+    // Zhm: XLEN/8 bytes in front of the first executable segment.
+    Defined *zhmGotSlot;
+
     // __rel{,a}_iplt_{start,end} symbols.
     Defined *relaIpltStart;
     Defined *relaIpltEnd;

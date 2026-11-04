@@ -3836,6 +3836,14 @@ void RISCVAsmParser::emitLoadGlobalAddress(MCInst &Inst, SMLoc IDLoc,
   //             Lx rdest, %pcrel_lo(TmpLabel)(rdest)
   MCRegister DestReg = Inst.getOperand(0).getReg();
   const MCExpr *Symbol = Inst.getOperand(1).getExpr();
+  // Zhm: GOT access relative to gp, see PseudoZhmLGA.
+  if (getSTI().hasFeature(RISCV::FeatureStdExtZhm)) {
+    emitToStreamer(Out, MCInstBuilder(RISCV::PseudoZhmLGA)
+                            .addReg(DestReg)
+                            .addExpr(Symbol)
+                            .setLoc(IDLoc));
+    return;
+  }
   unsigned SecondOpcode = isRV64() ? RISCV::LD : RISCV::LW;
   emitAuipcInstPair(DestReg, DestReg, Symbol, RISCV::S_GOT_HI, SecondOpcode,
                     IDLoc, Out);
@@ -3850,7 +3858,8 @@ void RISCVAsmParser::emitLoadAddress(MCInst &Inst, SMLoc IDLoc,
   //   lla rdest, symbol
   // or (for PIC)
   //   lga rdest, symbol
-  if (ParserOptions.IsPicEnabled)
+  if (ParserOptions.IsPicEnabled ||
+      getSTI().hasFeature(RISCV::FeatureStdExtZhm))
     emitLoadGlobalAddress(Inst, IDLoc, Out);
   else
     emitLoadLocalAddress(Inst, IDLoc, Out);

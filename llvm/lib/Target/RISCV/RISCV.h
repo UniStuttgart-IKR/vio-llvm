@@ -80,6 +80,9 @@ void initializeRISCVZhmRemoveZeroInitsPass(PassRegistry &);
 FunctionPass *createRISCVZhmLegalizeFrameAddrPass();
 void initializeRISCVZhmLegalizeFrameAddrPass(PassRegistry &);
 
+FunctionPass *createRISCVZhmGOTPointerPass();
+void initializeRISCVZhmGOTPointerPass(PassRegistry &);
+
 class RISCVGatherScatterLoweringPass
     : public OptionalPassInfoMixin<RISCVGatherScatterLoweringPass> {
 private:

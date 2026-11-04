@@ -1,7 +1,9 @@
 //===-- RISCVInstrInfoZhm.td - Zhm instructions -------------*- tablegen -*-===//
 //
 // Zhm: hardware-managed objects. alc/alci allocate zeroed, 16-byte aligned
-// objects; qsz/itd/btd query a pointer; sep/dtp are supervisor instructions.
+// objects; qsz queries a pointer; bso branches if two pointers reference
+// the same object. itd/btd/sep/dtp/lt/st/clr are privileged (spec V0.3.2);
+// the itd intrinsic is selected as an unprivileged andi/sub pair.
 //
 //===----------------------------------------------------------------------===//
 
@@ -101,9 +103,41 @@ let Predicates = [HasStdExtZhm], hasSideEffects = 1, mayLoad = 0, mayStore = 1 i
   }
 }
 
+// lga rd, sym on Zhm: load the GOT entry of sym relative to the GOT pointer
+// in gp (spec V0.3.2), for any GOT size. Expanded by the MC code emitter to
+//   lui rd, 0 ; add rd, gp, rd ; l[wd] rd, 0(rd)
+// with one R_RISCV_GOT_OFF (+ R_RISCV_RELAX) on the lui; lld relaxes it to
+// `l[wd] rd, off(gp)` when the offset fits 12 bits. Printed as `lga`; the asm
+// parser turns `lga` and `la` into this pseudo on Zhm. Reads gp (Uses), which
+// RISCVZhmGOTPointer makes valid in front of it. Not rematerialisable: it
+// depends on gp.
+let Predicates = [HasStdExtZhm], hasSideEffects = 0, mayLoad = 1,
+    mayStore = 0, Size = 12, isCodeGenOnly = 1, Uses = [X3] in
+def PseudoZhmLGA : Pseudo<(outs GPR:$dst), (ins bare_symbol:$src), [],
+                          "lga", "$dst, $src">;
+
+// bso rs1, rs2, offset: branch if both pointers reference the same object
+// (spec V0.3.2: the only identity check). B-type in custom-0, funct3 111;
+// encoded and relocated like beq (fixup_riscv_branch). Traps if an operand
+// is a primitive. Assembler only: the compiler does not select it.
+let Predicates = [HasStdExtZhm], isBranch = 1, isTerminator = 1,
+    hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
+def BSO : RVInstB<0b111, OPC_HM, (outs),
+                  (ins GPR:$rs1, GPR:$rs2, bare_simm13_lsb0:$imm12),
+                  "bso", "$rs1, $rs2, $imm12">,
+          Sched<[WriteJmp, ReadJmp, ReadJmp]>;
+
 //===----------------------------------------------------------------------===//
 // Intrinsic patterns
 //===----------------------------------------------------------------------===//
+
+// The index of a pointer without the privileged itd (spec V0.3.2, runtime
+// functions): a logic operation with a primitive only changes the index, so
+//   andi t, p, 0     t = the pointer's base (same object, index 0)
+//   sub  rd, p, t    two pointers into one object: rd = index (primitive)
+// For a primitive p this yields p itself instead of trapping. The patterns
+// produce machine nodes directly, so no DAG combine sees (and p, 0) and
+// folds it to the constant 0.
 
 // alc/alci are IntrHasSideEffects, i.e. chained intrinsics; TableGen matches
 // the chain automatically from the intrinsic definition.
@@ -118,7 +152,7 @@ let Predicates = [HasStdExtZhm, IsRV32] in {
   def : Pat<(int_riscv_alc_32   GPR:$rs2), (ALC   GPR:$rs2)>;
   def : Pat<(int_riscv_alc_d_32 GPR:$rs2), (ALC_D GPR:$rs2)>;
   def : Pat<(int_riscv_qsz_32   GPR:$rs1), (QSZ   GPR:$rs1)>;
-  def : Pat<(int_riscv_itd_32   GPR:$rs1), (ITD   GPR:$rs1)>;
+  def : Pat<(int_riscv_itd_32   GPR:$rs1), (SUB GPR:$rs1, (ANDI GPR:$rs1, 0))>;
   def : Pat<(int_riscv_btd_32   GPR:$rs1), (BTD   GPR:$rs1)>;
   def : Pat<(int_riscv_lt_32    GPR:$rs1), (LT    GPR:$rs1)>;
   def : Pat<(int_riscv_st_32    GPR:$rs1, GPR:$rs2), (ST  GPR:$rs1, GPR:$rs2)>;
@@ -129,7 +163,7 @@ let Predicates = [HasStdExtZhm, IsRV64] in {
   def : Pat<(int_riscv_alc_64   GPR:$rs2), (ALC   GPR:$rs2)>;
   def : Pat<(int_riscv_alc_d_64 GPR:$rs2), (ALC_D GPR:$rs2)>;
   def : Pat<(int_riscv_qsz_64   GPR:$rs1), (QSZ   GPR:$rs1)>;
-  def : Pat<(int_riscv_itd_64   GPR:$rs1), (ITD   GPR:$rs1)>;
+  def : Pat<(int_riscv_itd_64   GPR:$rs1), (SUB GPR:$rs1, (ANDI GPR:$rs1, 0))>;
   def : Pat<(int_riscv_btd_64   GPR:$rs1), (BTD   GPR:$rs1)>;
   def : Pat<(int_riscv_lt_64    GPR:$rs1), (LT    GPR:$rs1)>;
   def : Pat<(int_riscv_st_64    GPR:$rs1, GPR:$rs2), (ST  GPR:$rs1, GPR:$rs2)>;

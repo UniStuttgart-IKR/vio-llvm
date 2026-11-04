@@ -86,6 +86,7 @@ add_llvm_target(RISCVCodeGen
   Zhm/RISCVZhmRemoveZeroInits.cpp
   Zhm/RISCVZhmVerifyIR.cpp
   Zhm/RISCVZhmVerifySpecialRegs.cpp
+  Zhm/RISCVZhmGOTPointer.cpp
   GISel/RISCVCallLowering.cpp
   GISel/RISCVInlineAsmLowering.cpp
   GISel/RISCVInstructionSelector.cpp

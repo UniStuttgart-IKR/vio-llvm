@@ -125,6 +125,13 @@ static cl::opt<int> BrMergingUnlikelyBias(
         "branches."),
     cl::Hidden);
 
+// Zhm: GOT accesses as one load (`l[wd] rd, %got_off(sym)(gp)`, GOT up to
+// 2 KiB, no linker relaxation needed) instead of `lga`.
+static cl::opt<bool> ZhmShortGOT(
+    "riscv-zhm-short-got", cl::init(false), cl::Hidden,
+    cl::desc("Zhm: access the GOT with a single gp-relative load (GOT of at "
+             "most 2 KiB) instead of lga"));
+
 // TODO: Support more ops
 static const unsigned ZvfbfaOps[] = {
     ISD::FNEG,        ISD::FABS,        ISD::FCOPYSIGN,   ISD::FADD,
@@ -10065,20 +10072,48 @@ static SDValue getLargeExternalSymbol(ExternalSymbolSDNode *N, const SDLoc &DL,
       MachinePointerInfo::getConstantPool(DAG.getMachineFunction()));
 }
 
+// Zhm: load the GOT entry of a symbol relative to the GOT pointer in gp.
+// MakeSym(Flags) creates the target node of the symbol with the given
+// operand flags. Default: `lga rd, sym` (PseudoZhmLGA, any GOT size; lld
+// relaxes it to one load). With -riscv-zhm-short-got:
+// `l[wd] rd, %got_off(sym)(gp)`.
+// RISCVZhmGOTPointer makes gp valid in front of every such access after
+// register allocation, wherever it ends up. The entry never changes after
+// loading, so the access is invariant: MachineLICM may hoist it out of loops
+// and MachineCSE may merge equal ones.
+static SDValue
+getZhmGOTLoad(SelectionDAG &DAG, const SDLoc &DL, EVT Ty,
+              function_ref<SDValue(unsigned Flags)> MakeSym,
+              const RISCVSubtarget &ST) {
+  MachineSDNode *Load;
+  if (ZhmShortGOT)
+    Load = DAG.getMachineNode(ST.is64Bit() ? RISCV::LD : RISCV::LW, DL, Ty,
+                              DAG.getRegister(RISCV::X3, ST.getXLenVT()),
+                              MakeSym(RISCVII::MO_GOT_OFF));
+  else
+    Load = DAG.getMachineNode(RISCV::PseudoZhmLGA, DL, Ty,
+                              MakeSym(RISCVII::MO_None));
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineMemOperand *MemOp = MF.getMachineMemOperand(
+      MachinePointerInfo::getGOT(MF),
+      MachineMemOperand::MOLoad | MachineMemOperand::MODereferenceable |
+          MachineMemOperand::MOInvariant,
+      LLT(Ty.getSimpleVT()), Align(Ty.getFixedSizeInBits() / 8));
+  DAG.setNodeMemRefs(Load, {MemOp});
+  return SDValue(Load, 0);
+}
+
 template <class NodeTy>
 SDValue RISCVTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
                                      bool IsLocal, bool IsExternWeak) const {
   SDLoc DL(N);
   EVT Ty = getPointerTy(DAG.getDataLayout());
 
-  if (Subtarget.hasStdExtZhm()){
-    SDValue GPReg = DAG.getRegister(RISCV::X3, Subtarget.getXLenVT());
-    SDValue Addr = getTargetNode(N, DL, Ty, DAG, RISCVII::MO_GOT_OFF);
-    SDValue Load =
-        SDValue(DAG.getMachineNode(Subtarget.is64Bit() ? RISCV::LD : RISCV::LW, DL, Ty, GPReg, Addr), 0);
-
-    return Load;
-  }
+  if (Subtarget.hasStdExtZhm())
+    return getZhmGOTLoad(
+        DAG, DL, Ty,
+        [&](unsigned Flags) { return getTargetNode(N, DL, Ty, DAG, Flags); },
+        Subtarget);
 
   // When HWASAN is used and tagging of global variables is enabled
   // they should be accessed via the GOT, since the tagged address of a global
@@ -27620,6 +27655,21 @@ static SDValue emitZhmAlloc(SelectionDAG &DAG, const SDLoc &DL, SDValue &Chain,
   return Node;
 }
 
+// Zhm: may a direct call to Callee leave this image's executable object?
+// Such callees are called through their GOT slot. RISCVZhmGOTPointer
+// (callMayLeave) uses the same rule for the calls that remain direct.
+static bool zhmCalleeMayLeaveImage(SDValue Callee) {
+  if (auto *S = dyn_cast<GlobalAddressSDNode>(Callee))
+    return !S->getGlobal()->isDSOLocal();
+  if (auto *S = dyn_cast<ExternalSymbolSDNode>(Callee))
+    // Libcalls. compiler-rt is linked statically into every image (spec:
+    // runtime functions), and its functions all start with "__" (__mulsi3,
+    // __zhm_memcpy, __vio_type, ...). Anything else, e.g. memset, may come
+    // from a shared libc.
+    return !StringRef(S->getSymbol()).starts_with("__");
+  return false; // already a pointer in a register
+}
+
 // Lower a call to a callseq_start + CALL + callseq_end chain, and add input
 // and output parameter nodes.
 SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
@@ -28025,6 +28075,19 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       Callee = getLargeExternalSymbol(S, DL, PtrVT, DAG);
       CalleeIsLargeExternalSymbol = true;
     }
+  } else if (Subtarget.hasStdExtZhm() && zhmCalleeMayLeaveImage(Callee)) {
+    // Zhm: GOT call. Load the callee's GOT slot like any other address and
+    // call through the register (PseudoCALLIndirect / PseudoTAILIndirect).
+    // The slot shares its GOT entry with &callee. RISCVZhmGOTPointer loads
+    // gp in front of the load and clears it in front of the call.
+    auto MakeSym = [&](unsigned Flags) {
+      if (auto *S = dyn_cast<GlobalAddressSDNode>(Callee))
+        return DAG.getTargetGlobalAddress(S->getGlobal(), DL, PtrVT,
+                                          S->getOffset(), Flags);
+      return DAG.getTargetExternalSymbol(
+          cast<ExternalSymbolSDNode>(Callee)->getSymbol(), PtrVT, Flags);
+    };
+    Callee = getZhmGOTLoad(DAG, DL, PtrVT, MakeSym, Subtarget);
   } else if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
     const GlobalValue *GV = S->getGlobal();
     Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, RISCVII::MO_CALL);

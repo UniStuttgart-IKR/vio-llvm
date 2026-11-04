@@ -1,16 +1,17 @@
-//===-- RISCVZhmVerifySpecialRegs.cpp - Enforce the Zhm ra/sp/gp rules ------------===//
+//===-- RISCVZhmVerifySpecialRegs.cpp - Enforce the Zhm ra/sp rules -------===//
 //
-// On Zhm, sp, gp and ra must not be written by hand, and ra may only be the
+// On Zhm, sp and ra must not be written by hand, and ra may only be the
 // source or destination of a jump. The hardware additionally supervises the
-// save and restore of ra in its frame slot at offset XLEN.
+// save and restore of ra in its frame slot at offset XLEN. Since spec V0.4.0,
+// gp is an ordinary register (it holds the GOT pointer by convention only),
+// so it is not checked here.
 //
 // The rest of the backend is set up so that these rules hold by construction:
 //   * ra is a reserved register for Zhm (RISCVRegisterInfo), so the register
 //     allocator never uses it as a general register;
 //   * calls use t1, not ra, as the temporary of `auipc` + `jalr`
 //     (RISCVMCCodeEmitter);
-//   * sp is only changed by the frame protocol (RISCVZhmFrameLowering);
-//   * gp is reserved on RISC-V anyway.
+//   * sp is only changed by the frame protocol (RISCVZhmFrameLowering).
 //
 // This pass runs last, before emission, and reports anything that still
 // breaks a rule, e.g. __builtin_return_address(0) (a copy of ra) or inline
@@ -21,8 +22,7 @@
 //       use: jalr rs1 (ret); `s[wd] ra, XLEN(sp)` (save)
 //   sp  def: alc[i][.d] sp; `l[wd] sp, 0(sp)`; addi sp, sp, imm;
 //            add/sub sp, sp, rX (sp walk)
-//   gp  def: never
-// Implicit ra/sp/gp operands are allowed on calls and returns (they describe
+// Implicit ra/sp operands are allowed on calls and returns (they describe
 // the jump itself). Meta and debug instructions are ignored.
 //
 //===----------------------------------------------------------------------===//
@@ -36,7 +36,7 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-zhm-verify-regs"
+#define DEBUG_TYPE "riscv-zhm-verify-special-regs"
 
 namespace {
 
@@ -46,7 +46,7 @@ public:
   RISCVZhmVerifySpecialRegs() : MachineFunctionPass(ID) {}
 
   StringRef getPassName() const override {
-    return "RISC-V Zhm verify ra/sp/gp usage";
+    return "RISC-V Zhm verify ra/sp usage";
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
@@ -141,20 +141,17 @@ bool RISCVZhmVerifySpecialRegs::runOnMachineFunction(MachineFunction &MF) {
         if (!MO.isReg())
           continue;
         const Register R = MO.getReg();
-        if (R != RISCV::X1 && R != RISCV::X2 && R != RISCV::X3)
+        if (R != RISCV::X1 && R != RISCV::X2)
           continue;
         if (MO.isImplicit()) {
           // Calls and returns carry ra/sp as implicit operands; anything
           // else that implicitly writes them is a violation.
           if (MO.isDef() && !IsJump)
-            report(MI, "instruction implicitly writes ra, sp or gp");
+            report(MI, "instruction implicitly writes ra or sp");
           continue;
         }
         const unsigned OpNo = MO.getOperandNo();
-        if (R == RISCV::X3) {
-          if (MO.isDef())
-            report(MI, "gp may not be written");
-        } else if (R == RISCV::X1) {
+        if (R == RISCV::X1) {
           if (MO.isDef() ? !allowedRaDef(MI) : !allowedRaUse(MI, OpNo))
             report(MI, MO.isDef()
                            ? "ra may only be written by a jump"
@@ -171,7 +168,7 @@ bool RISCVZhmVerifySpecialRegs::runOnMachineFunction(MachineFunction &MF) {
 char RISCVZhmVerifySpecialRegs::ID = 0;
 
 INITIALIZE_PASS(RISCVZhmVerifySpecialRegs, DEBUG_TYPE,
-                "RISC-V Zhm verify ra/sp/gp usage", false, true)
+                "RISC-V Zhm verify ra/sp usage", false, true)
 
 FunctionPass *llvm::createRISCVZhmVerifySpecialRegsPass() {
   return new RISCVZhmVerifySpecialRegs();
